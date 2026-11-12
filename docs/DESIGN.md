@@ -159,3 +159,7 @@ Solo begins with an owned-weapon preparation screen. Selecting a card previews t
 The skill-tree link from preparation opens the selected weapon family; closing it returns to the same preparation screen. The threshold groups skill training, inventory, minting and resale in a single navigation row. Unlearned skill slots remain hidden during combat. Preview slow motion affects presentation only.
 
 Final Absolution has an aerial descent, Cathedral Fall a raised ground strike, Astral Funeral horned soul projectiles, and Reaping Orbit animated spectral guards. Their ranges, pulses, charge costs, cooldowns and damage are unchanged. Airborne presentation grants no invulnerability. The guards illustrate existing orbit pulses and do not acquire targets or add attacks. A third-circle blacksmith is deferred.
+
+## Combat input continuity
+
+Q, R and weapon techniques have a single 14-tick input buffer (about 233 ms). A press near the end of an attack or cast starts at the next legal opening, including while basic attack is held. The most recent skill press replaces the previous one. Dash and pause/menu transitions clear the buffer; expired, unlearned and uncharged requests do not fire later. This is client input handling: the referee still receives ordinary versioned inputs and enforces the existing recovery, ownership and cooldown rules.

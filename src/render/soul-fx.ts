@@ -1,3 +1,4 @@
+import { EffectAnchor, attachmentFor } from "./effect-anchor.ts";
 import { ModelLibrary, type AnimatedModel } from "./assets";
 import { mountGrip, starterWeapon } from "./weapon-pose";
 import { dragonSoul, brokenCathedral, ritualPulse, ritualCharge, covenantWard, bloodThread, weaponImpact } from "./signatures";
@@ -63,10 +64,11 @@ interface Motif {
   animate?: (t: number) => void;
   parts?: T.Mesh[];
   spinners?: T.Object3D[];
+  anchor?: EffectAnchor;
 }
 export class SoulFx {
   private motifs: Motif[] = [];
-  private guards: {actor: AnimatedModel; life: number; angle: number; enemy: boolean; materials:T.MeshStandardMaterial[]}[] = [];
+  private guards: {actor: AnimatedModel; life: number; angle: number; enemy: boolean; anchor?: EffectAnchor; centerX?: number; centerZ?: number; materials:T.MeshStandardMaterial[]}[] = [];
   private guardLoad?: Promise<void>;
   private prepareGuards() {
     this.guardLoad ??= Promise.all(Array.from({length:4},()=>guardModels.create('hero',1.9))).then(actors=>{
@@ -94,7 +96,9 @@ export class SoulFx {
   private seal: T.CanvasTexture;
   private flame: T.CanvasTexture;
   private wisp: T.CanvasTexture;
-  constructor(scene: T.Scene) {
+  private trackActors: boolean;
+  constructor(scene: T.Scene, trackActors = false) {
+    this.trackActors = trackActors;
     scene.add(this.root);
     this.root.add(this.ward, this.core);
     const c = document.createElement("canvas");
@@ -188,6 +192,14 @@ export class SoulFx {
     return m;
   }
   event(e: SimEvent, identity: WeaponId = "starter") {
+    const mode = this.trackActors ? attachmentFor(e, identity) : null;
+    const existing = mode ? new Set(this.motifs) : null;
+    this.emit(e, identity);
+    if (mode && existing) for (const motif of this.motifs) {
+      if (!existing.has(motif)) motif.anchor = new EffectAnchor(e, mode);
+    }
+  }
+  private emit(e: SimEvent, identity: WeaponId) {
     if (e.type === 'swing' || e.type === 'ranged') { this.strike(e, identity); return; }
     if (e.type !== "ability" && e.type !== "combo" && e.type !== "echo") return;
     if (e.ability && e.stage !== 'charge' && e.stage !== 'release' && previewVolley(e.ability, identity)) { this.volley(e, identity); return; }
@@ -318,6 +330,8 @@ export class SoulFx {
       const guard=this.guards.find(g=>g.life<=0);if(!guard)break;
       const a=this.time*1.7+i*Math.PI;
       guard.life=.62;guard.angle=a;guard.enemy=e.side==='enemy';
+      guard.anchor=this.trackActors?new EffectAnchor(e,'wielder'):undefined;
+      guard.centerX=e.x;guard.centerZ=e.z;
       guard.actor.root.position.set(e.x+Math.cos(a)*2.6,-.18,e.z+Math.sin(a)*2.6);
       guard.actor.root.rotation.y=-a-Math.PI/2;guard.actor.root.visible=true;
       guard.actor.play('attack',.62,true);
@@ -440,6 +454,13 @@ export class SoulFx {
     this.time += dt;
     for(const guard of this.guards) {
       if(guard.life<=0)continue;
+      if (guard.anchor) {
+        const owner = guard.anchor.sample(w);
+        if (!owner) { guard.life=0;guard.actor.root.visible=false;continue; }
+        guard.actor.root.position.x += owner.x - guard.centerX!;
+        guard.actor.root.position.z += owner.z - guard.centerZ!;
+        guard.centerX=owner.x;guard.centerZ=owner.z;
+      }
       guard.life-=dt;const t=1-Math.max(0,guard.life)/.62;
       guard.actor.root.visible=guard.life>0;
       guard.actor.root.position.y=-.18+.22*Math.sin(t*Math.PI);
@@ -461,6 +482,11 @@ export class SoulFx {
     this.ward.position.set(p.x, 0, p.z);
     this.ward.rotation.y = this.time * 0.4;
     for (const m of this.motifs) {
+      if (m.anchor) {
+        const owner = m.anchor.sample(w);
+        if (!owner) { m.life=0;continue; }
+        m.root.position.x=owner.x;m.root.position.z=owner.z;
+      }
       m.life -= dt;
       const t = 1 - Math.max(0, m.life) / m.max;
       m.animate?.(t);

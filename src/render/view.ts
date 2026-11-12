@@ -183,7 +183,7 @@ export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   private gore = new Gore(this.scene);
-  private soul = new SoulFx(this.scene);
+  private soul = new SoulFx(this.scene, true);
   private previousCast = 0;
   private echoes: { root: THREE.Object3D; life: number }[] = [];
   private echoCd = 0;
@@ -297,6 +297,8 @@ export class View {
   private slashMat!: THREE.MeshBasicMaterial;
   private slashT = 0;
   private swingSide = 1;
+  private heroMoving = false;
+  private heroMotionTick = -1;
 
   private enemies = new Map<number, EnemyView>();
   private fallen: { view: EnemyView; life: number }[] = [];
@@ -1023,10 +1025,13 @@ export class View {
     const blink = false;
     this.hero.visible = (w.phase !== "dead" || !!this.heroModel) && !blink;
     if (this.heroModel) {
-      const moving =
-        Math.abs(p.x - this.previousHero.x) +
-          Math.abs(p.z - this.previousHero.y) >
-        0.001;
+      // A 120 Hz display renders a 60 Hz simulation state more than once.
+      // Repeated samples are not a stop command (nor is a hit-stop frame).
+      if (w.tick !== this.heroMotionTick || battlefieldChanged) {
+        this.heroMoving = !battlefieldChanged && Math.abs(p.x - this.previousHero.x) + Math.abs(p.z - this.previousHero.y) > .001;
+        this.heroMotionTick = w.tick;
+      }
+      const moving = this.heroMoving;
       this.heroModel.play(
         w.phase === "dead"
           ? "death"

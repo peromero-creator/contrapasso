@@ -157,3 +157,54 @@ assert.equal((headA.children[0] as THREE.Mesh).geometry,(headB.children[0] as TH
 assert.equal((headA.children[0] as THREE.Mesh).geometry.getAttribute('color').itemSize,4,'merged head retains per-part translucency');
 for(const head of [headA,headB])head.traverse(n=>{if(n instanceof THREE.Mesh)(n.material as THREE.Material).dispose();});
 console.log('Arsenal motion: PASS (aimed thrusts, interruption reset, recoil recovery, bounded strokes, shared buffers, single-mesh soul heads)');
+
+// Interrupt a corrected pose, including same-action restarts, at zero elapsed time.
+const { PoseTransition } = await import('../src/render/pose-transition.ts');
+const joint = new THREE.Bone(), child = new THREE.Bone(); child.position.x = .6;joint.add(child);
+const blend = new PoseTransition([joint, child]);
+joint.rotation.z = 1.2;const outgoing=joint.quaternion.clone();blend.begin(.08);
+joint.rotation.z=-.8;blend.apply(0);
+assert.ok(joint.quaternion.angleTo(outgoing)<1e-7,'transition starts at the actual displayed pose');
+blend.restore();assert.ok(Math.abs(joint.rotation.z+.8)<1e-7,'blended transforms never feed back into the next sample');
+blend.apply(.04);const middle=joint.quaternion.clone();assert.ok(Math.abs(joint.rotation.z-.2)<1e-6);
+blend.begin(.08);joint.rotation.z=2;blend.apply(0);
+assert.ok(joint.quaternion.angleTo(middle)<1e-7,'a second interruption starts at the current blend, not the old clip');
+blend.restore();blend.apply(.08);assert.ok(Math.abs(joint.rotation.z-2)<1e-7);
+assert.equal(child.position.length(),.6,'transition preserves unscaled limb lengths');
+
+const { EffectAnchor, attachmentFor } = await import('../src/render/effect-anchor.ts');
+const {createWorld,step}=await import('../src/sim/world.ts');
+const followWorld=createWorld(123,['sword-2','sword-3','ash'],{weaponId:'starter',weaponLevel:0,armorLevel:0,core:'ash'});
+followWorld.spawnDelay=999;
+const idle={move:-1,aim:0,attack:false,dash:false};
+step(followWorld,{...idle,technique:2});
+const charging=followWorld.events.find(e=>e.stage==='charge')!;
+assert.ok(charging,'real Solo simulation starts a learned lunge');
+const anchor=new EffectAnchor(charging,'charge');assert.equal(anchor.sample(followWorld),followWorld.player);
+const origin=followWorld.player.x;
+for(let i=0;i<10;i++)step(followWorld,{...idle,move:0});
+assert.ok(followWorld.player.x>origin);assert.equal(anchor.sample(followWorld)?.x,followWorld.player.x,'windup follows movement before contact');
+for(let i=0;i<12;i++)step(followWorld,idle);
+assert.equal(anchor.sample(followWorld),null,'released windup disappears instead of leaving an old seal');
+for(const id of ['sword-3','dagger-4','axe-3','spear-3','ash'] as const)assert.equal(attachmentFor({type:'ability',ability:id,stage:'pulse',x:0,z:0},'starter'),'wielder');
+for(const id of ['ember','iron','hammer-4','staff-4','crossbow-2','lance'] as const)assert.equal(attachmentFor({type:'ability',ability:id,stage:'pulse',x:0,z:0},'starter'),null,'committed ground hits/projectiles remain in world space');
+const orbit=new EffectAnchor({type:'ability',ability:'ash',stage:'pulse',x:0,z:0},'wielder');
+followWorld.player.x+=5;assert.equal(orbit.sample(followWorld)?.x,followWorld.player.x);
+followWorld.player.hp=0;assert.equal(orbit.sample(followWorld),null);
+console.log('Motion continuity: PASS (interrupted poses, same-pose restart, moving windup/orbits, release cleanup, world-space impacts)');
+
+const continuousRig=new THREE.Group(),continuousBone=new THREE.Bone();continuousBone.name='Wrist';continuousRig.add(continuousBone);
+const continuous=new AnimatedModel({scene:continuousRig,animations:[
+  new THREE.AnimationClip('attack',1,[new THREE.QuaternionKeyframeTrack('Wrist.quaternion',[0,1],[0,0,0,1,0,0,Math.sin(.6),Math.cos(.6)])]),
+  new THREE.AnimationClip('idle',1,[new THREE.QuaternionKeyframeTrack('Wrist.quaternion',[0,1],[0,0,0,1,0,0,0,1])]),
+]} as any,1,0);
+continuous.play('attack',.2);continuous.update(.15);
+const shown=continuous.bone('Wrist')!.quaternion.clone();
+continuous.play('attack',.2,true);continuous.update(0);
+assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(shown)<1e-7,'actual mixer restart retains displayed wrist at the transition boundary');
+continuous.update(.05);const recovering=continuous.bone('Wrist')!.quaternion.clone();
+continuous.play('idle');continuous.update(0);
+assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(recovering)<1e-7,'actual attack-to-idle transition has no pose pop');
+continuous.update(.13);assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(new THREE.Quaternion())<1e-7);
+continuous.dispose();
+console.log('Mixer continuity: PASS (same clip restart and recovery preserve the displayed wrist, then settle to the target)');

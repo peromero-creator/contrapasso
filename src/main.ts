@@ -1,3 +1,4 @@
+import { SkillInputBuffer } from "./ui/skill-input";
 import { loadoutWeapons } from "./ui/loadout";
 import { SkillTree } from "./ui/skill-tree";
 import { TECHNIQUES, techniqueId, weaponTechniques } from "./sim/techniques";
@@ -92,10 +93,8 @@ let mouseX = window.innerWidth / 2,
   mouseY = window.innerHeight / 3;
 let mouseDown = false,
   dashQueued = 0,
-  attackQueued = 0,
-  techniqueQueued = 0,
-  castQueued = false,
-  coreQueued = false;
+  attackQueued = 0;
+const skillInput = new SkillInputBuffer();
 let aim = Math.floor(DIRS * 0.75);
 const tmp = new THREE.Vector3();
 
@@ -107,8 +106,7 @@ function clearInput() {
   keys.clear();
   mouseDown = false;
   dashQueued = attackQueued = choiceQueued = 0;
-  castQueued = coreQueued = false;
-  techniqueQueued = 0;
+  skillInput.clear();
 }
 function reflectSound() {
   const button = $<HTMLButtonElement>("sound-toggle");
@@ -198,12 +196,7 @@ function readInput(): Input {
       !dash && world.player.attackCd <= DT && world.player.dashT <= 0
         ? 0
         : attackQueued - 1;
-  const cast = castQueued,
-    ultimate = coreQueued;
-  const technique = techniqueQueued;
-  castQueued = coreQueued = false;
-  techniqueQueued = 0;
-  return { move, aim, attack, dash, cast, ultimate, technique };
+  return { move, aim, attack, dash, ...skillInput.take(world.player, dash) };
 }
 function choose(choice: number) {
   if (world.phase !== "reward" || paused || choiceQueued) return;
@@ -245,9 +238,9 @@ window.addEventListener("keydown", (e) => {
   if (!e.repeat && ["Space", "ShiftLeft", "KeyK"].includes(e.code))
     dashQueued = 8;
   if (!e.repeat && e.code === "KeyJ") attackQueued = 8;
-  if (!e.repeat && /^Digit[1-4]$/.test(e.code)) techniqueQueued = Number(e.code.slice(-1));
-  if (!e.repeat && e.code === "KeyQ") castQueued = true;
-  if (!e.repeat && e.code === "KeyR") coreQueued = true;
+  if (!e.repeat && /^Digit[1-4]$/.test(e.code)) skillInput.press(Number(e.code.slice(-1)));
+  if (!e.repeat && e.code === "KeyQ") skillInput.press("cast");
+  if (!e.repeat && e.code === "KeyR") skillInput.press("ultimate");
   keys.add(e.code);
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));

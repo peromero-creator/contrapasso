@@ -6,6 +6,8 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { abilityContact, abilityDuration } from "../sim/abilities.ts";
 import { combatLift, combatPose, motionClock, staffGesture, piercingGesture, crossbowRecoil, type CombatMotion } from "./combat-motion.ts";
 
+import { PoseTransition } from "./pose-transition.ts";
+
 interface ModelSpec {
   file: string;
   height: number;
@@ -62,6 +64,7 @@ export class AnimatedModel {
   private content: THREE.Object3D;
   private posed = new Map<THREE.Object3D, THREE.Quaternion>();
   private joints = new Map<string, THREE.Object3D>();
+  private transition: PoseTransition;
 
   constructor(
     template: GLTF,
@@ -106,6 +109,14 @@ export class AnimatedModel {
     fit.position.set(-center.x, -box.min.y, -center.z);
     this.presentation.add(fit);
     this.root.add(this.presentation);
+    const animated = new Set<THREE.Object3D>();
+    this.content.traverse(node => { if (node instanceof THREE.Bone) animated.add(node); });
+    for (const clip of clips) for (const track of clip.tracks) {
+      const node = this.joints.get(THREE.PropertyBinding.parseTrackName(track.name).nodeName);
+      if (node) animated.add(node);
+    }
+    animated.add(this.presentation);
+    this.transition = new PoseTransition([...animated]);
     this.addOutline(box.getSize(new THREE.Vector3()).length());
     this.mixer = new THREE.AnimationMixer(this.content);
     for (const clip of clips)
@@ -153,8 +164,13 @@ export class AnimatedModel {
       this.actions.get("idle") ??
       this.actions.values().next().value;
     if (!next || (next === this.active && !restart)) return;
-    this.active?.fadeOut(0.07);
-    next.reset().fadeIn(0.07);
+    if (this.active) this.transition.begin(state === "dash" ? .045 : state === "run" || state === "idle" ? .12 : Math.min(.08, (seconds ?? .4) * .2));
+    this.transition.restore();
+    // Restore procedural corrections before unbinding the previous action.
+    for (const [joint, base] of this.posed) joint.quaternion.copy(base);
+    this.posed.clear();
+    this.mixer.stopAllAction();
+    next.reset().setEffectiveWeight(1);
     const once =
       (state.startsWith("attack") ||
         ["dash", "death", "cast"].includes(state) ||
@@ -181,13 +197,14 @@ export class AnimatedModel {
       );
   }
   update(dt: number, motion?: CombatMotion) {
+    this.transition.restore();
     // Restore before sampling: additive accents never accumulate on idle or a new clip.
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
     this.posed.clear();
     if(this.staffFocus)this.staffFocus.visible=false;
     this.presentation.position.y = combatLift(motion);
     this.mixer.update(dt);
-    if (!motion || !this.active) return;
+    if (!motion || !this.active) { this.transition.apply(dt); return; }
     this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;
     this.mixer.update(0);
     for (const [name, angles] of Object.entries(combatPose(motion))) {
@@ -199,6 +216,7 @@ export class AnimatedModel {
     this.aimVaultBlade(motion);
     this.aimHeldWeapon(motion);
     this.alignHeavyGrip(motion);
+    this.transition.apply(dt);
     this.updateStaffFocus(motion);
   }
   /** Gathering pigment is attached to the actual staff crown, never the actor origin. */
