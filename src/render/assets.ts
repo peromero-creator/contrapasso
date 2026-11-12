@@ -4,7 +4,7 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 import { abilityContact, abilityDuration } from "../sim/abilities.ts";
-import { combatLift, combatPose, motionClock, staffGesture, type CombatMotion } from "./combat-motion.ts";
+import { combatLift, combatPose, motionClock, staffGesture, piercingGesture, crossbowRecoil, type CombatMotion } from "./combat-motion.ts";
 
 interface ModelSpec {
   file: string;
@@ -61,6 +61,7 @@ export class AnimatedModel {
   private allMaterials = new Set<THREE.Material>();
   private content: THREE.Object3D;
   private posed = new Map<THREE.Object3D, THREE.Quaternion>();
+  private joints = new Map<string, THREE.Object3D>();
 
   constructor(
     template: GLTF,
@@ -70,6 +71,7 @@ export class AnimatedModel {
   ) {
     this.content = clone(template.scene);
     this.content.traverse((node) => {
+      if(node.name && !this.joints.has(node.name))this.joints.set(node.name,node);
       if (!(node instanceof THREE.Mesh)) return;
       node.castShadow = true;
       node.receiveShadow = true;
@@ -143,11 +145,7 @@ export class AnimatedModel {
   }
   /** A skeleton bone by name, for attaching held items. */
   bone(name: string): THREE.Object3D | null {
-    let found: THREE.Object3D | null = null;
-    this.content.traverse((node) => {
-      if (!found && node.name === name) found = node;
-    });
-    return found;
+    return this.joints.get(name) ?? null;
   }
   play(state: string, seconds?: number, restart = false) {
     const next =
@@ -259,6 +257,7 @@ export class AnimatedModel {
     this.root.updateWorldMatrix(true,true);
     const axis=new THREE.Vector3(0,0,1).applyQuaternion(right.getWorldQuaternion(new THREE.Quaternion()));
     const shaft=left.getWorldPosition(new THREE.Vector3()).sub(right.getWorldPosition(new THREE.Vector3())).normalize();
+    if(state==='ultimate-slam')shaft.negate();
     if(!this.posed.has(right))this.posed.set(right,right.quaternion.clone());
     const world=right.getWorldQuaternion(new THREE.Quaternion());
     const parent=right.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
@@ -267,16 +266,18 @@ export class AnimatedModel {
   }
   /** Keep ranged releases in front of the caster while preserving the animated windup. */
   private aimHeldWeapon(motion: CombatMotion) {
-    const ranged = motion.weapon === 'vesper-reed' || motion.weapon === 'gravewhisper';
-    const directed = motion.weapon === 'vesper-reed' || !motion.ability || motion.ability === 'lance' || motion.ability === 'staff-1' || motion.ability === 'staff-4' || motion.ability.startsWith('crossbow-');
+    const piercing=piercingGesture(motion);
+    const ranged = !!piercing || motion.weapon === 'vesper-reed' || motion.weapon === 'gravewhisper';
+    const directed = !!piercing || motion.weapon === 'vesper-reed' || !motion.ability || motion.ability === 'lance' || motion.ability === 'staff-1' || motion.ability === 'staff-4' || motion.ability.startsWith('crossbow-');
     if (!ranged || !directed) return;
     const hand=this.bone('RightHand'), upper=this.bone('RightArm'), fore=this.bone('RightForeArm');
     if(!hand||!upper||!fore)return;
     const phase=motionClock(motion,this.active?.getClip().name);
-    const gesture=motion.weapon==='vesper-reed'?staffGesture(motion):null;
+    const gesture=motion.weapon==='vesper-reed'?staffGesture(motion):piercing;
     const weight=gesture?.weight ?? Math.min(1,phase/.4)*Math.min(1,(1-phase)/.22);
     if(weight<=0)return;
-    const localTarget=gesture?new THREE.Vector3(...gesture.target):new THREE.Vector3(.65,1.3,.12);
+    const recoil=crossbowRecoil(motion);
+    const localTarget=gesture?new THREE.Vector3(...gesture.target):new THREE.Vector3(.65-recoil,1.3+recoil*.4,.12);
     this.root.updateWorldMatrix(true,true);
     const target=this.root.localToWorld(localTarget);
     const rotateWorld=(joint:THREE.Object3D,delta:THREE.Quaternion,blend:number)=>{
@@ -293,14 +294,14 @@ export class AnimatedModel {
       const to=target.clone().sub(origin).normalize();
       rotateWorld(joint,new THREE.Quaternion().setFromUnitVectors(from,to),weight);
     }
-    const forward=(gesture?new THREE.Vector3(...gesture.direction):new THREE.Vector3(1,.04,0)).normalize().transformDirection(this.root.matrixWorld);
+    const forward=(gesture?new THREE.Vector3(...gesture.direction):new THREE.Vector3(1,.04+recoil*.8,0)).normalize().transformDirection(this.root.matrixWorld);
     const heldAxis=(motion.weapon === 'gravewhisper' ? new THREE.Vector3(-1,0,0) : new THREE.Vector3(0,0,1)).applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
     rotateWorld(hand,new THREE.Quaternion().setFromUnitVectors(heldAxis,forward),weight);
     // The supporting palm follows the real shaft. Rotate joints only; never stretch bones.
     if(gesture?.support) {
       const left=this.bone('LeftHand'), lower=this.bone('LeftForeArm'), shoulder=this.bone('LeftArm');
       if(left&&lower&&shoulder) {
-        const grip=hand.getWorldPosition(new THREE.Vector3()).addScaledVector(forward,.32);
+        const grip=hand.getWorldPosition(new THREE.Vector3()).addScaledVector(forward,gesture.supportOffset);
         for(let pass=0;pass<3;pass++)for(const joint of [lower,shoulder]) {
           const origin=joint.getWorldPosition(new THREE.Vector3());
           const from=left.getWorldPosition(new THREE.Vector3()).sub(origin).normalize();

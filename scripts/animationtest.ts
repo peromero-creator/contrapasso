@@ -99,6 +99,15 @@ for(const id of ['staff-1','staff-2','staff-3','staff-4','ember','ash','iron'] a
   assert.ok(focus.getWorldPosition(new THREE.Vector3()).distanceTo(tip)<1e-6,`${id}: focus stays at the real staff crown`);
   aiming.update(0);assert.equal(focus.visible,false,'no lingering charge after interruption or weapon switch');
 }
+for(const id of ['spear-1','spear-2','spear-4','dagger-1','sword-2'] as const) {
+  const identity=id.startsWith('spear')?'acheron-needle':id.startsWith('dagger')?'widows-fang':'starter';
+  const {abilityContact}=await import('../src/sim/abilities.ts');
+  aiming.play('cast',1,true);aiming.update(.1,{weapon:identity,ability:id,elapsed:abilityContact(id),combo:1});
+  const tipAxis=new THREE.Vector3(0,0,1).applyQuaternion(aiming.bone('RightHand')!.getWorldQuaternion(new THREE.Quaternion()));
+  const lane=new THREE.Vector3(1,.025,0).normalize().transformDirection(aiming.root.matrixWorld);
+  assert.ok(tipAxis.dot(lane)>.999,`${id}: held tip follows the committed lane`);
+  aiming.update(0);assert.ok(aiming.bone('RightHand')!.quaternion.angleTo(new THREE.Quaternion())<1e-7);
+}
 aiming.dispose();body.geometry.dispose();body.material.dispose();
 console.log('Ranged hand posing: PASS (rotated actor, forward muzzle, unchanged limb lengths, clean recovery)');
 
@@ -127,3 +136,24 @@ for(const signature of [ritualCharge(0x88aaaa),bloodThread(0xaa6677),...(['furna
   signature.root.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();n.material.dispose();}});
 }
 console.log('Spell presentation: PASS (staff release directions, attached focus, interruption reset, finite bounded fades, normal blending)');
+
+const {crossbowRecoil}=await import('../src/render/combat-motion.ts');
+assert.equal(crossbowRecoil({weapon:'gravewhisper',ability:'crossbow-1',elapsed:.32,combo:1}),0);
+assert.ok(crossbowRecoil({weapon:'gravewhisper',ability:'crossbow-1',elapsed:.38,combo:1})>.04);
+assert.ok(crossbowRecoil({weapon:'gravewhisper',ability:'crossbow-1',elapsed:.6,combo:1})<1e-10);
+const {weaponImpact,dragonSoul}=await import('../src/render/signatures.ts');
+for(const family of ['sword','hammer','dagger','axe','spear'])for(const pattern of ['arc','line','burst']) {
+  const a=weaponImpact(family,pattern,4,0xaa9988),b=weaponImpact(family,pattern,6,0xaa9988);
+  assert.ok(a.root.children.length<=3,'weapon contacts have a fixed small draw budget');
+  assert.equal((a.root.children[0] as THREE.Mesh).geometry,(b.root.children[0] as THREE.Mesh).geometry,'repeated hits reuse immutable buffers');
+  a.animate(.3);b.animate(.9);
+  assert.notEqual(a.root.children[0].scale,b.root.children[0].scale,'pooled geometry never shares effect transforms');
+  for(const sig of [a,b])for(let i=0;i<=10;i++){sig.animate(i/10);sig.root.updateMatrixWorld(true);sig.root.traverse(n=>assert.ok(n.matrixWorld.elements.every(Number.isFinite)));}
+  for(const sig of [a,b])sig.root.traverse(n=>{if(n instanceof THREE.Mesh)(n.material as THREE.Material).dispose();});
+}
+const headA=new THREE.Group(),headB=new THREE.Group();dragonSoul(headA,0x91b7b8);dragonSoul(headB,0xb15b64);
+assert.equal(headA.children.length,1,'horns, teeth and whiskers use one mesh per head');
+assert.equal((headA.children[0] as THREE.Mesh).geometry,(headB.children[0] as THREE.Mesh).geometry);
+assert.equal((headA.children[0] as THREE.Mesh).geometry.getAttribute('color').itemSize,4,'merged head retains per-part translucency');
+for(const head of [headA,headB])head.traverse(n=>{if(n instanceof THREE.Mesh)(n.material as THREE.Material).dispose();});
+console.log('Arsenal motion: PASS (aimed thrusts, interruption reset, recoil recovery, bounded strokes, shared buffers, single-mesh soul heads)');

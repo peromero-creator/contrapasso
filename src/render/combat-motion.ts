@@ -18,12 +18,14 @@ export function motionClock(m: CombatMotion, clip?: string) {
   const t = clamp(m.elapsed / duration);
   if (!contact) return t;
   const c = contact / duration, strike = clipContact(clip);
+  const family=familyOf(m.weapon),heavy=family==='hammer'||family==='axe';
+  const gather=heavy?.78:family==='dagger'?.55:family==='spear'?.62:.72;
   if(t <= c) {
     const q=t/c;
     // Settle into a readable silhouette, then accelerate through the final swing.
-    return strike * (.62*smooth(q/.72) + .38*Math.pow(clamp((q-.72)/.28),2));
+    return strike * (.62*smooth(q/gather) + .38*Math.pow(clamp((q-gather)/(1-gather)),2));
   }
-  const hold=Math.min(.045, (duration-contact)*.16);
+  const hold=Math.min(heavy?.06:family==='dagger'||family==='crossbow'?.012:family==='spear'?.018:.045, (duration-contact)*.16);
   return strike+(1-strike)*smooth((m.elapsed-contact-hold)/(duration-contact-hold));
 }
 /** Small additive accents on the existing rig: no detached hand or scaled anatomy. */
@@ -36,12 +38,12 @@ export function combatPose(m: CombatMotion): JointPose {
   let twist = 0, bow = 0, arm = 0, wrist = 0;
   switch (f) {
     case 'sword': twist = side * (.12 * wind - .18 * release); arm = side * .12 * envelope; break;
-    case 'hammer': bow = -.12 * wind + .2 * release; arm = -.14 * wind; break;
-    case 'dagger': twist = side * .16 * envelope; wrist = side * .18 * release; break;
+    case 'hammer': bow = -.22 * wind + .3 * release; arm = -.2 * wind; twist=-.08*wind; break;
+    case 'dagger': twist = side * (.24*wind-.28*release); wrist = side * .22 * release; bow=.12*release; break;
     case 'crossbow': bow = -.07 * release; arm = -.1 * release; break;
     case 'staff': twist = side * .12 * envelope; arm = -.18 * wind + .12 * release; wrist = .12 * envelope; break;
-    case 'axe': twist = side * (.18 * wind - .22 * release); bow = .12 * release; break;
-    case 'spear': twist = -.12 * wind + .14 * release; bow = .1 * release; break;
+    case 'axe': twist = side * (.27 * wind - .32 * release); bow = -.12*wind+.2*release; break;
+    case 'spear': twist = -.19 * wind + .22 * release; bow = -.08*wind+.16*release; break;
   }
   if (m.ability === 'sword-4') { bow=-.12*wind+.24*release; arm=-.85*wind+.16*release; wrist=-.3*wind; }
   if (m.ability === 'ember') { bow = -.14 * wind + .16 * release; arm = -.22 * envelope; }
@@ -87,5 +89,23 @@ export function staffGesture(m: CombatMotion) {
     :harvest?[.45-.22*snap,1.25+.23*snap,.18]
     :orbit?[.35,1.55,.15]
     :[.25+.4*snap-.1*recovery,1.32,.12];
-  return {direction,target,weight,support:!harvest&&!orbit};
+  return {direction,target,weight,support:!harvest&&!orbit,supportOffset:.32};
+}
+
+/** A thrust keeps the tip in the committed lane while the back hand carries the shaft. */
+export function piercingGesture(m:CombatMotion) {
+  const family=familyOf(m.weapon),id=m.ability;
+  const spear=family==='spear'&&(!id||id==='spear-1'||id==='spear-2'||id==='spear-4');
+  const stab=id==='sword-2'||id==='dagger-1'||id==='dagger-2';
+  if(!spear&&!stab)return null;
+  const duration=id?abilityDuration(id):weapon(m.weapon).swing,contact=id?abilityContact(id):weapon(m.weapon).impactDelay!;
+  const q=clamp(m.elapsed/contact),drive=smooth((q-.5)/.5),recover=smooth((m.elapsed-contact)/(duration-contact));
+  const weight=smooth(m.elapsed/.07)*(1-smooth((m.elapsed-duration+.09)/.09));
+  return {target:[.2+.5*drive-.18*recover,1.2,.1] as [number,number,number],direction:[1,.025,0] as [number,number,number],weight,support:spear,supportOffset:-.32};
+}
+export function crossbowRecoil(m:CombatMotion) {
+  if(m.weapon!=='gravewhisper')return 0;
+  const contact=m.ability?abilityContact(m.ability):0;
+  const t=clamp((m.elapsed-contact)/.16);
+  return .12*Math.sin(Math.PI*t)*(1-t);
 }

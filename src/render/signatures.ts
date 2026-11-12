@@ -10,7 +10,7 @@ function cut(points: number[][], depth=.08) {
   return new T.ExtrudeGeometry(shape,{depth,bevelEnabled:false});
 }
 /** A horned soul at the head of Astral Funeral's real projectile fan. */
-export function dragonSoul(root: T.Group, color: number) {
+function sculptDragon(root: T.Group, color: number) {
   const head=new T.Group();head.scale.setScalar(.48);root.add(head);
   const skull=new T.Shape();
   skull.moveTo(-.48,0);skull.bezierCurveTo(-.48,-.36,-.08,-.42,.2,-.29);
@@ -27,6 +27,22 @@ export function dragonSoul(root: T.Group, color: number) {
     thread.userData.alpha=.26;
     for(let i=0;i<3;i++){const tooth=mesh(head,new T.ConeGeometry(.035,.12,3),0x9da78d,.4);tooth.rotation.z=Math.PI;tooth.position.set(.42+i*.11,-.04,side*.1);}
   }
+}
+// All horns, teeth and whiskers share one draw call and one immutable GPU buffer.
+let soulHeadGeometry:T.BufferGeometry | null=null;
+export function dragonSoul(root:T.Group,_color:number) {
+  if(!soulHeadGeometry) {
+    const source=new T.Group();sculptDragon(source,0x91b7b8);source.updateMatrixWorld(true);
+    const positions:number[]=[],colors:number[]=[];
+    source.traverse(node=>{if(node instanceof T.Mesh) {
+      const geometry=node.geometry.index?node.geometry.toNonIndexed():node.geometry.clone();geometry.applyMatrix4(node.matrixWorld);
+      const attr=geometry.getAttribute('position'),color=(node.material as T.MeshBasicMaterial).color;
+      for(let i=0;i<attr.count;i++){positions.push(attr.getX(i),attr.getY(i),attr.getZ(i));colors.push(color.r,color.g,color.b,node.userData.alpha);}
+      geometry.dispose();node.geometry.dispose();(node.material as T.Material).dispose();
+    }});
+    soulHeadGeometry=new T.BufferGeometry();soulHeadGeometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));soulHeadGeometry.setAttribute('color',new T.Float32BufferAttribute(colors,4));soulHeadGeometry.userData.sharedEffect=true;
+  }
+  const head=mesh(root,soulHeadGeometry,_color===0xb15b64?0xe0a3a3:0xffffff,1);return head;
 }
 export function brokenCathedral(radius: number, color: number) {
   const root=new T.Group(),pieces:T.Mesh[]=[];
@@ -132,5 +148,51 @@ export function bloodThread(color:number) {
   return {root,animate:(t:number)=>{
     root.scale.x=1-.88*(1-(1-t)**2);
     veins.forEach(v=>{v.userData.fade=Math.min(1,t/.045)*(1-t)**.5;});
+  }};
+}
+
+// Reusable weapon strokes: fixed vertex counts, no geometry allocation on repeated hits.
+const weaponStrokes=new Map<string,T.BufferGeometry>();
+function weaponStroke(kind:string) {
+  let geometry=weaponStrokes.get(kind);if(geometry)return geometry;
+  if(kind==='fracture'||kind==='fault') {
+    const points:number[]=[],colors:number[]=[],indices:number[]=[];
+    const count=kind==='fault'?3:8;
+    for(let i=0;i<count;i++)for(let j=0;j<6;j++) {
+      const a=kind==='fault'?(i-1)*.055:i*Math.PI/4,d=.08+j*.175,bend=(j%2?1:-1)*.025;
+      const x=Math.cos(a)*d,z=Math.sin(a)*d+bend,w=.016*(1-j/6);
+      points.push(x,.012,z-w,x,.012,z+w);colors.push(1,1,1,.8,1,1,1,.8);
+      if(j<5){const n=(i*6+j)*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}
+    }
+    geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(points,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,4));geometry.setIndex(indices);
+  } else if(kind==='thrust') {
+    geometry=ribbon(t=>new T.Vector3(t,.015,Math.sin(t*Math.PI)*.018),.05);
+  } else {
+    const wide=kind==='cleave';
+    geometry=ribbon(t=>{const a=-1.05+t*2.1;return new T.Vector3(Math.cos(a),.02+Math.sin(Math.PI*t)*(wide?.12:.035),Math.sin(a));},wide?.12:.065);
+  }
+  geometry.userData.sharedEffect=true;weaponStrokes.set(kind,geometry);return geometry;
+}
+export function weaponImpact(family:string,pattern:string,reach:number,color:number) {
+  const root=new T.Group(),parts:T.Mesh[]=[];
+  const hammer=family==='hammer',dagger=family==='dagger',line=pattern==='line',burst=pattern==='burst';
+  const kind=hammer?(line?'fault':'fracture'):line?'thrust':family==='axe'?'cleave':'cut';
+  const count=hammer?1:line?2:burst?3:dagger?2:1;
+  for(let i=0;i<count;i++) {
+    const part=mesh(root,weaponStroke(kind),color,hammer?.42:dagger?.6:.53);
+    part.rotation.y=line?0:burst?i*Math.PI*2/3:dagger?(i-.5)*.45:0;
+    part.position.y=hammer?0:line?.7+i*.12:.55+i*.16;
+    part.scale.set(reach,1,line?1:reach);
+    if(line)part.position.z=(i-.5)*.14;
+    parts.push(part);
+  }
+  return {root,animate:(t:number)=>{
+    const travel=1-(1-t)**3;
+    parts.forEach((part,i)=>{
+      if(line)part.scale.x=reach*(.35+.65*travel);
+      else if(hammer)part.scale.set(reach*(.35+.65*travel),1,reach*(.35+.65*travel));
+      else part.rotation.y=(burst?i*Math.PI*2/3:dagger?(i-.5)*.45:0)+(dagger?(i%2?-1:1):1)*(travel-.5)*(family==='axe'?1.1:.7);
+      part.userData.fade=Math.min(1,t/.035)*(1-t)**(dagger?1.6:.75);
+    });
   }};
 }

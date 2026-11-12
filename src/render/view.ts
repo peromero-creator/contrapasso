@@ -11,7 +11,6 @@ import { Underworld } from "./dressing";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import {
   ARENA_HX,
@@ -192,7 +191,6 @@ export class View {
   private viewH = VIEW_HEIGHT;
   private aspect = 1;
   private composer: EffectComposer;
-  private bloom: UnrealBloomPass;
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private target = new THREE.Vector3();
@@ -385,9 +383,6 @@ export class View {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.6, 0.92);
-    this.bloom.enabled = false;
-    this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
     this.setCircle(0);
@@ -1401,7 +1396,6 @@ export class View {
     const h = window.innerHeight;
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
-    this.bloom.resolution.set(w, h);
     this.aspect = w / h;
     // narrow windows zoom out so at least 20 units of arena width stay visible
     this.viewH = Math.max(VIEW_HEIGHT, 20 / this.aspect);

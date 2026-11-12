@@ -26,7 +26,7 @@ export function orientWeapon(
   root.rotation.z = bolt ? 0 : -Math.PI / 2;
   root.rotation.y = bolt ? Math.PI / 2 : 0;
   root.position.set(
-    bolt ? 0.22 : spec.model === "spear" ? -1.05 : -0.15,
+    bolt ? 0.22 : spec.model === "spear" ? -1.05 : spec.model === "hammer" ? -.45 : -0.15,
     bolt ? -0.12 : 0,
     0,
   );
@@ -37,9 +37,9 @@ export function abilityClip(id: import('../sim/abilities').AbilityId, identity: 
   const clips: Record<string, string> = {
     'sword-1': 'attack', 'sword-2': 'attack-spear', 'sword-3': 'attack-axe-heavy', 'sword-4': 'attack-vault',
     'hammer-1': 'attack-hammer', 'hammer-2': 'attack-hammer', 'hammer-3': 'ultimate-iron', 'hammer-4': 'ultimate-slam',
-    'dagger-1': 'attack-dagger', 'dagger-2': 'attack-crossbow', 'dagger-3': 'attack', 'dagger-4': 'attack-axe-heavy',
+    'dagger-1': 'attack-dagger', 'dagger-2': 'attack-crossbow', 'dagger-3': 'attack', 'dagger-4': 'attack-dagger',
     'staff-1': 'cast', 'staff-2': 'ultimate-slam', 'staff-3': 'cast', 'staff-4': 'ultimate',
-    'axe-1': 'attack-axe', 'axe-2': 'attack', 'axe-3': 'attack-axe-heavy', 'axe-4': 'attack-axe',
+    'axe-1': 'attack-axe', 'axe-2': 'attack-axe', 'axe-3': 'attack-axe', 'axe-4': 'attack-axe-heavy',
     'spear-1': 'attack-spear', 'spear-2': 'attack-spear', 'spear-3': 'attack', 'spear-4': 'attack-spear',
   };
   if (clips[id]) return clips[id];
