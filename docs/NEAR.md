@@ -6,8 +6,8 @@ Deployed and verified on public NEAR testnet on 2026-11-12. No mainnet assets ar
 
 - Contract: [contrapasso-261112-a23809.testnet](https://testnet.nearblocks.io/address/contrapasso-261112-a23809.testnet)
 - Deployment: [5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5](https://testnet.nearblocks.io/txns/5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5)
-- WASM SHA-256: `04528a87127db2e6b0fc4ad1c300c318d76eea7a47dfd57d32cf669533ebd198`
-- Latest code-only update: [4Um6yKCLJQgdCtguPQpPo38uKiRawRcsXBJDYueMjvM5](https://testnet.nearblocks.io/txns/4Um6yKCLJQgdCtguPQpPo38uKiRawRcsXBJDYueMjvM5), version 0.7.0. Existing state and 29 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
+- WASM SHA-256: `d53cfdd765587876b31063ebaca5029da0fccb777a5c4f7b89d9601d96a3ebe2`
+- Latest code-only update: [5VUXz7F1NwrqvNt776N5HFxs8f8Jd2RsG8yykMWa6fFL](https://testnet.nearblocks.io/txns/5VUXz7F1NwrqvNt776N5HFxs8f8Jd2RsG8yykMWa6fFL), version 0.8.0. Existing state and 31 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
 - Published code and referee public key were read back and matched. The local server is connected through a restricted relay key.
 - Live verification passed: two guest champions played verified Solo, a permanent power was bought, defense was enabled, both Duel stakes were locked, and the winning replay paid the pool and updated both NFTs. Repeating a result did not award twice.
 - A separate silent browser run earned 165 coin, then won its Duel and finished with 175 coin and a 1–0 record, confirmed directly from NFT metadata.
@@ -50,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.6.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.7.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -102,6 +102,16 @@ The built-in exchange pays royalties atomically; external NEP-199 quotes still r
 Both ranged weapons were minted and upgraded on public testnet. A real native purchase and seller withdrawal passed, including a same-intent retry with no second payment. [Exchange proof](testnet-exchange-proof.json). Fresh WASM and in-place 0.6→0.7 VM tests verify listing locks, stale quotes, paid replay protection, preserved nonzero kill history, royalties and withdrawals. The deployment preserves the serialized root and uses the existing market map prefix for exchange state.
 
 Reproduce within authorized testnet scope with `npm run near:exchange-smoke -- --execute`. It resumes its private saved intents and edition; it is not a generic load test. Free testnet balances only; guest custody and external wallet gameplay limitations still apply.
+
+## Expanded forge (0.8)
+
+The same champion can now mint repeatedly in treasury editions, paying fresh coin access and native value each time. The reservation map retains one active/current entry per champion; the round's participant list stays unique, so close/cancel never refunds an already minted item twice. Unique serial token IDs preserve prior NFTs. Legacy raffle behavior stays unchanged. `open_round` accepts an owner-only `cap` from 1 to 1,000 (default 12 for compatibility); the CLI defaults to 100. There are still at most 50 distinct participants per round to bound refund work.
+
+`expanded_arsenal` and `repeat_mint` advertise actual deployed support. Guillotine Hymn and Acheron Needle are accepted by the shared catalog, referee and contract, with metadata-selected combat builds. The API refuses these new mints on older deployments. `forge-demo-1` has 100 pieces and a seven-day window; the former treasury edition was closed with unpaid reservations refunded. [Forge verification](testnet-forge-proof.json). `npm run near:forge-smoke -- --execute` resumes the private existing test champion and never requests additional sponsorship.
+
+A silent browser test separately minted and equipped the axe, completed a replay-verified Solo descent to circle three, and confirmed 31 kills on that same NFT. The daily coin cap credited zero additional coin; the vault stayed at 60.
+
+Both fresh WASM and in-place 0.7→0.8 VM verification passed, including two different paid mints on one champion, retained coin accounting, distinct tokens and equipment metadata. The previous deployment evidence is [archived here](testnet-exchange-upgrade-proof.json).
 
 ## Historical mint and native prize accounting (0.5)
 

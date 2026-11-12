@@ -70,6 +70,17 @@ export class GameService {
             "Ranged relics open after the testnet update.",
             503,
           );
+        if (
+          body.operation === "reserve_mint" &&
+          ["guillotine-hymn", "acheron-needle"].includes(
+            String(marketData?.weaponId),
+          ) &&
+          !this.near.supports("expanded_arsenal")
+        )
+          throw new RefereeError(
+            "These relics open after the testnet update.",
+            503,
+          );
         this.referee.queueMarket(owner, body.id, body.operation, body.data);
         try {
           await this.near.flush();

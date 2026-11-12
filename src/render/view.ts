@@ -1,3 +1,5 @@
+import { attackClip, orientWeapon } from "./weapon-pose";
+import { Gore } from "./gore";
 import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
 import { Underworld } from "./dressing";
 // Everything visual. Reads the simulation state, never changes it.
@@ -39,13 +41,6 @@ const CHARGE: Record<string, number> = {
 };
 /** How the blade sits in the hero's right-hand bone (radians). */
 const GRIP: [number, number, number] = [0, -Math.PI / 2, 0];
-
-function orientWeapon(root: THREE.Group, spec: ReturnType<typeof weapon>) {
-  const bolt = spec.ranged === "bolt";
-  root.rotation.z = bolt ? 0 : -Math.PI / 2;
-  root.rotation.y = bolt ? Math.PI / 2 : 0;
-  root.position.set(bolt ? 0.22 : -0.15, bolt ? -0.12 : 0, 0);
-}
 
 function canvasTexture(
   size: number,
@@ -183,6 +178,7 @@ const std = (color: number, emissive = 0x000000, ei = 1) =>
 export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
+  private gore = new Gore(this.scene);
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   private viewH = VIEW_HEIGHT;
   private aspect = 1;
@@ -193,9 +189,11 @@ export class View {
   private target = new THREE.Vector3();
   private shake = 0;
   private time = 0;
+  private lastWorldTick = 0;
   private models = new ModelLibrary();
   private heroModel: AnimatedModel | null = null;
   private previousHero = new THREE.Vector2();
+  private previousHeroSwing = -1;
   private baseGround: THREE.Texture | null = null;
 
   private ground!: THREE.Mesh;
@@ -215,20 +213,48 @@ export class View {
     g.fillStyle = grad;
     g.fillRect(0, 0, 128, 128);
   });
-  private splatTex = canvasTexture(128, (g) => {
-    g.fillStyle = "#fff";
-    for (let i = 0; i < 11; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const d = i === 0 ? 0 : 12 + Math.random() * 30;
+  private splatTex = canvasTexture(256, (g) => {
+    const pool = g.createRadialGradient(128, 128, 8, 128, 128, 78);
+    pool.addColorStop(0, "#6b5454");
+    pool.addColorStop(0.6, "#b79b9b");
+    pool.addColorStop(1, "#d0aaaa");
+    g.fillStyle = pool;
+    g.beginPath();
+    for (let i = 0; i < 48; i++) {
+      const angle = (i / 48) * Math.PI * 2,
+        r = 44 + Math.random() * 25;
+      const x = 128 + Math.cos(angle) * r,
+        y = 128 + Math.sin(angle) * r;
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.closePath();
+    g.fill();
+    for (let i = 0; i < 38; i++) {
+      const angle = Math.random() * Math.PI * 2,
+        d = 35 + Math.random() * 75;
+      g.fillStyle = i % 3 === 0 ? "#ae8f8f" : "#d6baba";
       g.beginPath();
-      g.arc(
-        64 + Math.cos(a) * d,
-        64 + Math.sin(a) * d,
-        i === 0 ? 26 : 5 + Math.random() * 13,
+      g.ellipse(
+        128 + Math.cos(angle) * d,
+        128 + Math.sin(angle) * d,
+        2 + Math.random() * 9,
+        1 + Math.random() * 4,
+        angle,
         0,
         Math.PI * 2,
       );
       g.fill();
+    }
+    g.globalCompositeOperation = "destination-out";
+    for (let i = 0; i < 1100; i++) {
+      g.fillStyle = `rgba(0,0,0,${0.08 + Math.random() * 0.2})`;
+      g.fillRect(
+        Math.random() * 256,
+        Math.random() * 256,
+        1 + Math.random() * 3,
+        1 + Math.random() * 2,
+      );
     }
   });
   private key!: THREE.DirectionalLight;
@@ -258,11 +284,14 @@ export class View {
     this.weaponGlow.intensity = Math.min(0.3, level * 0.035);
   }
   private slash = new THREE.Group();
+  private slashArc!: THREE.Mesh;
+  private thrustTrail!: THREE.Mesh;
   private slashMat!: THREE.MeshBasicMaterial;
   private slashT = 0;
   private swingSide = 1;
 
   private enemies = new Map<number, EnemyView>();
+  private fallen: { view: EnemyView; life: number }[] = [];
   private shots = new Map<number, THREE.Mesh>();
   private shotGeo = new THREE.SphereGeometry(0.16, 10, 8);
   private boltGeo = new THREE.BoxGeometry(0.8, 0.07, 0.07);
@@ -459,14 +488,14 @@ export class View {
   private splat(x: number, z: number, size: number) {
     let s = this.splats.find((q) => q.life <= 0);
     if (!s) {
-      if (this.splats.length >= 70)
+      if (this.splats.length >= 100)
         s = this.splats.reduce((a, b) => (a.life < b.life ? a : b));
       else {
         const mesh = new THREE.Mesh(
           new THREE.PlaneGeometry(1, 1),
           new THREE.MeshBasicMaterial({
             map: this.splatTex,
-            color: 0x4a0709,
+            color: 0x630c13,
             transparent: true,
             depthWrite: false,
             toneMapped: false,
@@ -478,7 +507,7 @@ export class View {
         this.splats.push(s);
       }
     }
-    s.life = 9;
+    s.life = 45;
     s.mesh.visible = true;
     s.mesh.position.set(
       Math.max(-ARENA_HX + 0.5, Math.min(ARENA_HX - 0.5, x)),
@@ -494,7 +523,13 @@ export class View {
   }
 
   private blood(x: number, z: number, drops: number, size: number) {
-    this.burst(x, 1.0, z, drops, 0x7a0d10, 5, false);
+    this.gore.spray(
+      x,
+      z,
+      drops,
+      x - this.hero.position.x,
+      z - this.hero.position.z,
+    );
     this.splat(
       x + (Math.random() - 0.5) * 0.9,
       z + (Math.random() - 0.5) * 0.9,
@@ -614,6 +649,13 @@ export class View {
     );
     arc.rotation.x = -Math.PI / 2;
     this.slash.add(arc);
+    this.slashArc = arc;
+    this.thrustTrail = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 0.025, 0.09),
+      this.slashMat,
+    );
+    this.thrustTrail.position.x = 1.65;
+    this.slash.add(this.thrustTrail);
     this.slash.position.y = 0.9;
     this.scene.add(this.slash);
   }
@@ -652,6 +694,13 @@ export class View {
     const idx = Math.max(0, Math.min(CIRCLES.length - 1, i));
     if (idx === this.circle) return;
     this.circle = idx;
+    this.gore.clear();
+    for (const c of this.fallen) this.disposeEnemy(c.view);
+    this.fallen = [];
+    for (const s of this.splats) {
+      s.life = 0;
+      s.mesh.visible = false;
+    }
     const c = CIRCLES[idx];
     (this.scene.background as THREE.Color).setHex(c.fog);
     (this.ground.material as THREE.MeshBasicMaterial).color.setHex(c.tint);
@@ -876,12 +925,13 @@ export class View {
           break;
         case "hit":
           this.damageText(e.x, e.z, String(e.amount ?? 0), "#e8dcc5");
-          this.burst(e.x, 1.1, e.z, 6, 0xffd9a0, 7);
-          this.blood(e.x, e.z, 4, 0.7);
+          this.burst(e.x, 1.1, e.z, 3, 0x9c7154, 3);
+          this.blood(e.x, e.z, 12, 1.0);
           this.shake = Math.max(this.shake, (e.amount ?? 0) > 40 ? 0.08 : 0.04);
           stop = Math.max(stop, (e.amount ?? 0) > 40 ? 0.03 : 0.015);
           break;
         case "kill":
+          this.gore.shatter(e.x, e.z, e.kind === "warden" ? 14 : 6);
           this.burst(
             e.x,
             1.0,
@@ -893,8 +943,8 @@ export class View {
           this.blood(
             e.x,
             e.z,
-            e.kind === "warden" ? 36 : 12,
-            e.kind === "warden" ? 3 : 1.5,
+            e.kind === "warden" ? 55 : 28,
+            e.kind === "warden" ? 3.4 : 2.1,
           );
           this.splat(
             e.x + (Math.random() - 0.5) * 1.4,
@@ -906,7 +956,7 @@ export class View {
           break;
         case "hurt":
           this.damageText(e.x, e.z, `−${e.amount ?? 0}`, "#d6a092", 2.5);
-          this.burst(e.x, 1.2, e.z, 10, 0xff2a2a, 6);
+          this.blood(e.x, e.z, 10, 0.8);
           this.shake = Math.max(this.shake, 0.12);
           break;
         case "dash":
@@ -943,6 +993,18 @@ export class View {
   }
 
   sync(w: World, dt: number) {
+    const battlefieldChanged =
+      w.tick < this.lastWorldTick || w.floor - 1 !== this.circle;
+    if (w.tick < this.lastWorldTick) {
+      this.gore.clear();
+      for (const c of this.fallen) this.disposeEnemy(c.view);
+      this.fallen = [];
+      for (const s of this.splats) {
+        s.life = 0;
+        s.mesh.visible = false;
+      }
+    }
+    this.lastWorldTick = w.tick;
     this.time += dt;
     this.setCircle(w.floor - 1);
     const p = w.player;
@@ -983,23 +1045,17 @@ export class View {
           : dashing
             ? "dash"
             : p.swingT > 0
-              ? p.weaponId === "gravewhisper"
-                ? "attack-crossbow"
-                : p.weaponId === "vesper-reed"
-                  ? "attack-staff"
-                  : p.weaponId === "tollkeeper"
-                    ? "attack-hammer"
-                    : p.weaponId === "widows-fang"
-                      ? "attack-dagger"
-                      : "attack"
+              ? attackClip(p.weaponId, p.swingN)
               : moving
                 ? "run"
                 : "idle",
         p.swingT > 0 ? weapon(p.weaponId).swing : undefined,
+        p.swingT > 0 && p.swingN !== this.previousHeroSwing,
       );
       this.heroModel.flash(p.flash > 0 ? 0x401b16 : null);
       this.heroModel.update(dt);
     }
+    this.previousHeroSwing = p.swingN;
     this.previousHero.set(p.x, p.z);
     for (let i = 0; i < this.heroMats.length; i++) {
       this.heroMats[i].emissive.copy(this.heroBase[i]);
@@ -1014,6 +1070,8 @@ export class View {
         (-0.95 * this.swingSide - this.swordPivot.rotation.y) *
         Math.min(1, dt * 14);
     }
+    this.slashArc.visible = p.weaponId !== "acheron-needle";
+    this.thrustTrail.visible = p.weaponId === "acheron-needle";
     if (this.slashT > 0) {
       this.slashT -= dt;
       this.slash.position.set(p.x, 0.9, p.z);
@@ -1071,20 +1129,25 @@ export class View {
     }
     for (const [id, v] of this.enemies) {
       if (seen.has(id)) continue;
-      this.scene.remove(v.group, v.hpBg, v.hpFg);
-      v.weaponModel?.dispose();
-      v.model?.dispose();
-      for (const child of v.group.children) {
-        if (!(child instanceof THREE.Mesh)) continue;
-        child.geometry.dispose();
-        if (Array.isArray(child.material))
-          child.material.forEach((m) => m.dispose());
-        else child.material.dispose();
-      }
-      v.hpBg.material.dispose();
-      v.hpFg.material.dispose();
+      this.scene.remove(v.hpBg, v.hpFg);
+      if (v.tele) v.tele.visible = false;
+      if (v.model && !battlefieldChanged) {
+        v.model.flash(null);
+        v.model.play("death", 0.9);
+        this.fallen.push({ view: v, life: 2.2 });
+        if (this.fallen.length > 10)
+          this.disposeEnemy(this.fallen.shift()!.view);
+      } else this.disposeEnemy(v);
       this.enemies.delete(id);
     }
+
+    for (const corpse of this.fallen) {
+      corpse.life -= dt;
+      corpse.view.model?.update(dt);
+      if (corpse.life < 0.7) corpse.view.group.position.y -= dt * 1.5;
+      if (corpse.life <= 0) this.disposeEnemy(corpse.view);
+    }
+    this.fallen = this.fallen.filter((c) => c.life > 0);
 
     // shots
     const live = new Set<number>();
@@ -1121,6 +1184,7 @@ export class View {
     for (const m of this.torchMats)
       m.emissiveIntensity = 0.4 + Math.sin(this.time * 1.2 + m.id) * 0.03;
 
+    this.gore.update(dt);
     // particles
     for (const text of this.damageTexts) {
       text.life -= dt;
@@ -1181,6 +1245,21 @@ export class View {
     this.camera.lookAt(this.target.x + sx, 0, this.target.z + sz);
   }
 
+  private disposeEnemy(v: EnemyView) {
+    this.scene.remove(v.group, v.hpBg, v.hpFg);
+    v.weaponModel?.dispose();
+    v.model?.dispose();
+    for (const child of v.group.children) {
+      if (!(child instanceof THREE.Mesh)) continue;
+      child.geometry.dispose();
+      if (Array.isArray(child.material))
+        child.material.forEach((m) => m.dispose());
+      else child.material.dispose();
+    }
+    v.hpBg.material.dispose();
+    v.hpFg.material.dispose();
+  }
+
   private syncEnemy(e: Enemy, v: EnemyView) {
     v.group.position.set(e.x, 0, e.z);
     v.group.rotation.y = -Math.atan2(e.dz, e.dx);
@@ -1193,15 +1272,7 @@ export class View {
         e.state === "act"
           ? "dash"
           : wind
-            ? e.weaponId === "gravewhisper"
-              ? "attack-crossbow"
-              : e.weaponId === "vesper-reed"
-                ? "attack-staff"
-                : e.weaponId === "tollkeeper"
-                  ? "attack-hammer"
-                  : e.weaponId === "widows-fang"
-                    ? "attack-dagger"
-                    : "attack"
+            ? attackClip(e.weaponId, e.pattern)
             : e.state === "seek"
               ? "run"
               : "idle";

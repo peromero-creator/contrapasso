@@ -2,7 +2,7 @@
   "version": 1,
   "models": {
     "hero": {
-      "file": "/assets/models/hero-598679d8bf38.glb",
+      "file": "/assets/models/hero-1a2832180cce.glb",
       "height": 2.2,
       "rotationY": 90,
       "clips": [
@@ -14,9 +14,12 @@
         "attack-hammer",
         "attack-dagger",
         "attack-crossbow",
-        "attack-staff"
+        "attack-staff",
+        "attack-axe",
+        "attack-axe-heavy",
+        "attack-spear"
       ],
-      "bytes": 1136272,
+      "bytes": 1249296,
       "windows": {
         "attack": [
           0.35,
@@ -41,6 +44,18 @@
         "attack-staff": [
           0.2,
           1.3
+        ],
+        "attack-axe": [
+          7.05,
+          7.66
+        ],
+        "attack-axe-heavy": [
+          0.25,
+          1.5
+        ],
+        "attack-spear": [
+          0.55,
+          1.35
         ]
       },
       "credit": {
@@ -218,6 +233,32 @@
         "author": "Made for Contrapasso",
         "license": "Project asset",
         "source": "Meshy image-to-3D from Google Flow concept art/source/funerary-arch.jpg"
+      }
+    },
+    "axe": {
+      "file": "/assets/models/axe-0ed2620d254c.glb",
+      "height": 1.55,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 214280,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept art/source/guillotine-hymn.jpg converted through Meshy image-to-3D"
+      }
+    },
+    "spear": {
+      "file": "/assets/models/spear-8fb5053d8d3c.glb",
+      "height": 2.55,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 209524,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept art/source/acheron-needle.jpg converted through Meshy image-to-3D"
       }
     }
   },

@@ -110,6 +110,16 @@ The Ash Exchange sells existing, unequipped tradable gear for 0.001–1 test NEA
 
 Each circle now has a deliberate perimeter composition: Limbo’s ferry landing and tombs, Lust’s broken thresholds and cloth, Gluttony’s cistern and spider ossuary, Greed’s coffers and shrine, and Wrath’s basalt riverbank. Ambient creatures occupy fixed niches outside combat. The carved arch shares the existing Flow/Meshy art direction. Combat bloom and rapid blinking are disabled; subdued particles, serif damage numbers and a delayed vitality-loss trail keep hits readable without bright bursts.
 
+## Forge and combat presentation (0.8)
+
+The primary catalog mints new weapons; player listings are optional resale of already minted gear. Treasury editions allow sequential mints by the same champion. Each consumes a fresh 10-coin reservation and exact 0.01-test-NEAR payment, producing a distinct token. Only one reservation per champion can be active at a time; cancellation refunds only the current unpaid reservation. Legacy raffle editions keep their original one-mint rules. The owner may choose 1–1,000 total pieces; the live `forge-demo-1` edition has 100. The existing 50-participant bound keeps close/refund work bounded even when players mint repeatedly.
+
+Guillotine Hymn is an executioner axe: 43 base damage, 2.9 reach, wide cleave, 0.58-second recovery. Its third cut deals another 35% damage against targets below 35% life. Acheron Needle is a war spear: 27 damage, 4.1 reach, narrow alignment, 0.43-second recovery; the third thrust gains 1.2 reach. Both use real in-hand models. Damage lands after the animation windup (axe 0.30 seconds; spear 0.12), once per attack; dashing before contact cancels the strike. Simulation version is 0.7.0.
+
+The mint catalog previews the hero's actual attack clips silently. Inventory and resale cards render the same game model in a dark stone chamber rather than showing raw studio concept images. Weapon identity, level, kills and owner history still come from NFT metadata. Faster consecutive attacks explicitly restart the animation instead of leaving it at its final pose.
+
+Blood uses directional clots, textured floor stains lasting up to 45 seconds, and short-lived bone/flesh fragments. Defeated actors play their death clip before sinking away. Pools are bounded (180 gore pieces, 100 stains, 10 falling actors) and clear between floors/runs. No bloom or white damage flash is added.
+
 ## Next steps
 
 1. Record the final demo and review the delivery checklist in `docs/SUBMISSION.md`.

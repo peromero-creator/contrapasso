@@ -288,24 +288,21 @@
         </div>
         <nav class="market-tabs" aria-label="Relic trading">
           <button id="tab-mint" class="btn ghost" aria-pressed="true">
-            MINT EDITION
+            MINT NEW RELICS
           </button>
           <button id="tab-exchange" class="btn ghost" aria-pressed="false">
-            PLAYER MARKET
+            PLAYER LISTINGS
           </button>
         </nav>
         <div id="mint-panel">
           <div id="arsenal-choices" aria-label="Choose a weapon"></div>
           <div class="market-layout">
             <div class="relic-art">
-              <img
-                id="relic-image"
-                src="/assets/ui/cinder-requiem.jpg"
-                alt="Cinder Requiem, a black iron blade with an ember fissure and bronze crescent guard"
-              /><span>LIMITED RELIC / 001</span>
+              <canvas id="relic-stage" aria-label="Selected weapon attack animation preview"></canvas>
+              <span id="relic-motion">IN-GAME MODEL / SILENT PREVIEW</span>
             </div>
             <div class="relic-detail">
-              <span class="eyebrow">ONE RELIC. ANOTHER DESCENT.</span>
+              <span class="eyebrow">MINT IT. WIELD IT. MAKE IT YOURS.</span>
               <h3 id="relic-title">CINDER REQUIEM</h3>
               <p id="relic-description">
                 A free-trading blade forged from the first circle. Starts at +0;
@@ -412,7 +409,7 @@
           WHAT YOU OWN <span>↗</span>
         </button>
         <button id="exchange-open" class="btn ghost">
-          PLAYER MARKET <span>↗</span>
+          PLAYER LISTINGS <span>↗</span>
         </button>
         <button id="market-open" class="btn ghost nft-open">
           THE RELIQUARY <span>↗</span>

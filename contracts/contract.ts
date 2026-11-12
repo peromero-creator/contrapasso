@@ -397,15 +397,17 @@ class Contrapasso {
   open_round({
     id,
     duration_seconds = 120,
+    cap = 12,
   }: {
     id: string;
     duration_seconds?: number;
+    cap?: number;
   }) {
     assert(near.predecessorAccountId() === this.ownerId, "Owner only");
     return openRound(
       this.marketStorage(),
       { nowMs: Number(near.blockTimestamp() / 1000000n) },
-      { id, durationSeconds: duration_seconds },
+      { id, durationSeconds: duration_seconds, cap },
     );
   }
   @call({})
@@ -475,8 +477,8 @@ class Contrapasso {
   game_config() {
     return {
       network: "testnet",
-      version: "0.7.0",
-      features: ["upgrade", "claim", "market", "royalties", "arsenal", "skill_tree", "treasury", "ranged", "exchange"],
+      version: "0.8.0",
+      features: ["upgrade", "claim", "market", "royalties", "arsenal", "skill_tree", "treasury", "ranged", "exchange", "expanded_arsenal", "repeat_mint"],
       referee_public_key: this.refereeKey,
       coin_daily_cap: 300,
       duel_stake: 10,

@@ -1,4 +1,10 @@
-import { weapon, weaponId, type WeaponId } from "./weapons.ts";
+import {
+  weapon,
+  weaponId,
+  heavyReach,
+  executionBonus,
+  type WeaponId,
+} from "./weapons.ts";
 // Deterministic combat simulation. No DOM, no three.js, no Math.random, no trig:
 // the same inputs and seed always give the same run, so a server can replay it.
 import { DX, DZ, DIRS, dirIndex } from "./dirs.ts";
@@ -88,6 +94,7 @@ export interface Player {
   aim: number;
   swingT: number;
   swingN: number;
+  pendingStrike: boolean;
   attackCd: number;
   dashT: number;
   dashCd: number;
@@ -215,6 +222,7 @@ export function createWorld(
       aim: Math.floor(DIRS * 0.75),
       swingT: 0,
       swingN: 0,
+      pendingStrike: false,
       attackCd: 0,
       dashT: 0,
       dashCd: 0,
@@ -544,14 +552,25 @@ function melee(w: World) {
     const ex = e.x - p.x;
     const ez = e.z - p.z;
     const d = Math.sqrt(ex * ex + ez * ez);
-    if (d > blade.reach + e.r + 0.6 * rank(p.skills, "reach")) continue;
+    if (
+      d >
+      blade.reach +
+        heavyReach(p.weaponId, heavy) +
+        e.r +
+        0.6 * rank(p.skills, "reach")
+    )
+      continue;
     if (
       d > 0.001 &&
       (ex * ax + ez * az) / d < blade.arc - 0.12 * rank(p.skills, "reach")
     )
       continue;
     const burning = e.burnT > 0;
-    hurtEnemy(w, e, dmg);
+    hurtEnemy(
+      w,
+      e,
+      Math.round(dmg * executionBonus(p.weaponId, heavy, e.hp, e.maxHp)),
+    );
     if (heavy && burning && rank(p.skills, "pyre"))
       nova(w, e.x, e.z, 2.5, 12 * rank(p.skills, "pyre"));
     if (rank(p.skills, "ember") > 0) e.burnT = 3;
@@ -591,6 +610,7 @@ function stepPlayer(w: World, input: Input) {
     p.dashCd = DASH_CD * (1 - 0.12 * rank(p.skills, "ash"));
     if (p.invuln < DASH_TIME + 0.08) p.invuln = DASH_TIME + 0.08;
     p.swingT = 0;
+    p.pendingStrike = false;
     w.events.push({ type: "dash", x: p.x, z: p.z, dir: p.dashDir });
     if (rank(p.skills, "ash") > 0)
       nova(w, p.x, p.z, 2.5, 18 * rank(p.skills, "ash"));
@@ -605,6 +625,21 @@ function stepPlayer(w: World, input: Input) {
       w.events.push({ type: "echo", x: p.x, z: p.z });
     }
   } else {
+    if (
+      p.pendingStrike &&
+      p.swingT <=
+        weapon(p.weaponId).swing - (weapon(p.weaponId).impactDelay ?? 0)
+    ) {
+      p.pendingStrike = false;
+      w.events.push({
+        type: "swing",
+        x: p.x,
+        z: p.z,
+        dir: p.aim,
+        amount: p.swingN % 3 === 0 ? 2 : 1,
+      });
+      melee(w);
+    }
     if (p.swingT <= 0) p.aim = input.aim;
     if (input.attack && p.attackCd <= 0) {
       p.aim = input.aim;
@@ -616,13 +651,14 @@ function stepPlayer(w: World, input: Input) {
         (1 - 0.08 * rank(p.skills, "haste"));
       p.x += DX[p.aim] * blade.lunge;
       p.z += DZ[p.aim] * blade.lunge;
-      w.events.push({
-        type: blade.ranged ? "ranged" : "swing",
-        x: p.x,
-        z: p.z,
-        dir: p.aim,
-        amount: p.swingN % 3 === 0 ? 2 : 1,
-      });
+      if (!blade.impactDelay)
+        w.events.push({
+          type: blade.ranged ? "ranged" : "swing",
+          x: p.x,
+          z: p.z,
+          dir: p.aim,
+          amount: p.swingN % 3 === 0 ? 2 : 1,
+        });
       if (blade.ranged) {
         fireWeapon(
           w,
@@ -637,7 +673,8 @@ function stepPlayer(w: World, input: Input) {
           "player",
         );
         p.comboT = 0;
-      } else melee(w);
+      } else if (blade.impactDelay) p.pendingStrike = true;
+      else melee(w);
     }
     if (input.move >= 0) {
       const slow = p.swingT > 0 ? 0.55 : 1;
@@ -750,10 +787,11 @@ function stepEnemy(w: World, e: Enemy) {
             const damage = Math.round(
               (blade.damage + (e.weaponLevel ?? 0) * 2) *
                 (heavy ? blade.heavy + 0.6 * rank(skills, "verdict") : 1) *
-                ((e.comboT ?? 0) > 0 ? 1 + 0.25 * rank(skills, "coup") : 1),
+                ((e.comboT ?? 0) > 0 ? 1 + 0.25 * rank(skills, "coup") : 1) *
+                executionBonus(weaponId(e.weaponId), heavy, p.hp, p.maxHp),
             );
             const direct =
-              d <= attackReach &&
+              d <= attackReach + heavyReach(weaponId(e.weaponId), heavy) &&
               facing >= blade.arc - 0.12 * rank(skills, "reach");
             const shock =
               heavy &&

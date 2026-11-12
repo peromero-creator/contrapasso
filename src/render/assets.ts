@@ -142,12 +142,12 @@ export class AnimatedModel {
     });
     return found;
   }
-  play(state: string, seconds?: number) {
+  play(state: string, seconds?: number, restart = false) {
     const next =
       this.actions.get(state) ??
       this.actions.get("idle") ??
       this.actions.values().next().value;
-    if (!next || next === this.active) return;
+    if (!next || (next === this.active && !restart)) return;
     this.active?.fadeOut(0.07);
     next.reset().fadeIn(0.07);
     const once =

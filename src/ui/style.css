@@ -2183,3 +2183,60 @@ h1 {
     padding: 12px;
   }
 }
+
+/* Relics are displayed as their actual game models in a stone chamber. */
+.relic-art,
+.arsenal-choice img,
+.nft-card img {
+  background: #191714;
+}
+.exchange-card img {
+  mix-blend-mode: normal;
+  background: #191714;
+  border: 1px solid #40372c;
+}
+.relic-art {
+  min-width: 0;
+  overflow: hidden;
+}
+#relic-stage {
+  width: 100%;
+  height: 360px;
+  display: block;
+}
+.relic-art span {
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  padding: 12px 10px;
+  text-align: center;
+  color: #c7b99e;
+  background: #191714e8;
+  font-size: 9px;
+}
+#arsenal-choices {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+.arsenal-choice {
+  grid-template-columns: 54px minmax(0, 1fr);
+  padding: 8px;
+  gap: 4px 9px;
+}
+.arsenal-choice img {
+  width: 54px;
+  height: 72px;
+}
+.arsenal-choice strong {
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  #arsenal-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  #relic-stage {
+    height: 320px;
+  }
+}

@@ -1,3 +1,4 @@
+import { WEAPON_IDS } from "../src/sim/weapons.ts";
 import {
   MARKET_OPERATIONS,
   type MarketIntent,
@@ -890,13 +891,7 @@ export class Referee {
     }
     if (operation === "reserve_mint" && body.weaponId !== undefined) {
       demand(
-        [
-          "cinder-requiem",
-          "tollkeeper",
-          "widows-fang",
-          "gravewhisper",
-          "vesper-reed",
-        ].includes(String(body.weaponId)),
+        WEAPON_IDS.some((id) => id !== "starter" && id === body.weaponId),
         "Unknown relic.",
       );
       data.weaponId = body.weaponId;

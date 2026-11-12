@@ -1,3 +1,4 @@
+import { WEAPON_IDS } from "../src/sim/weapons.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -245,11 +246,49 @@ try {
     "Known final failure",
   );
   assert.equal(referee.profile(session.owner).coins, 0);
-  const saleId = randomUUID(), quote = {tokenId:"relic:edition:1",priceYocto:"015000000000000000000000"};
-  const listing = referee.queueMarket(session.owner,saleId,"list_gear",quote);
-  assert.equal(listing.data.priceYocto,"15000000000000000000000","native prices are canonical before signing");
-  assert.equal(referee.queueMarket(session.owner,saleId,"list_gear",{...quote,priceYocto:"15000000000000000000000"}).id,saleId);
-
+  const saleId = randomUUID(),
+    quote = {
+      tokenId: "relic:edition:1",
+      priceYocto: "015000000000000000000000",
+    };
+  const listing = referee.queueMarket(
+    session.owner,
+    saleId,
+    "list_gear",
+    quote,
+  );
+  assert.equal(
+    listing.data.priceYocto,
+    "15000000000000000000000",
+    "native prices are canonical before signing",
+  );
+  assert.equal(
+    referee.queueMarket(session.owner, saleId, "list_gear", {
+      ...quote,
+      priceYocto: "15000000000000000000000",
+    }).id,
+    saleId,
+  );
+  referee.rejectChainOperation(`market:${saleId}`, {}, "Test completed");
+  for (const weaponId of WEAPON_IDS.filter((id) => id !== "starter")) {
+    const id = randomUUID();
+    assert.equal(
+      referee.queueMarket(session.owner, id, "reserve_mint", {
+        roundId: "catalog",
+        weaponId,
+      }).data.weaponId,
+      weaponId,
+    );
+    referee.rejectChainOperation(`market:${id}`, {}, "Test completed");
+  }
+  assert.throws(
+    () =>
+      referee.queueMarket(session.owner, randomUUID(), "reserve_mint", {
+        roundId: "catalog",
+        weaponId: "starter",
+      }),
+    /Unknown relic/,
+  );
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
@@ -295,4 +334,63 @@ const beforeClosing = maps.champions.get("p0").coins;
 closeTreasuryRound(store);
 assert.equal(maps.champions.get("p0").coins, beforeClosing + 10);
 closeTreasuryRound(store);
-assert.equal(maps.champions.get("p0").coins, beforeClosing + 10, "closing twice never refunds twice");
+assert.equal(
+  maps.champions.get("p0").coins,
+  beforeClosing + 10,
+  "closing twice never refunds twice",
+);
+
+// Treasury editions permit repeated earned mints, never reusing a paid reservation.
+assert.throws(
+  () => openRound(store, ctx, { id: "bad-cap", cap: 1001 }),
+  /supply/,
+);
+openRound(store, ctx, { id: "repeat", durationSeconds: 60, cap: 2 });
+const repeatCoin = maps.champions.get("p0").coins;
+for (const [i, identity] of ["guillotine-hymn", "acheron-needle"].entries()) {
+  apply(
+    action("p0", "reserve_mint", { roundId: "repeat", weaponId: identity }),
+  );
+  assert.throws(
+    () =>
+      apply(
+        action("p0", "reserve_mint", { roundId: "repeat", weaponId: identity }),
+      ),
+    /already reserved/,
+  );
+  ctx.predecessor = maps.owners.get("p0");
+  ctx.depositYocto = MINT_PRICE_YOCTO;
+  const paid = action("p0", "mint", { roundId: "repeat" });
+  apply(paid);
+  assert.throws(() => apply(paid), /replay|deposit|paid|Duplicate|Payment/i);
+  assert.throws(
+    () => apply(action("p0", "mint", { roundId: "repeat" })),
+    /Reserve/,
+  );
+  ctx.depositYocto = "0";
+  assert.equal(
+    store.reservations.get("repeat:p0").tokenId,
+    `relic:repeat:${i + 1}`,
+  );
+}
+assert.equal(maps.champions.get("p0").coins, repeatCoin - 20);
+assert.deepEqual(store.rounds.get("repeat").reservationIds, ["p0"]);
+assert.throws(
+  () =>
+    apply(
+      action("p0", "reserve_mint", {
+        roundId: "repeat",
+        weaponId: "tollkeeper",
+      }),
+    ),
+  /reserved/,
+);
+closeTreasuryRound(store);
+assert.equal(
+  maps.champions.get("p0").coins,
+  repeatCoin - 20,
+  "minted reservations never refund on close",
+);
+console.log(
+  "Repeat mint: PASS (unique tokens, fresh coin/native cost, duplicate rejection, exact supply, close accounting)",
+);

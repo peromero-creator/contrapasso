@@ -1,0 +1,104 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "edition": "forge-demo-1",
+  "editionSupply": 100,
+  "championId": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+  "coinsBefore": 34,
+  "coinsAfter": 14,
+  "repeatMintVerified": true,
+  "duplicateMintSafe": true,
+  "cancelRefundVerified": true,
+  "tokens": {
+    "guillotine-hymn": {
+      "tokenId": "relic:forge-demo-1:1",
+      "ownerId": "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad",
+      "traits": {
+        "kind": "weapon",
+        "championId": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "equippedTo": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "level": 0,
+        "bound": false,
+        "kills": 0,
+        "pastOwners": [],
+        "collection": "guillotine-hymn",
+        "weaponId": "guillotine-hymn",
+        "archetype": "Executioner axe",
+        "listing": null,
+        "damage": 43,
+        "reach": 2.9,
+        "attackCooldown": 0.58
+      }
+    },
+    "acheron-needle": {
+      "tokenId": "relic:forge-demo-1:2",
+      "ownerId": "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad",
+      "traits": {
+        "kind": "weapon",
+        "championId": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "equippedTo": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "level": 0,
+        "bound": false,
+        "kills": 0,
+        "pastOwners": [],
+        "collection": "acheron-needle",
+        "weaponId": "acheron-needle",
+        "archetype": "War spear",
+        "listing": null,
+        "damage": 27,
+        "reach": 4.1,
+        "attackCooldown": 0.43
+      }
+    }
+  },
+  "transactions": {
+    "guillotine-hymn:reserve": "r8YN3mWTV6pYv2A3UqHv5BtpoSWKUngQwf79Z9ZVy7J",
+    "proceeds:withdraw": "ChuxTAjtZzottxMaDki57bfivN48XuNa94MiEeFufe1Z",
+    "guillotine-hymn:mint": "CwB4si8iTMJqbvh7MuHNgtPmano52F7ismzPhJks1X21",
+    "guillotine-hymn:equip": "FVXg1LcPCEBNE6RaKomWuf5pkTmwgNbEcMMQDtFC3mFE",
+    "acheron-needle:reserve": "2nTfvf3FkJ51aREAwgMhrsTXcnKGxdVNPkDkrM4pccyf",
+    "acheron-needle:mint": "8dPTVyXJtZKVgRKfZzYft8TkDqsq2vgDQwxP4JBtQhP7",
+    "acheron-needle:equip": "3A958iNJAEnAD4Ncrb9UhFd1XksfxNXbePkHf1eR3mZk",
+    "refund:reserve": "AWbjv5CBiLZCo9kJxKNtTEzW37fPMRRRF3pPVxgwdoWE",
+    "refund:cancel": "6dKhfhDrvXSiNtiGC9HvudbsrctF9iSNenFFGwyDn9gf"
+  },
+  "verifiedAt": "2026-11-12T20:21:36.809Z",
+  "openTransaction": "HVnvQbjEXEbK8SiEJYPzmK2RGBSC9eT7T12b6THyad7G",
+  "previousEditionCloseTransaction": "HVDDT4XV6U2zUbVJHUZZTEqyjK7xjKTPuigXMLX2ZG6d",
+  "originalChampionCoins": 76,
+  "silentBrowser": {
+    "championId": "af515c79-d175-424b-a8c2-1d4b258684d9",
+    "tokenId": "relic:forge-demo-1:3",
+    "reserveTransaction": "G4oYPnpvQQcbPKiQ26ou2A2SF8hLdAutENKkdskALR71",
+    "mintTransaction": "QKv6G58W6zW3BAhEwPeSjx6ti4gnqRNNA5g994fjFUo",
+    "coinBefore": 70,
+    "coinAfterMint": 60,
+    "equipTransaction": "B9rVJ3CSNHPAojedLJbwheTQ4SuPqHLUhqxEsRFs4VoJ",
+    "solo": {
+      "floor": 3,
+      "kills": 31,
+      "earned": 111,
+      "credited": 0,
+      "dailyCapReached": true,
+      "runs": 5,
+      "coinVault": 60
+    },
+    "confirmedTraits": {
+      "kind": "weapon",
+      "championId": "af515c79-d175-424b-a8c2-1d4b258684d9",
+      "equippedTo": "af515c79-d175-424b-a8c2-1d4b258684d9",
+      "level": 0,
+      "bound": false,
+      "kills": 31,
+      "pastOwners": [],
+      "collection": "guillotine-hymn",
+      "weaponId": "guillotine-hymn",
+      "archetype": "Executioner axe",
+      "listing": null,
+      "damage": 43,
+      "reach": 2.9,
+      "attackCooldown": 0.58
+    },
+    "verifiedAt": "2026-11-12T20:27:20.200Z"
+  }
+}

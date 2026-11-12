@@ -614,6 +614,39 @@ try {
       identity,
     );
   }
+  // Repeat mint on the same champion: distinct NFTs and a new paid entry each time.
+  for (const [index, identity] of [
+    "guillotine-hymn",
+    "acheron-needle",
+  ].entries()) {
+    const before = await game.view("get_champion", { champion_id: "smith" });
+    await apply("smith", bob, "reserve_mint", {
+      roundId: "ranged",
+      weaponId: identity,
+    });
+    await apply(
+      "smith",
+      bob,
+      "mint",
+      { roundId: "ranged" },
+      {},
+      { sender: bob, deposit: 10000000000000000000000n },
+    );
+    const tokenId = `relic:ranged:${3 + index}`;
+    const token = await game.view("nft_token", { token_id: tokenId });
+    assert.equal(JSON.parse(token.metadata.extra).weaponId, identity);
+    const after = await game.view("get_champion", { champion_id: "smith" });
+    assert.equal(after.coins, before.coins - 10);
+    await apply("smith", bob, "equip_gear", {
+      slot: "weapon",
+      gearId: tokenId,
+    });
+    assert.equal(
+      (await game.view("get_champion", { champion_id: "smith" })).build
+        .weaponId,
+      identity,
+    );
+  }
   const funds = (await game.view("market_view", { champion_id: "smith" }))
     .treasuryYocto;
   await assert.rejects(

@@ -61,7 +61,7 @@ Record the actual asset pack, author, source URL and license in the manifest and
 
 The title-screen illustration was generated in the same Flow project from the existing penitent character reference: `art/source/cover.jpg`, which remains the preserved original; the active enhanced export is described below.
 
-The limited blade uses `art/source/cinder-requiem.jpg` (Flow) and `art/source/cinder-requiem.glb` (Meshy image-to-3D, 4,000 target polygons). The shipped `sword` model is compressed and reduced to 512-pixel textures. It is shown when Cinder Requiem is equipped and shares the hero’s right-hand grip with the starter fallback, regardless of which model loads first. The concept is also used in the Reliquary and NFT cards.
+The limited blade uses `art/source/cinder-requiem.jpg` (Flow) and `art/source/cinder-requiem.glb` (Meshy image-to-3D, 4,000 target polygons). The shipped `sword` model is compressed and reduced to 512-pixel textures. It is shown when Cinder Requiem is equipped and shares the hero’s right-hand grip with the starter fallback, regardless of which model loads first. The concept remains a source reference; the Reliquary and NFT cards now render the actual packed game model.
 
 Raw duplicate exports and unused generation attempts stay outside Git under `art/source/raw/`. Runtime assets, source inputs needed by `art.config.json`, and provenance stay in the repository.
 
@@ -81,3 +81,11 @@ Gravewhisper and Vesper Reed use original Flow concepts converted into Meshy pro
 The original carved funerary arch was generated in the same Flow project and converted through Meshy (8,000 target polygons, 1024-pixel packed texture). It frames the shore-spider and circle shrines. Five perimeter layouts use the arch, matte weathered stone, tombs, cloth, urns, cisterns, coffers and basalt. The ferryman stays at his landing; the spider stays within its niche. Ambient props never overlap intended combat rules or become attackable targets.
 
 Bloom and rapid model blinking are disabled. Warm bone damage text uses Cinzel; the vitality bar has a delayed loss trail. Hit particles and camera impulses are reduced, with no full-white damage flash. The source concepts, model inputs and packed assets retain actual provenance in `art.config.json` and the manifest.
+
+## Forge presentation (0.8)
+
+Guillotine Hymn and Acheron Needle are original Flow concepts in the same project, converted into Meshy axe and spear props. The hero's existing rig adds Charged Axe Chop and Axe Spin Attack; the spear uses a separately trimmed Thrust Slash clip. Contact frames were inspected in a local silent animation study before choosing the windows. The charged axe clip retains its final descending cut rather than the long hold. Player, rival and mint preview share grip transforms and attack selection.
+
+Fourteen packed models and five painted floors ship. `src/render/relics.ts` renders cached portraits from the same packed weapon meshes in a dark stone chamber; raw neutral-background concepts remain in `art/source/` for provenance, not in product cards. The mint preview uses the hero rig and actual action durations and never changes equipment, gameplay, rewards or audio.
+
+Blood textures and stone-chamber geometry are original procedural art. Directional clots, fragments, irregular stained-floor decals and existing death clips add weight without brighter lighting. Pools are capped and reused. Full anatomical dismemberment is not implemented.

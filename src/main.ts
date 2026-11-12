@@ -1,3 +1,4 @@
+import { relicImage, paintRelics, RelicStage } from "./render/relics";
 import {
   WEAPONS,
   WEAPON_IDS,
@@ -661,7 +662,7 @@ function showMarketTab(exchange: boolean) {
     : "THE RELIQUARY.";
   document.querySelector<HTMLElement>(".market-fine")!.textContent = exchange
     ? "Prices are in free test NEAR. A sale transfers the same weapon NFT and records its previous owner. Seller proceeds remain withdrawable to the seller’s account; 10% supports the game treasury."
-    : "Earn access with 10 Solo coin, then pay 0.01 test NEAR to mint. Unpaid reservations can be cancelled for a full coin refund.";
+    : "Mint a new weapon with 10 earned coin + 0.01 test NEAR. Keep it, upgrade it, or choose to list it on the player market. Every new mint needs its own coin reservation.";
 }
 function renderExchange() {
   if (!marketState || !champion) return;
@@ -676,7 +677,7 @@ function renderExchange() {
           .map((l) => {
             const spec = weapon(l.weaponId),
               mine = l.seller === owner;
-            return `<article class="exchange-card"><img src="/assets/ui/${weaponId(l.weaponId)}.jpg" alt="${escapeHtml(spec.name)}"/><div><span class="eyebrow">${escapeHtml(spec.className)} · +${l.level}</span><h3>${escapeHtml(spec.name)}</h3><p>${l.kills} kills · ${l.pastOwners.length} previous owner${l.pastOwners.length === 1 ? "" : "s"}</p><dl><dt>Damage</dt><dd>${spec.damage + l.level * 2}</dd><dt>Range</dt><dd>${spec.reach} m</dd><dt>Seller</dt><dd>${escapeHtml(shortAccount(l.seller))}</dd></dl><p class="listing-price">${nearAmount(l.priceYocto)} <small>test NEAR</small></p><button class="btn ${mine ? "ghost" : ""}" data-sale="${escapeHtml(l.id)}" data-sale-action="${mine ? "cancel_sale" : "buy_gear"}" ${busy || pendingMarket || (!mine && BigInt(state.nativeBalanceYocto ?? "0") < BigInt(l.priceYocto) + 10n ** 22n) ? "disabled" : ""}>${mine ? "CANCEL LISTING" : "BUY THIS NFT ↗"}</button></div></article>`;
+            return `<article class="exchange-card">${relicImage(weaponId(l.weaponId), escapeHtml(spec.name))}<div><span class="eyebrow">${escapeHtml(spec.className)} · +${l.level}</span><h3>${escapeHtml(spec.name)}</h3><p>${l.kills} kills · ${l.pastOwners.length} previous owner${l.pastOwners.length === 1 ? "" : "s"}</p><dl><dt>Damage</dt><dd>${spec.damage + l.level * 2}</dd><dt>Range</dt><dd>${spec.reach} m</dd><dt>Seller</dt><dd>${escapeHtml(shortAccount(l.seller))}</dd></dl><p class="listing-price">${nearAmount(l.priceYocto)} <small>test NEAR</small></p><button class="btn ${mine ? "ghost" : ""}" data-sale="${escapeHtml(l.id)}" data-sale-action="${mine ? "cancel_sale" : "buy_gear"}" ${busy || pendingMarket || (!mine && BigInt(state.nativeBalanceYocto ?? "0") < BigInt(l.priceYocto) + 10n ** 22n) ? "disabled" : ""}>${mine ? "CANCEL LISTING" : "BUY THIS NFT ↗"}</button></div></article>`;
           })
           .join("")
       : '<p class="exchange-empty">No relics are listed yet. Offer an unequipped weapon below.</p>';
@@ -713,6 +714,7 @@ function renderExchange() {
   $<HTMLButtonElement>("sale-submit").disabled =
     !ready || !available.length || busy || !!pendingMarket;
 }
+let relicStage: RelicStage | null = null;
 let selectedRelic: WeaponId = "cinder-requiem";
 let pendingMarket: {
   championId: string;
@@ -735,18 +737,28 @@ function renderMarket() {
   const { round, reservation, prizeYocto } = marketState;
   const open = !!round && !round.drawn && round.endsAt > Date.now();
   renderedMarketOpen = open;
-  const selected = weapon(reservation?.weaponId ?? selectedRelic);
+  const selected = weapon(
+    reservation?.status === "reserved"
+      ? (reservation.weaponId ?? selectedRelic)
+      : selectedRelic,
+  );
   $("relic-title").textContent = selected.name;
   $("relic-description").textContent =
     selected.description +
     " Starts at +0. Each upgrade adds 2 damage; level and kill history travel with the NFT.";
-  const art = $<HTMLImageElement>("relic-image");
-  art.src = `/assets/ui/${reservation?.weaponId ?? selectedRelic}.jpg`;
-  art.alt = selected.name;
+  const reserved = reservation?.status === "reserved";
+  const choice = reserved
+    ? (reservation.weaponId ?? selectedRelic)
+    : selectedRelic;
+  relicStage ??= new RelicStage(
+    $<HTMLCanvasElement>("relic-stage"),
+    $("relic-motion"),
+  );
+  void relicStage.select(choice);
   $("arsenal-choices").innerHTML = WEAPON_IDS.filter((id) => id !== "starter")
     .map(
       (id) =>
-        `<button class="arsenal-choice ${id === (reservation?.weaponId ?? selectedRelic) ? "selected" : ""}" data-relic="${id}" ${reservation?.status === "reserved" || reservation?.status === "minted" || busy || pendingMarket ? "disabled" : ""}><img src="/assets/ui/${id}.jpg" alt=""/><span>${WEAPONS[id].className}</span><strong>${WEAPONS[id].name}</strong></button>`,
+        `<button class="arsenal-choice ${id === (reserved ? (reservation?.weaponId ?? selectedRelic) : selectedRelic) ? "selected" : ""}" data-relic="${id}" ${reservation?.status === "reserved" || busy || pendingMarket ? "disabled" : ""}>${relicImage(id)}<span>${WEAPONS[id].className}</span><strong>${WEAPONS[id].name}</strong></button>`,
     )
     .join("");
   const metrics = (items: [string, string][]) =>
@@ -762,7 +774,10 @@ function renderMarket() {
   ]);
   let actions = "";
   if (!round) actions = "The next edition has not opened yet.";
-  else if (reservation?.status === "minted")
+  else if (
+    reservation?.status === "minted" &&
+    !champion.chain?.features?.includes("repeat_mint")
+  )
     actions = "Your relic is minted. Equip it from What You Own.";
   else if (reservation?.status === "reserved") {
     actions =
@@ -776,9 +791,13 @@ function renderMarket() {
   } else if (open)
     actions = marketButton(
       "reserve_mint",
-      "RESERVE · 10 COIN",
+      reservation?.status === "minted"
+        ? "MINT ANOTHER · RESERVE 10 COIN"
+        : "RESERVE · 10 COIN",
       champion.runs < 1 ||
         champion.coins < 10 ||
+        (["guillotine-hymn", "acheron-needle"].includes(selectedRelic) &&
+          !champion.chain?.features?.includes("expanded_arsenal")) ||
         round.minted + round.reserved >= round.cap,
     );
   else actions = "This edition is closed. The next round will appear here.";
@@ -798,6 +817,7 @@ function renderMarket() {
     actions +=
       "<p>Finish a Solo descent to earn mint access and demo funds.</p>";
   $("market-actions").innerHTML = actions;
+  paintRelics($("market"));
   const remaining = round
     ? Math.max(0, Math.ceil((round.endsAt - Date.now()) / 1000))
     : 0;
@@ -1068,9 +1088,10 @@ async function renderNft() {
         !isChampion && view.features?.includes("market") && available
           ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || x.listing || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${x.listing ? "LISTED · CANCEL IN MARKET" : equipped ? "UNEQUIP" : "EQUIP"}</button>`
           : "";
-      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${!isChampion && identity !== "starter" ? `<img src="/assets/ui/${identity}.jpg" alt="${weapon(identity).name}"/>` : ""}<strong>${escapeHtml(token.title)}</strong><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${gearButton}</article>`;
+      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${!isChampion && identity !== "starter" ? `${relicImage(identity, weapon(identity).name)}` : ""}<strong>${escapeHtml(token.title)}</strong><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${gearButton}</article>`;
     })
     .join("");
+  paintRelics($("nft-tokens"));
   if (view.onChain && view.contractId)
     $("nft-intro").insertAdjacentHTML(
       "beforeend",

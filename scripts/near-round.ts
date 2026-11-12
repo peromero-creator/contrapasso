@@ -12,15 +12,19 @@ const arg = (name: string, fallback: string) => {
   return i < 0 ? fallback : process.argv[i + 1];
 };
 const id = arg("--id", `cinder-${Date.now().toString(36)}`),
-  duration = Number(arg("--seconds", "86400"));
+  duration = Number(arg("--seconds", "86400")),
+  cap = Number(arg("--cap", "100"));
 if (
   !/^[a-z0-9-]{1,40}$/.test(id) ||
   !Number.isSafeInteger(duration) ||
   duration < 30 ||
-  duration > 604800
+  duration > 604800 ||
+  !Number.isSafeInteger(cap) ||
+  cap < 1 ||
+  cap > 1000
 )
   throw new Error("Invalid round");
-const request = { id, duration_seconds: duration };
+const request = { id, duration_seconds: duration, cap };
 if (!process.argv.includes("--execute")) {
   console.log(
     JSON.stringify(

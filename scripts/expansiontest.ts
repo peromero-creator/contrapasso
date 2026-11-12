@@ -50,6 +50,9 @@ for (const id of WEAPON_IDS) {
   w.enemies = [target(1.3)];
   step(w, { ...idle, attack: true });
   assert.equal(w.player.swingT, weapon(id).swing);
+  if (weapon(id).impactDelay)
+    for (let i = 0; i < Math.ceil(weapon(id).impactDelay! * 60) + 1; i++)
+      step(w, idle);
   if (weapon(id).ranged) for (let i = 0; i < 5; i++) step(w, idle);
   assert.equal(
     w.enemies[0].hp,

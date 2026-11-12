@@ -28,7 +28,7 @@ export const prize = (store, id) => store.market.get(`prize:${id}`) ?? "0";
 export const pendingNative = (store, id) => store.market.get(`native:${id}`);
 export const reservation = (store, round, id) =>
   store.reservations.get(`${round}:${id}`);
-export function openRound(store, ctx, { id, durationSeconds = 120 }) {
+export function openRound(store, ctx, { id, durationSeconds = 120, cap = MINT_CAP }) {
   const config = economy(store),
     old = config.currentRound ? store.rounds.get(config.currentRound) : null;
   check(!old || old.drawn, "Draw the previous round first");
@@ -42,13 +42,14 @@ export function openRound(store, ctx, { id, durationSeconds = 120 }) {
     integer(durationSeconds, 604800) && durationSeconds >= 30,
     "Invalid round duration",
   );
+  check(integer(cap, 1000) && cap >= 1, "Invalid edition supply");
   const round = {
     id,
     title: (config.mode ?? "raffle") === "treasury" ? "Arsenal of the Descent" : "Cinder Requiem",
     revenueMode: config.mode ?? "raffle",
     startsAt: ctx.nowMs,
     endsAt: ctx.nowMs + durationSeconds * 1000,
-    cap: MINT_CAP,
+    cap,
     minted: 0,
     reserved: 0,
     poolYocto: config.carryYocto,
@@ -250,7 +251,7 @@ export function marketAction(store, ctx, c, action) {
     check(round.revenueMode === "treasury" || choice === "cinder-requiem", "Legacy edition is Cinder Requiem only");
     const old = reservation(store, round.id, c.id);
     check(
-      !old || old.status === "cancelled",
+      !old || old.status === "cancelled" || (round.revenueMode === "treasury" && old.status === "minted"),
       "This champion already reserved or minted",
     );
     check(

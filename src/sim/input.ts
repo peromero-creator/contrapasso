@@ -1,6 +1,6 @@
 import type { Input } from "./world.ts";
 
-export const SIM_VERSION = "0.6.0";
+export const SIM_VERSION = "0.7.0";
 export const MAX_PACKED_INPUT = 0x1ffffff;
 
 export function packInput(i: Input): number {
