@@ -14,7 +14,7 @@ import {
 import * as THREE from "three";
 import { ModelLibrary, type AnimatedModel } from "./assets";
 import { weapon, weaponId, type WeaponId } from "../sim/weapons";
-import { attackClip, orientWeapon } from "./weapon-pose";
+import { attackClip, orientWeapon, mountGrip, starterWeapon } from "./weapon-pose";
 
 const models = new ModelLibrary();
 const portraits = new Map<WeaponId, Promise<string>>();
@@ -152,6 +152,7 @@ export class RelicStage {
   private starter = new THREE.Group();
   private identity: WeaponId = "starter";
   private generation = 0;
+  private loading = false;
   private timer = 0;
   private combo = 0;
   private playing = false;
@@ -165,10 +166,7 @@ export class RelicStage {
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     this.camera.position.set(3.5, 2.8, 5.5);
     this.camera.lookAt(0.25, 1.1, 0);
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.55,.07,.17),new THREE.MeshStandardMaterial({color:0x2a1a10,emissive:0xffa040,emissiveIntensity:2.6}));
-    blade.position.x=1.05;
-    const hilt=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.5),new THREE.MeshStandardMaterial({color:0x3a2a20}));
-    hilt.position.x=.3; this.starter.add(blade,hilt); this.grip.add(this.starter); this.starter.visible=false;
+    this.starter.add(starterWeapon()); this.grip.add(this.starter); this.starter.visible = true;
     this.ready = models.create("hero", 2.2).then((hero) => {
       if (!hero) {
         this.label.textContent = "Preview unavailable";
@@ -176,14 +174,10 @@ export class RelicStage {
       }
       this.hero = hero;
       this.scene.add(hero.root);
-      hero.root.rotation.y = -0.35;
+      hero.root.rotation.y = 0;
       const hand = hero.bone("RightHand");
       if (hand) {
-        hero.root.updateWorldMatrix(true, true);
-        const s = hand.getWorldScale(new THREE.Vector3());
-        this.grip.scale.set(1 / s.x, 1 / s.y, 1 / s.z);
-        this.grip.rotation.y = -Math.PI / 2;
-        hand.add(this.grip);
+        mountGrip(hand, this.grip);
       }
       hero.play("idle");
     });
@@ -195,18 +189,14 @@ export class RelicStage {
     this.timer = 0;
     this.playing = false;
     this.fx.clear();
-    this.camera.position.set(
-      ...((ability
-        ? ability === "lance"
-          ? [3.5, 3, 6.5]
-          : [5, 5, 9]
-        : [3.5, 2.8, 5.5]) as [number, number, number]),
-    );
-    this.camera.lookAt(0.25, 1.1, 0);
+
   }
   async select(id: WeaponId) {
-    if (id === this.identity && this.blade) return;
-    this.identity = id;
+    if (!this.loading && id === this.identity && (this.blade || id === 'starter')) return;
+    this.loading = true;
+    this.starter.visible = false;
+    if (this.blade) this.blade.root.visible = false;
+    this.fx.clear();
     const revision = ++this.generation;
     this.label.textContent = "Loading moves…";
     await this.ready;
@@ -221,6 +211,7 @@ export class RelicStage {
       this.blade.dispose();
     }
     this.blade = blade;
+    this.identity = id; this.loading = false;
     this.starter.visible = id === "starter";
     if (blade) {
       orientWeapon(blade.root, spec);
@@ -231,7 +222,7 @@ export class RelicStage {
     this.playing = false;
     this.hero?.play("idle");
     this.label.textContent = blade || id === "starter"
-      ? "SILENT MOVES PREVIEW"
+      ? `${spec.name.toUpperCase()} · SILENT PREVIEW`
       : "Model unavailable";
   }
   private tick(time: number) {
@@ -241,7 +232,7 @@ export class RelicStage {
     if (!this.canvas.checkVisibility() || document.hidden) return;
     const width = this.canvas.clientWidth,
       height = this.canvas.clientHeight;
-    if (!width || !height || !this.hero || (!this.blade && this.identity !== "starter")) return;
+    if (this.loading || !width || !height || !this.hero || (!this.blade && this.identity !== "starter")) return;
     if (
       this.renderer.domElement.width !==
         Math.round(width * this.renderer.getPixelRatio()) ||
@@ -250,6 +241,9 @@ export class RelicStage {
     ) {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
+      const expanded = width > 600;
+      this.camera.position.set(...(expanded ? [7,6,11] : [3.4,2.8,5.3]) as [number,number,number]);
+      this.camera.lookAt(expanded ? 1 : .35, 1, 0);
       this.camera.updateProjectionMatrix();
     }
     this.previewWorld.player.core = coreId(this.ability);
@@ -275,8 +269,8 @@ export class RelicStage {
           stage: "charge",
           x: 0,
           z: 0,
-        });
-        this.label.textContent = `SILENT PREVIEW · ${(isSpell(this.ability) ? SPELLS[this.ability].name : techniqueId(this.ability) ? TECHNIQUES[techniqueId(this.ability)!].name : CORES[coreId(this.ability)!].name).toUpperCase()}`;
+        }, this.identity);
+        this.label.textContent = `${weapon(this.identity).name.toUpperCase()} · ${(isSpell(this.ability) ? SPELLS[this.ability].name : techniqueId(this.ability) ? TECHNIQUES[techniqueId(this.ability)!].name : CORES[coreId(this.ability)!].name).toUpperCase()}`;
       }
       this.elapsed += dt;
       const count =
@@ -292,14 +286,17 @@ export class RelicStage {
           x: 0,
           z: 0,
           amount: this.ability === "ember" ? 3.5 + this.emitted : undefined,
-        });
+        }, this.identity);
         this.emitted++;
       }
       if (this.playing && this.elapsed > duration) {
         this.hero.play("idle");
         this.playing = false;
       }
-      this.hero.update(dt);
+      if (this.playing && !this.emitted && weapon(this.identity).swing - this.timer >= (weapon(this.identity).impactDelay ?? 0)) {
+      this.fx.event({type:weapon(this.identity).ranged?'ranged':'swing',x:0,z:0,dir:0,amount:this.combo%3===0?2:1},this.identity); this.emitted=1;
+    }
+    this.hero.update(dt, this.playing ? { weapon: this.identity, ability: this.ability, elapsed: this.elapsed, combo: Number(this.ability.split('-')[1]) || 1 } : undefined);
       this.renderer.render(this.scene, this.camera);
       return;
     }
@@ -311,6 +308,7 @@ export class RelicStage {
         this.playing = false;
       } else {
         this.combo++;
+        this.emitted = 0;
         this.hero.play(
           attackClip(this.identity, this.combo),
           weapon(this.identity).swing,
@@ -320,7 +318,10 @@ export class RelicStage {
         this.label.textContent = `${this.combo % 3 === 0 ? "III · FINISHER" : this.combo % 3 === 1 ? "I · OPENING" : "II · FOLLOW-UP"}`;
       }
     }
-    this.hero.update(dt);
+    if (this.playing && !this.emitted && weapon(this.identity).swing - this.timer >= (weapon(this.identity).impactDelay ?? 0)) {
+      this.fx.event({type:weapon(this.identity).ranged?'ranged':'swing',x:0,z:0,dir:0,amount:this.combo%3===0?2:1},this.identity); this.emitted=1;
+    }
+    this.hero.update(dt, this.playing ? { weapon: this.identity, elapsed: weapon(this.identity).swing - this.timer, combo: this.combo } : undefined);
     this.renderer.render(this.scene, this.camera);
   }
 }

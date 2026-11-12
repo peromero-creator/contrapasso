@@ -3,7 +3,7 @@ import { abilityClip } from "./weapon-pose";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { SoulFx } from "./soul-fx";
 import { CAST_TIME, CORE_TIME, abilityDuration } from "../sim/abilities";
-import { attackClip, orientWeapon } from "./weapon-pose";
+import { attackClip, orientWeapon, mountGrip, starterWeapon } from "./weapon-pose";
 import { Gore } from "./gore";
 import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
 import { Underworld } from "./dressing";
@@ -45,7 +45,6 @@ const CHARGE: Record<string, number> = {
   champion: 0.3,
 };
 /** How the blade sits in the hero's right-hand bone (radians). */
-const GRIP: [number, number, number] = [0, -Math.PI / 2, 0];
 
 function canvasTexture(
   size: number,
@@ -108,6 +107,7 @@ interface EnemyView {
   h: number;
   model?: AnimatedModel;
   weaponModel?: AnimatedModel;
+  starterProp?: THREE.Group;
 }
 
 interface Particle {
@@ -280,6 +280,7 @@ export class View {
   private starterBlade = new THREE.Group();
   private relicBlades = new Map<WeaponId, THREE.Group>();
   private equippedWeapon: WeaponId = "starter";
+  private rivalWeapon: WeaponId = "starter";
   private weaponLevel = 0;
   private weaponGlow = new THREE.PointLight(0xff9d58, 0, 2.2);
   private underworld!: Underworld;
@@ -587,23 +588,7 @@ export class View {
     halo.position.y = 2.22;
     this.hero.add(halo);
 
-    const bladeMat = new THREE.MeshStandardMaterial({
-      color: 0x2a1a10,
-      emissive: 0xffa040,
-      emissiveIntensity: 2.6,
-    });
-    const blade = new THREE.Mesh(
-      new THREE.BoxGeometry(1.55, 0.07, 0.17),
-      bladeMat,
-    );
-    blade.position.x = 1.05;
-    blade.castShadow = true;
-    const hilt = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, 0.1, 0.5),
-      std(0x3a2a20),
-    );
-    hilt.position.x = 0.3;
-    this.starterBlade.add(blade, hilt);
+    this.starterBlade.add(starterWeapon());
     this.swordGrip.add(this.starterBlade);
     this.swordPivot.add(this.swordGrip);
     this.swordPivot.position.y = 1.05;
@@ -619,14 +604,7 @@ export class View {
       // carry the blade in the right hand instead of orbiting the body
       const hand = model.bone("RightHand");
       if (hand) {
-        this.hero.updateWorldMatrix(true, true);
-        const scale = hand.getWorldScale(new THREE.Vector3());
-        const grip = this.swordGrip;
-        grip.scale.set(1 / scale.x, 1 / scale.y, 1 / scale.z);
-        grip.rotation.set(GRIP[0], GRIP[1], GRIP[2]);
-        hand.add(grip);
-        blade.position.set(0.86, 0, 0);
-        hilt.position.set(0.05, 0, 0);
+        mountGrip(hand, this.swordGrip);
         // The entire grip moves to the hand, including a relic loaded before the hero.
       }
     });
@@ -923,10 +901,10 @@ export class View {
     let stop = 0;
     const glow = CIRCLES[this.circle]?.glow ?? 0xffa040;
     for (const e of events) {
-      this.soul.event(e);
+      this.soul.event(e, e.side === "enemy" ? this.rivalWeapon : this.equippedWeapon);
       switch (e.type) {
         case "swing":
-          this.slashT = 0.16;
+          this.slashT = 0; // The shared weapon-specific ink stroke now owns the swing silhouette.
           this.swingSide = -this.swingSide;
           this.slash.scale.setScalar(e.amount === 2 ? 1.22 : 1);
           this.slashMat.color.setHex(e.amount === 2 ? 0xfff0d0 : 0xffb46a);
@@ -938,7 +916,8 @@ export class View {
           this.burst(e.x, 1.1, e.z, 3, 0x9c7154, 3);
           this.blood(e.x, e.z, 12, 1.0);
           this.shake = Math.max(this.shake, (e.amount ?? 0) > 40 ? 0.08 : 0.04);
-          stop = Math.max(stop, (e.amount ?? 0) > 40 ? 0.03 : 0.015);
+          stop = Math.max(stop, this.equippedWeapon === 'tollkeeper' || this.equippedWeapon === 'guillotine-hymn'
+            ? (e.amount ?? 0) > 40 ? .045 : .025 : this.equippedWeapon === 'widows-fang' ? .012 : (e.amount ?? 0) > 40 ? .028 : .016);
           break;
         case "kill":
           this.gore.shatter(e.x, e.z, e.kind === "warden" ? 14 : 6);
@@ -1003,6 +982,7 @@ export class View {
   }
 
   sync(w: World, dt: number) {
+    this.rivalWeapon = w.enemies.find(e => e.kind === "champion")?.weaponId ?? "starter";
     const battlefieldChanged =
       w.tick < this.lastWorldTick || w.floor - 1 !== this.circle;
     if (w.tick < this.lastWorldTick) {
@@ -1042,7 +1022,7 @@ export class View {
 
     // hero
     this.hero.position.set(p.x, 0, p.z);
-    this.hero.rotation.y = -dirAngle(p.aim);
+    this.hero.rotation.y = -dirAngle(p.castT > 0 ? p.castAim : p.aim);
     const dashing = p.dashT > 0;
     this.hero.scale.set(dashing ? 1.35 : 1, dashing ? 0.8 : 1, 1);
     const blink = false;
@@ -1073,7 +1053,9 @@ export class View {
           (p.swingT > 0 && p.swingN !== this.previousHeroSwing),
       );
       this.heroModel.flash(p.flash > 0 ? 0x401b16 : null);
-      this.heroModel.update(dt);
+      this.heroModel.update(dt, w.phase === 'dead' || dashing ? undefined : p.castT > 0 ? {
+        weapon: p.weaponId, ability: p.castId, elapsed: abilityDuration(p.castId!) - p.castT, combo: Number(p.castId?.split('-')[1]) || 1,
+      } : p.swingT > 0 ? { weapon: p.weaponId, elapsed: weapon(p.weaponId).swing - p.swingT, combo: p.swingN } : undefined);
     }
     this.echoCd -= dt;
     if (
@@ -1169,6 +1151,7 @@ export class View {
           if (e.kind === "champion") {
             const spec = weapon(e.weaponId),
               hand = model.bone("RightHand");
+            if (hand && !spec.model) { const grip = new THREE.Group(); actor.starterProp=starterWeapon(); grip.add(actor.starterProp); mountGrip(hand, grip); }
             if (hand && spec.model)
               void this.models.create(spec.model, spec.height).then((blade) => {
                 if (!blade) return;
@@ -1176,11 +1159,8 @@ export class View {
                   blade.dispose();
                   return;
                 }
-                actor.group.updateWorldMatrix(true, true);
-                const scale = hand.getWorldScale(new THREE.Vector3()),
-                  grip = new THREE.Group();
-                grip.scale.set(1 / scale.x, 1 / scale.y, 1 / scale.z);
-                grip.rotation.set(...GRIP);
+                const grip = new THREE.Group();
+                mountGrip(hand, grip);
                 orientWeapon(blade.root, spec);
                 actor.weaponModel = blade;
                 grip.add(blade.root);
@@ -1190,7 +1170,9 @@ export class View {
         });
       }
       this.syncEnemy(e, v);
-      v.model?.update(dt);
+      v.model?.update(dt, e.kind === 'champion' && (e.ability?.castT ?? 0) > 0 ? {
+        weapon: e.weaponId ?? 'starter', ability: e.ability!.castId, elapsed: abilityDuration(e.ability!.castId!) - e.ability!.castT, combo: Number(e.ability!.castId?.split('-')[1]) || 1,
+      } : undefined);
     }
     for (const [id, v] of this.enemies) {
       if (seen.has(id)) continue;
@@ -1319,6 +1301,7 @@ export class View {
 
   private disposeEnemy(v: EnemyView) {
     this.scene.remove(v.group, v.hpBg, v.hpFg);
+    v.starterProp?.traverse(o=>{ if(o instanceof THREE.Mesh){o.geometry.dispose();(o.material as THREE.Material).dispose();} });
     v.weaponModel?.dispose();
     v.model?.dispose();
     for (const child of v.group.children) {

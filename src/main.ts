@@ -1275,11 +1275,11 @@ function renderGear() {
     });
 }
 let skillStage: RelicStage | null = null;
-function showSkillPreview(id: AbilityId, identity?: WeaponId, scroll = true) {
+function showSkillPreview(id: AbilityId, identity?: WeaponId) {
   skillStage ??= new RelicStage($<HTMLCanvasElement>("skill-stage"),$("skill-preview-label"));
   void skillStage.select(identity ?? champion?.build.weaponId ?? "starter");
   skillStage.preview(id);
-  if (scroll) $("skill-stage").scrollIntoView({ behavior: "smooth", block: "center" });
+  // Keep the map in place while its adjacent theatre changes weapon.
   const t = techniqueId(id);
   const info = t ? TECHNIQUES[t] : isSpell(id) ? SPELLS[id] : CORES[coreId(id)!];
   $("skill-preview-name").textContent = info.name;
@@ -1307,7 +1307,6 @@ $("train").addEventListener("click", async () => {
   try {
     await loadChampion();
     renderForge();
-    showSkillPreview(champion?.build.core ?? spellId(champion?.build.spell), undefined, false);
     $("modes").inert = true;
     $("forge").classList.remove("hidden");
     $("forge-close").focus();
@@ -1321,6 +1320,23 @@ $("forge-close").addEventListener("click", () => {
   $("modes").inert = false;
   $("train").focus();
 });
+let previewInert: [HTMLElement, boolean][] = [];
+$("skill-preview-expand").onclick = () => {
+  const theatre = document.querySelector('.skill-theatre')!;
+  const expanded = theatre.classList.toggle('expanded');
+  if(expanded) {
+    theatre.setAttribute('role','dialog'); theatre.setAttribute('aria-modal','true'); theatre.setAttribute('aria-label','Skill animation preview');
+    for(let branch=theatre as HTMLElement;branch.parentElement && branch!==$('forge');branch=branch.parentElement) {
+      for(const sibling of branch.parentElement.children) if(sibling!==branch && sibling instanceof HTMLElement) { previewInert.push([sibling,sibling.inert]);sibling.inert=true; }
+    }
+  } else {
+    for(const [el,inert] of previewInert) el.inert=inert;
+    previewInert=[];theatre.removeAttribute('role');theatre.removeAttribute('aria-modal');theatre.removeAttribute('aria-label');
+  }
+  $("skill-preview-expand").setAttribute('aria-pressed',String(expanded));
+  $("skill-preview-expand").setAttribute('aria-label',expanded?'Close expanded preview':'Expand animation preview');
+};
+document.addEventListener('keydown', e => { if(e.key==='Escape' && document.querySelector('.skill-theatre.expanded')) { $("skill-preview-expand").click(); e.stopImmediatePropagation(); } }, true);
 $("preview-lance").onclick = () => showSkillPreview(spellId(champion?.build.spell));
 const embers = $("embers");
 for (let i = 0; i < 36; i++) {

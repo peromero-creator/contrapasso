@@ -99,3 +99,14 @@ The same Meshy hero rig adds Charged Spell Cast (125), Mage Spell Cast 3 (132) a
 ## Weapon mastery presentation (0.10)
 
 The skill atlas uses original SVG branch paths and weapon-family icons, circular learned nodes and a hold-to-learn ring. Seven weapon tabs, spells and ultimates separate browsing from the four combat hotkeys. The existing hero rig and weapon models supply the technique clips; no new generated models or animation credits were used for this revision. Directed trails, circular cuts and hammer ground fractures follow actual hit patterns without bloom. Reused clips have move-specific durations and contacts; this is not a new set of 28 bespoke motion-capture clips.
+
+
+## Combat motion and atlas polish
+
+Player, Duel champion and silent theatre now share the same grip mounting and matte starter blade. Preview selection waits for its requested model before resuming, so a slow prop load cannot play the new technique with the previous weapon. Matching weapon branches preview the equipped variant; other branches remain cosmetic previews.
+
+Existing clips are selected by technique (lunges, spins, judgments and staff channels), with small family-specific spine, arm and wrist accents for preparation, contact and recovery. A presentation clock maps the simulation contact to the release portion of a clip. Staff and crossbow releases use two short arm-aim corrections and a wrist alignment toward the actor's firing direction; segment lengths and simulation positions remain unchanged. Heavy two-hand clips align the shaft through both palms. The hammer window is corrected to 0.95–1.75 seconds of Heavy Hammer Swing, retaining the actual downward contact instead of ending during its preparation. Clip-specific contact markers distinguish thrusts from sweeps and judgments. Additive poses restore before each new sample. These are refinements of the existing 15-clip rig, not new generated motion-capture assets or 28 bespoke animations.
+
+Weapon-specific tapered strokes replace the generic basic swing arc. Staff volleys use curved ink wisps, hammers use grounded fractures, pulls contract inward, and heavy impacts get a short bounded hit stop. Volley count, spread, speed and lifetime match their corresponding technique; Soul Lance shows one shot for ordinary weapons and three for a staff. All effects use normal transparency and bounded pools, without bloom or full-screen flashes. The shared theatre shows these effects beside the tree and can expand for inspection.
+
+The atlas has an overview of all ten categories, draggable and zoomable maps, Fit tree and Find selected controls, arrow-key panning and keyboard focus reveal. A single branch fits its viewport; the preview stays adjacent on desktop. Learning retains the original cancellable 1.1-second hold. No asset generation credits were spent in this pass.

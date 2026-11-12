@@ -3,6 +3,8 @@ import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
+import { combatPose, motionClock, type CombatMotion } from "./combat-motion.ts";
+
 interface ModelSpec {
   file: string;
   height: number;
@@ -55,6 +57,7 @@ export class AnimatedModel {
   }[] = [];
   private allMaterials = new Set<THREE.Material>();
   private content: THREE.Object3D;
+  private posed = new Map<THREE.Object3D, THREE.Quaternion>();
 
   constructor(
     template: GLTF,
@@ -175,8 +178,69 @@ export class AnimatedModel {
         color === null ? m.base : new THREE.Color(color),
       );
   }
-  update(dt: number) {
+  update(dt: number, motion?: CombatMotion) {
+    // Restore before sampling: additive accents never accumulate on idle or a new clip.
+    for (const [joint, base] of this.posed) joint.quaternion.copy(base);
+    this.posed.clear();
     this.mixer.update(dt);
+    if (!motion || !this.active) return;
+    this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;
+    this.mixer.update(0);
+    for (const [name, angles] of Object.entries(combatPose(motion))) {
+      const joint = this.bone(name);
+      if (!joint) continue;
+      this.posed.set(joint, joint.quaternion.clone());
+      joint.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles)));
+    }
+    this.aimHeldWeapon(motion);
+    this.alignHeavyGrip(motion);
+  }
+  /** Heavy two-hand clips carry one shaft through both palms, rather than a dangling prop. */
+  private alignHeavyGrip(motion: CombatMotion) {
+    const state=this.active?.getClip().name;
+    if(!['attack-hammer','attack-axe','ultimate-iron'].includes(state ?? ''))return;
+    if(motion.weapon!=='tollkeeper' && motion.weapon!=='guillotine-hymn')return;
+    const right=this.bone('RightHand'),left=this.bone('LeftHand');
+    if(!right||!left)return;
+    this.root.updateWorldMatrix(true,true);
+    const axis=new THREE.Vector3(0,0,1).applyQuaternion(right.getWorldQuaternion(new THREE.Quaternion()));
+    const shaft=left.getWorldPosition(new THREE.Vector3()).sub(right.getWorldPosition(new THREE.Vector3())).normalize();
+    if(!this.posed.has(right))this.posed.set(right,right.quaternion.clone());
+    const world=right.getWorldQuaternion(new THREE.Quaternion());
+    const parent=right.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
+    right.quaternion.copy(parent.multiply(new THREE.Quaternion().setFromUnitVectors(axis,shaft).multiply(world)));
+    right.updateWorldMatrix(false,true);
+  }
+  /** Keep ranged releases in front of the caster while preserving the animated windup. */
+  private aimHeldWeapon(motion: CombatMotion) {
+    const ranged = motion.weapon === 'vesper-reed' || motion.weapon === 'gravewhisper';
+    const directed = !motion.ability || motion.ability === 'lance' || motion.ability === 'staff-1' || motion.ability === 'staff-4' || motion.ability.startsWith('crossbow-');
+    if (!ranged || !directed) return;
+    const hand=this.bone('RightHand'), upper=this.bone('RightArm'), fore=this.bone('RightForeArm');
+    if(!hand||!upper||!fore)return;
+    const phase=motionClock(motion,this.active?.getClip().name);
+    const weight=Math.min(1,phase/.4)*Math.min(1,(1-phase)/.22);
+    if(weight<=0)return;
+    const localTarget=new THREE.Vector3(.65,1.3,.12);
+    this.root.updateWorldMatrix(true,true);
+    const target=this.root.localToWorld(localTarget);
+    const rotateWorld=(joint:THREE.Object3D,delta:THREE.Quaternion,blend:number)=>{
+      if(!this.posed.has(joint))this.posed.set(joint,joint.quaternion.clone());
+      const world=joint.getWorldQuaternion(new THREE.Quaternion());
+      const parent=joint.parent!.getWorldQuaternion(new THREE.Quaternion());
+      const desired=parent.invert().multiply(delta.multiply(world));
+      joint.quaternion.slerp(desired,blend);joint.updateWorldMatrix(false,true);
+    };
+    // Two short CCD passes, using actual rig segment lengths rather than stretched limbs.
+    for(let pass=0;pass<2;pass++)for(const joint of [fore,upper]) {
+      const origin=joint.getWorldPosition(new THREE.Vector3());
+      const from=hand.getWorldPosition(new THREE.Vector3()).sub(origin).normalize();
+      const to=target.clone().sub(origin).normalize();
+      rotateWorld(joint,new THREE.Quaternion().setFromUnitVectors(from,to),weight);
+    }
+    const forward=new THREE.Vector3(1,.04,0).normalize().transformDirection(this.root.matrixWorld);
+    const heldAxis=(motion.weapon === 'gravewhisper' ? new THREE.Vector3(-1,0,0) : new THREE.Vector3(0,0,1)).applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
+    rotateWorld(hand,new THREE.Quaternion().setFromUnitVectors(heldAxis,forward),weight);
   }
   dispose() {
     this.mixer.stopAllAction();

@@ -140,6 +140,12 @@ Weapon techniques only work with their corresponding family in hand. Blades shar
 
 Q has three selectable spells. Soul Lance retains its Ember Edge gate; Cinder Circle and Blood Thread each cost 35 coin. Circle burns a four-step radius; Thread siphons a seven-step narrow lane and heals six life per hit. Q's first-contact 25% weaving bonus also applies to weapon techniques, consumed once rather than once per pulse. One Q selection is saved as `build.spell`, validated against learned skills and carried in issued Solo/Duel loadouts. The three existing R cores remain separate. Duel rivals use the same active-ability rules. Simulation 0.9 uses a 30-bit input including a 0–4 weapon-technique slot; reward choice keys remain 1–3 only while the reward screen is open.
 
+## Combat presentation and atlas navigation
+
+The skill atlas offers an all-paths overview as well as individual weapon, Q, R and passive branches. Drag, zoom or use keyboard navigation to explore; Fit tree restores the complete view and Find selected returns to the inspected node. Selecting an active skill previews its matching weapon beside the map, with an optional expanded theatre. Previewing remains cosmetic and never equips an unowned NFT or buys training.
+
+The hero's existing rig now layers distinct weapon accents and ranged hand alignment onto technique-specific clips. Cast facing follows the committed aim. Ground cuts, staff wisps, inward harvests and heavy contact pauses strengthen motion without increasing flash intensity. Gameplay, referee inputs, costs, NFT metadata and the deployed contract remain unchanged by this rendering revision.
+
 ## Next steps
 
 1. Record the final demo and review the delivery checklist in `docs/SUBMISSION.md`.

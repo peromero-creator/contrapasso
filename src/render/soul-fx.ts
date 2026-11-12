@@ -1,3 +1,5 @@
+import { previewVolley } from "./combat-motion";
+import { weapon, type WeaponId } from "../sim/weapons";
 import { TECHNIQUES, techniqueId } from "../sim/techniques";
 import * as T from "three";
 import { CORES, CAST_TIME, CORE_TIME, type AbilityId } from "../sim/abilities";
@@ -47,6 +49,8 @@ interface Motif {
   kind: AbilityId | "combo" | "trail";
   inward: boolean;
   travel?: boolean;
+  speed?: number;
+  contract?: boolean;
   sweep?: number;
   extend?: boolean;
 }
@@ -61,6 +65,7 @@ export class SoulFx {
   );
   private seal: T.CanvasTexture;
   private flame: T.CanvasTexture;
+  private wisp: T.CanvasTexture;
   constructor(scene: T.Scene) {
     scene.add(this.root);
     this.root.add(this.ward, this.core);
@@ -118,6 +123,16 @@ export class SoulFx {
       f.closePath();
       f.fill();
     }
+    const ink=document.createElement('canvas');ink.width=256;ink.height=96;
+    const brush=ink.getContext('2d')!;
+    for(let i=0;i<3;i++) {
+      const fade=brush.createLinearGradient(12,0,244,0);
+      fade.addColorStop(0,'rgba(255,255,255,0)');fade.addColorStop(.65,`rgba(255,255,255,${.38+i*.12})`);fade.addColorStop(1,'rgba(255,255,255,.05)');
+      brush.fillStyle=fade;brush.beginPath();brush.moveTo(12,48+i*8);
+      brush.bezierCurveTo(70,8+i*10,180,22+i*8,244,48);
+      brush.bezierCurveTo(178,42+i*5,95,48+i*9,12,48+i*8);brush.fill();
+    }
+    this.wisp=new T.CanvasTexture(ink);this.wisp.colorSpace=T.SRGBColorSpace;
     this.flame = new T.CanvasTexture(flame);
     this.flame.colorSpace = T.SRGBColorSpace;
     this.seal = new T.CanvasTexture(c);
@@ -159,8 +174,11 @@ export class SoulFx {
     m.userData.alpha = opacity;
     return m;
   }
-  event(e: SimEvent) {
+  event(e: SimEvent, identity: WeaponId = "starter") {
+    if (e.type === 'swing' || e.type === 'ranged') { this.strike(e, identity); return; }
     if (e.type !== "ability" && e.type !== "combo" && e.type !== "echo") return;
+    if (e.ability && e.stage !== 'charge' && e.stage !== 'release' && previewVolley(e.ability, identity)) { this.volley(e, identity); return; }
+    if (e.ability === 'lance' && e.stage === 'release') { this.volley(e, identity); return; }
     if (e.ability === "siphon-spell") { this.thread(e); return; }
     const visualAbility = e.ability === "nova-spell" ? "ember" : e.ability;
     const technique = techniqueId(e.ability);
@@ -183,7 +201,7 @@ export class SoulFx {
         : CORE_TIME
       : kind === "combo"
         ? 0.4
-        : 0.9;
+        : kind === "ash" ? .46 : .72;
     const radius =
       e.amount ?? (e.ability === "nova-spell" ? 4 : undefined) ??
       (lance
@@ -229,7 +247,7 @@ export class SoulFx {
             root,
             kind === "ash" ? orbitBlade : shard,
             kind === "ember" ? 0xffffff : color,
-            kind === "ember" ? 0.75 : 0.5,
+            kind === "ember" ? 0.52 : 0.38,
           );
         m.position.set(Math.cos(a) * 0.8, 0.15, Math.sin(a) * 0.8);
         if (kind === "ash") {
@@ -270,42 +288,101 @@ export class SoulFx {
     this.motifs.push({root,life:charge?CAST_TIME:.65,max:charge?CAST_TIME:.65,radius:1,kind:"combo",inward:true,extend:!charge});
     while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
   }
-  private technique(e: SimEvent, id: import('../sim/techniques').TechniqueId) {
-    // A directed cut, ground fracture, or volley silhouette follows the real hit geometry.
-    if (e.stage === "release") return; // Contact pulses carry the visible impact.
-    const spec = TECHNIQUES[id], charge = e.stage === "charge";
+  private strike(e: SimEvent, identity: WeaponId) {
+    const spec=weapon(identity),root=new T.Group(),heavy=e.amount===2;
+    root.position.set(e.x,.08,e.z);root.rotation.y=-(e.dir??0)*Math.PI*2/1024;
+    const color=spec.color,reach=spec.reach+(identity==='acheron-needle'&&heavy?1.2:0);
+    if(spec.ranged) {
+      const curl=this.part(root,orbitBlade,color,.3);
+      curl.position.set(.75,.95,0);curl.scale.setScalar(spec.ranged==='bolt'?.28:heavy?.65:.42);
+      curl.rotation.x=Math.PI/2;
+    } else if(identity==='tollkeeper') {
+      const arc=this.part(root,orbitBlade,0xc0a27b,.35);
+      arc.rotation.x=Math.PI/2;arc.rotation.y=-.6;arc.position.set(.7,.7,0);arc.scale.setScalar(1.5);
+      if(heavy){const r=this.part(root,ring,0x9e8565,.25);r.rotation.x=-Math.PI/2;r.scale.setScalar(reach);}
+    } else if(identity==='acheron-needle') {
+      for(let i=0;i<2;i++) {const cut=this.part(root,orbitBlade,color,.35-i*.12);cut.position.set(reach*.5,.8,i*.15);cut.scale.set(reach*.55,1,.12);cut.rotation.y=Math.PI;}
+    } else {
+      for(let i=0;i<(heavy?2:1);i++){const cut=this.part(root,orbitBlade,color,.36-i*.1);cut.position.y=.8+i*.15;cut.rotation.y=-.75+i*.16;cut.scale.setScalar(reach*.95);if(identity==='guillotine-hymn')cut.rotation.x=.3;}
+    }
+    const life=spec.ranged?.22:identity==='tollkeeper'?.32:identity==='widows-fang'?.13:.23;
+    this.root.add(root);
+    this.motifs.push({root,life,max:life,radius:1,kind:'combo',inward:false,sweep:spec.ranged||identity==='acheron-needle'||identity==='tollkeeper'?0:2.2,extend:identity==='acheron-needle'});
+    while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
+  }
+  private volley(e: SimEvent, identity: WeaponId) {
+    const volley = previewVolley(e.ability!, identity)!;
     const root = new T.Group(); root.position.set(e.x, .08, e.z);
     root.rotation.y = -(e.dir ?? 0) * Math.PI * 2 / 1024;
-    const color = e.side === "enemy" ? 0xb15b64 : id.startsWith('staff') ? 0x8dbfc0 : id.startsWith('dagger') ? 0x9eae8f : id.startsWith('axe') ? 0xb66e59 : 0xc4ad88;
-    const radius = charge ? 1.1 : spec.reach;
-    if (spec.pattern === 'line' || spec.pattern === 'fan') {
-      for (let i = 0; i < (spec.pattern === 'fan' ? spec.spread ?? 1 : 3); i++) {
-        const cut = this.part(root, trailGeo, color, charge ? .2 : .65);
-        cut.position.set(charge ? .6 : spec.reach * .5, .45 + i * .1, spec.pattern === 'line' ? (i - 1) * .25 : 0);
-        cut.scale.set(charge ? 1 : spec.reach / 1.5, 1, 1.5);
-        if (spec.pattern === 'fan') cut.rotation.y = (i - ((spec.spread ?? 1) - 1) / 2) * .18;
+    const staff = e.ability === 'lance' || e.ability?.startsWith('staff');
+    const color = e.side === 'enemy' ? 0xb15b64 : staff ? 0x91b7b8 : 0xc0ac8b;
+    for (let i = 0; i < volley.count; i++) {
+      const dart = new T.Group(), angle = (i - (volley.count - 1) / 2) * volley.step;
+      dart.rotation.y = -angle; dart.position.set(Math.cos(angle)*.7, 1.3, Math.sin(angle)*.7);
+      if(staff) {
+        const plume=this.part(dart,new T.PlaneGeometry(1.7,.65),color,.68);
+        (plume.material as T.MeshBasicMaterial).map=this.wisp;
+        plume.rotation.x=-Math.PI/2;plume.position.x=-.25;
+        const thread=this.part(dart,orbitBlade,color,.3);thread.scale.set(.7,1,.14);thread.rotation.y=Math.PI;thread.position.x=-.25;
+      } else {
+        const tip=this.part(dart,lanceGeo,color,.55);tip.scale.set(.65,.45,.45);
+        const tail=this.part(dart,trailGeo,color,.22);tail.position.x=-.55;tail.scale.x=.7;
+      }
+      root.add(dart);
+    }
+    this.root.add(root);
+    const life = volley.reach / volley.speed;
+    this.motifs.push({root,life,max:life,radius:1,kind:'combo',inward:false,travel:true,speed:volley.speed});
+    while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
+  }
+  private technique(e: SimEvent, id: import('../sim/techniques').TechniqueId) {
+    if (e.stage === 'release') return;
+    const spec = TECHNIQUES[id], charge = e.stage === 'charge', staff = id.startsWith('staff'), hammer = id.startsWith('hammer');
+    const root = new T.Group(); root.position.set(e.x, .08, e.z);
+    root.rotation.y = -(e.dir ?? 0) * Math.PI * 2 / 1024;
+    const color = e.side === 'enemy' ? 0xb15b64 : staff ? id === 'staff-2' ? 0xb77d53 : 0x8db2b3 : id.startsWith('dagger') ? 0x9eae8f : id.startsWith('axe') ? 0xb66e59 : 0xc4ad88;
+    const radius = charge ? 1.05 : spec.reach;
+    if (charge) {
+      // A quiet preparation silhouette, not a premature full-range hit.
+      const seal = this.part(root, new T.PlaneGeometry(2,2), color, .22);
+      (seal.material as T.MeshBasicMaterial).map=this.seal; seal.rotation.x=-Math.PI/2;
+      if (staff) for (let i=0;i<3;i++) {
+        const curl=this.part(root,orbitBlade,color,.27);
+        curl.position.set(.5,.7+i*.3,0); curl.scale.setScalar(.45+i*.1); curl.rotation.y=i*2;
+      }
+    } else if (spec.pattern === 'line') {
+      for (let i=0;i<3;i++) {
+        const cut=this.part(root,orbitBlade,color,.5-i*.12);
+        cut.position.set(spec.reach*.5,.18+i*.18,(i-1)*.1);
+        cut.scale.set(spec.reach*.54,1,.18); cut.rotation.y=Math.PI;
+      }
+    } else if (staff || hammer) {
+      for (let i=0;i<2;i++) {
+        const circle=this.part(root,ring,color,.26-i*.08);
+        circle.rotation.x=-Math.PI/2; circle.scale.setScalar(radius*(1-i*.12)); circle.position.y=.02+i*.05;
+      }
+      const glyph=this.part(root,new T.PlaneGeometry(radius*2,radius*2),color,.13);
+      (glyph.material as T.MeshBasicMaterial).map=this.seal; glyph.rotation.x=-Math.PI/2;
+      for (let i=0;i<10;i++) {
+        const a=i*Math.PI/5;
+        const mark=this.part(root,staff?orbitBlade:trailGeo,color,.36);
+        mark.position.set(Math.cos(a)*radius*.65,.08,Math.sin(a)*radius*.65);
+        mark.rotation.y=-a; mark.scale.set(staff?.75:radius*.45,1,staff?.65:.7);
       }
     } else {
-      for (let i = 0; i < (charge ? 1 : 3); i++) {
-        const cut = this.part(root, orbitBlade, color, charge ? .2 : .6 - i * .12);
-        cut.scale.setScalar(radius * (1 - .12 * i));
-        cut.position.y = .3 + i * .18;
-        cut.rotation.y = spec.pattern === 'burst' ? i * Math.PI * 2 / 3 : -.8;
-      }
-      if (id.startsWith('hammer') && !charge) {
-        const circle = this.part(root, ring, color, .32);
-        circle.rotation.x = -Math.PI / 2; circle.scale.setScalar(radius);
-        for (let i = 0; i < 8; i++) {
-          const crack = this.part(root, trailGeo, color, .35);
-          const a = i * Math.PI / 4;
-          crack.position.set(Math.cos(a) * radius * .5, .02, Math.sin(a) * radius * .5);
-          crack.rotation.y = -a; crack.scale.x = radius * .55;
-        }
+      // Tapered ink strokes stay inside the damage radius and leave the target readable.
+      for (let i=0;i<(spec.pattern==='burst'?3:2);i++) {
+        const cut=this.part(root,orbitBlade,color,.48-i*.12);
+        cut.scale.setScalar(radius*(1-i*.13)); cut.position.y=.35+i*.24;
+        cut.rotation.y=spec.pattern==='burst'?i*Math.PI*2/3:-.8;
+        if(id.startsWith('axe')) cut.rotation.x=.16;
+        if(id.startsWith('dagger')) cut.scale.z*=.75;
       }
     }
     this.root.add(root);
-    this.motifs.push({ root, life: charge ? spec.contact : .55, max: charge ? spec.contact : .55, radius: 1, kind: "combo", inward: false, sweep: !charge && (spec.pattern === "arc" || spec.pattern === "burst") ? spec.pattern === "burst" ? 4 : 2 : 0, extend: !charge && spec.pattern === "line" });
-    while (this.motifs.length > 32) this.dispose(this.motifs.shift()!);
+    const life=charge?spec.contact:hammer?.65:.46;
+    this.motifs.push({root,life,max:life,radius:1,kind:'combo',inward:false,contract:!charge&&!!spec.pull,sweep:!charge&&!staff&&!hammer&&(spec.pattern==='arc'||spec.pattern==='burst')?(spec.pattern==='burst'?3:1.5):0,extend:!charge&&spec.pattern==='line'});
+    while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
   }
   private dispose(m: Motif) {
     this.root.remove(m.root);
@@ -340,11 +417,12 @@ export class SoulFx {
       m.life -= dt;
       const t = 1 - Math.max(0, m.life) / m.max;
       if (m.sweep) m.root.rotation.y += m.sweep * dt;
+      if (m.contract) m.root.scale.set(1-.85*t,1,1-.85*t);
       if (m.extend) m.root.scale.x = .55 + .45 * (1 - (1 - t) ** 3);
       if (m.travel) {
         for (const b of m.root.children) {
-          b.position.x += dt * 8;
-          b.position.z += Math.sin(b.rotation.y) * dt * 8;
+          b.position.x += Math.cos(b.rotation.y) * dt * (m.speed ?? 8);
+          b.position.z -= Math.sin(b.rotation.y) * dt * (m.speed ?? 8);
         }
       } else if (m.kind !== "combo") {
         const size = m.inward
