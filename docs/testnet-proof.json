@@ -1,0 +1,58 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "deploymentTransaction": "5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5",
+  "wasmSha256": "85578dfcacfe0a772bcf2d8c6c8926b598a4769d07ee9ac4907ab41b24c2dfc1",
+  "verifiedAt": "2026-11-12T15:33:17.667Z",
+  "automatedSmoke": {
+    "network": "testnet",
+    "contractId": "contrapasso-261112-a23809.testnet",
+    "verifiedAt": "2026-11-12T15:30:53.642Z",
+    "champions": [
+      {
+        "id": "2d9afa4c-7f62-4681-a10b-8b5c3e7e2866",
+        "owner": "1fc8e001b0912c2dc9868811c941713df404f4a2c720fc9043bad8b09fcdcc0a",
+        "coins": 101,
+        "wins": 1,
+        "losses": 0,
+        "transaction": "gHANtbgFDJE41Edz56jY93uz54ZhfMnZCTTa2VW7D21"
+      },
+      {
+        "id": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "owner": "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad",
+        "coins": 104,
+        "wins": 0,
+        "losses": 1,
+        "transaction": "gHANtbgFDJE41Edz56jY93uz54ZhfMnZCTTa2VW7D21"
+      }
+    ],
+    "duelId": "a87459fe-1d7c-4cbc-ac70-e68a8c654f08",
+    "outcome": "won",
+    "checks": [
+      "Solo replay + duplicate result",
+      "NFT ownership + dynamic metadata",
+      "Permanent training",
+      "Opt-in defense + matchmaking",
+      "Both stakes locked",
+      "Verified Duel + conserved coin + both NFT records"
+    ]
+  },
+  "browserDuel": {
+    "championTokenId": "champion:b97b0746-365c-4f37-8aeb-9dd5d8826700",
+    "owner": "8be6fa591b4ef0f18e8f8477a0019a99dcf9cdc7908d6a0f48feec19ea811174",
+    "coins": 175,
+    "wins": 1,
+    "losses": 0,
+    "equipped": {
+      "weapon": "weapon:b97b0746-365c-4f37-8aeb-9dd5d8826700",
+      "armor": "armor:b97b0746-365c-4f37-8aeb-9dd5d8826700"
+    },
+    "gearTokenCount": 2
+  },
+  "budget": {
+    "fundedTestNEAR": "10",
+    "gasSpentTestNEAR": "0.047149",
+    "storageReservedTestNEAR": "6.206190",
+    "availableTestNEAR": "3.746660"
+  }
+}

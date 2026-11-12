@@ -4,19 +4,59 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { ARENA_HX, ARENA_HZ, PORTAL, type Enemy, type EnemyKind, type SimEvent, type World } from "../sim/world";
+import {
+  ARENA_HX,
+  ARENA_HZ,
+  PORTAL,
+  type Enemy,
+  type EnemyKind,
+  type SimEvent,
+  type World,
+} from "../sim/world";
 import { dirAngle } from "../sim/dirs";
+import { rank } from "../sim/skills";
+import { ModelLibrary, type AnimatedModel } from "./assets";
 
 const PITCH = (55 * Math.PI) / 180;
 const CAM_DIST = 34;
 
 /** One look per circle of the descent: fog, light and floor tint. */
 export const CIRCLES = [
-  { name: "LIMBO", fog: 0x0b0e14, tint: 0x8fa3b8, light: 0xbfd4ff, glow: 0x7fb4ff },
-  { name: "LUST", fog: 0x14070f, tint: 0xb8527a, light: 0xffb3cf, glow: 0xff4f9a },
-  { name: "GLUTTONY", fog: 0x0b1008, tint: 0x7d8f3a, light: 0xdfe8a8, glow: 0xa8d23a },
-  { name: "GREED", fog: 0x120e04, tint: 0xb8922a, light: 0xffe2a0, glow: 0xffc12e },
-  { name: "WRATH", fog: 0x140504, tint: 0xb8351c, light: 0xffb090, glow: 0xff4a1e },
+  {
+    name: "LIMBO",
+    fog: 0x0b0e14,
+    tint: 0x8fa3b8,
+    light: 0xbfd4ff,
+    glow: 0x7fb4ff,
+  },
+  {
+    name: "LUST",
+    fog: 0x14070f,
+    tint: 0xb8527a,
+    light: 0xffb3cf,
+    glow: 0xff4f9a,
+  },
+  {
+    name: "GLUTTONY",
+    fog: 0x0b1008,
+    tint: 0x7d8f3a,
+    light: 0xdfe8a8,
+    glow: 0xa8d23a,
+  },
+  {
+    name: "GREED",
+    fog: 0x120e04,
+    tint: 0xb8922a,
+    light: 0xffe2a0,
+    glow: 0xffc12e,
+  },
+  {
+    name: "WRATH",
+    fog: 0x140504,
+    tint: 0xb8351c,
+    light: 0xffb090,
+    glow: 0xff4a1e,
+  },
 ];
 
 interface EnemyView {
@@ -27,6 +67,7 @@ interface EnemyView {
   hpFg: THREE.Sprite;
   tele: THREE.Mesh | null;
   h: number;
+  model?: AnimatedModel;
 }
 
 interface Particle {
@@ -38,6 +79,16 @@ interface Particle {
   max: number;
 }
 
+interface DamageText {
+  sprite: THREE.Sprite;
+  life: number;
+}
+interface Pulse {
+  mesh: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+  life: number;
+  radius: number;
+}
+
 function groundTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = 1024;
@@ -46,7 +97,7 @@ function groundTexture(): THREE.CanvasTexture {
   g.fillStyle = "#3a3634";
   g.fillRect(0, 0, 1024, 1024);
   let s = 7;
-  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const v = 46 + Math.floor(rnd() * 30);
@@ -81,7 +132,13 @@ function groundTexture(): THREE.CanvasTexture {
 }
 
 const std = (color: number, emissive = 0x000000, ei = 1) =>
-  new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, emissive, emissiveIntensity: ei });
+  new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.75,
+    metalness: 0.05,
+    emissive,
+    emissiveIntensity: ei,
+  });
 
 export class View {
   readonly renderer: THREE.WebGLRenderer;
@@ -94,6 +151,10 @@ export class View {
   private target = new THREE.Vector3();
   private shake = 0;
   private time = 0;
+  private models = new ModelLibrary();
+  private heroModel: AnimatedModel | null = null;
+  private previousHero = new THREE.Vector2();
+  private baseGround: THREE.Texture | null = null;
 
   private ground!: THREE.Mesh;
   private sigil!: THREE.Mesh;
@@ -119,12 +180,66 @@ export class View {
   private portal = new THREE.Group();
   private particles: Particle[] = [];
   private pGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
+  private damageTexts: DamageText[] = [];
+  private pulses: Pulse[] = [];
+
+  private damageText(x: number, z: number, text: string, color: string, y = 2) {
+    if (this.damageTexts.length >= 40) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d")!;
+    ctx.font = "bold 40px sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#18110c";
+    ctx.strokeText(text, 64, 46);
+    ctx.fillStyle = color;
+    ctx.fillText(text, 64, 46);
+    const texture = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: texture, depthTest: false }),
+    );
+    sprite.position.set(x + (Math.random() - 0.5) * 0.5, y, z);
+    sprite.scale.set(1.7, 0.85, 1);
+    sprite.renderOrder = 20;
+    this.scene.add(sprite);
+    this.damageTexts.push({ sprite, life: 0.65 });
+  }
+
+  private pulse(x: number, z: number, radius: number) {
+    let pulse = this.pulses.find((p) => p.life <= 0);
+    if (!pulse) {
+      const mesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.88, 1, 48),
+        new THREE.MeshBasicMaterial({
+          color: 0xffcd7e,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      this.scene.add(mesh);
+      pulse = { mesh, life: 0, radius };
+      this.pulses.push(pulse);
+    }
+    pulse.radius = radius;
+    pulse.life = 0.35;
+    pulse.mesh.visible = true;
+    pulse.mesh.position.set(x, 0.08, z);
+  }
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: "high-performance",
+    });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
 
@@ -162,8 +277,16 @@ export class View {
     this.key.shadow.bias = -0.0006;
     this.scene.add(this.key);
 
-    const gmat = new THREE.MeshStandardMaterial({ map: groundTexture(), roughness: 0.95, metalness: 0 });
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_HX * 2, ARENA_HZ * 2), gmat);
+    const gmat = new THREE.MeshStandardMaterial({
+      map: groundTexture(),
+      roughness: 0.95,
+      metalness: 0,
+    });
+    this.baseGround = gmat.map;
+    this.ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(ARENA_HX * 2, ARENA_HZ * 2),
+      gmat,
+    );
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.receiveShadow = true;
     this.scene.add(this.ground);
@@ -184,7 +307,13 @@ export class View {
     slab.receiveShadow = true;
     this.scene.add(slab);
 
-    const sigMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false });
+    const sigMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.16,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
     this.sigil = new THREE.Mesh(new THREE.RingGeometry(4.2, 4.5, 64), sigMat);
     this.sigil.rotation.x = -Math.PI / 2;
     this.sigil.position.y = 0.02;
@@ -228,7 +357,11 @@ export class View {
       const bowl = new THREE.Mesh(bowlGeo, wallMat);
       bowl.position.set(x, top, z);
       this.scene.add(bowl);
-      const fm = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff7a2a, emissiveIntensity: 1.5 });
+      const fm = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        emissive: 0xff7a2a,
+        emissiveIntensity: 1.5,
+      });
       const fire = new THREE.Mesh(fireGeo, fm);
       fire.position.set(x, top + 0.35, z);
       this.scene.add(fire);
@@ -250,35 +383,72 @@ export class View {
       this.heroBase.push(mat.emissive.clone());
     };
     const cloakMat = std(0x5a1016);
-    const cloak = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.5, 12), cloakMat);
+    const cloak = new THREE.Mesh(
+      new THREE.ConeGeometry(0.62, 1.5, 12),
+      cloakMat,
+    );
     cloak.position.y = 0.78;
     add(cloak, cloakMat);
     const bodyMat = std(0xd8cfc0);
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.55, 6, 12), bodyMat);
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.3, 0.55, 6, 12),
+      bodyMat,
+    );
     body.position.y = 1.15;
     add(body, bodyMat);
     const headMat = std(0xe9e2d6, 0xffd9a0, 0.25);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 10), headMat);
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.27, 14, 10),
+      headMat,
+    );
     head.position.y = 1.86;
     add(head, headMat);
     const halo = new THREE.Mesh(
       new THREE.TorusGeometry(0.3, 0.035, 8, 24),
-      new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffc46a, emissiveIntensity: 2.4 }),
+      new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        emissive: 0xffc46a,
+        emissiveIntensity: 2.4,
+      }),
     );
     halo.rotation.x = Math.PI / 2;
     halo.position.y = 2.22;
     this.hero.add(halo);
 
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xffa040, emissiveIntensity: 2.6 });
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.07, 0.17), bladeMat);
+    const bladeMat = new THREE.MeshStandardMaterial({
+      color: 0x2a1a10,
+      emissive: 0xffa040,
+      emissiveIntensity: 2.6,
+    });
+    const blade = new THREE.Mesh(
+      new THREE.BoxGeometry(1.55, 0.07, 0.17),
+      bladeMat,
+    );
     blade.position.x = 1.05;
     blade.castShadow = true;
-    const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.5), std(0x3a2a20));
+    const hilt = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.1, 0.5),
+      std(0x3a2a20),
+    );
     hilt.position.x = 0.3;
     this.swordPivot.add(blade, hilt);
     this.swordPivot.position.y = 1.05;
     this.hero.add(this.swordPivot);
     this.scene.add(this.hero);
+    void this.models.create("hero", 2.2).then((model) => {
+      if (!model) return;
+      this.heroModel = model;
+      for (const child of this.hero.children)
+        if (child !== this.swordPivot) child.visible = false;
+      this.hero.add(model.root);
+    });
+    void this.models.create("sword", 1.55).then((model) => {
+      if (!model) return;
+      blade.visible = hilt.visible = false;
+      model.root.rotation.z = -Math.PI / 2;
+      model.root.position.x = 0.3;
+      this.swordPivot.add(model.root);
+    });
 
     this.slashMat = new THREE.MeshBasicMaterial({
       color: 0xffb46a,
@@ -288,7 +458,10 @@ export class View {
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    const arc = new THREE.Mesh(new THREE.RingGeometry(1.0, 3.0, 28, 1, -1.22, 2.44), this.slashMat);
+    const arc = new THREE.Mesh(
+      new THREE.RingGeometry(1.0, 3.0, 28, 1, -1.22, 2.44),
+      this.slashMat,
+    );
     arc.rotation.x = -Math.PI / 2;
     this.slash.add(arc);
     this.slash.position.y = 0.9;
@@ -296,12 +469,28 @@ export class View {
   }
 
   private buildPortal() {
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffd27a,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.5, 48), mat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.04;
-    const beamMat = new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 7, 24, 1, true), beamMat);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xffb040,
+      transparent: true,
+      opacity: 0.22,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.15, 1.15, 7, 24, 1, true),
+      beamMat,
+    );
     beam.position.y = 3.5;
     this.portal.add(ring, beam);
     this.portal.position.set(PORTAL.x, 0, PORTAL.z);
@@ -321,12 +510,25 @@ export class View {
     (this.sigil.material as THREE.MeshBasicMaterial).color.setHex(c.glow);
     for (const l of this.torches) l.color.setHex(c.glow);
     for (const m of this.torchMats) m.emissive.setHex(c.glow);
+    void this.models.floor(c.name).then((texture) => {
+      if (this.circle !== idx) return;
+      const material = this.ground.material as THREE.MeshStandardMaterial;
+      material.map = texture ?? this.baseGround;
+      material.color.setHex(texture ? 0xffffff : c.tint);
+      material.needsUpdate = true;
+    });
   }
 
   private makeEnemy(kind: EnemyKind): EnemyView {
     const group = new THREE.Group();
     const mats: THREE.MeshStandardMaterial[] = [];
-    const add = (geo: THREE.BufferGeometry, mat: THREE.MeshStandardMaterial, x: number, y: number, z: number) => {
+    const add = (
+      geo: THREE.BufferGeometry,
+      mat: THREE.MeshStandardMaterial,
+      x: number,
+      y: number,
+      z: number,
+    ) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
       m.castShadow = true;
@@ -347,7 +549,11 @@ export class View {
       const m = std(0x6b3fa0, 0x1a0830, 1);
       add(new THREE.CapsuleGeometry(0.3, 0.9, 6, 10), m, 0, 0.78, 0);
       add(new THREE.ConeGeometry(0.34, 0.6, 8), std(0x24142e), 0, 1.72, 0);
-      const orb = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff5a2a, emissiveIntensity: 2.2 });
+      const orb = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        emissive: 0xff5a2a,
+        emissiveIntensity: 2.2,
+      });
       add(new THREE.SphereGeometry(0.14, 8, 6), orb, 0.42, 1.05, 0);
       h = 2.2;
     } else if (kind === "brute") {
@@ -359,30 +565,79 @@ export class View {
       add(new THREE.ConeGeometry(0.16, 0.6, 6), sh, 0.3, 2.3, 0.3);
       add(new THREE.ConeGeometry(0.16, 0.6, 6), sh, 0.3, 2.3, -0.3);
       h = 2.9;
+    } else if (kind === "champion") {
+      const cloak = std(0x271c32, 0x220818, 1);
+      add(new THREE.ConeGeometry(0.62, 1.5, 12), cloak, 0, 0.78, 0);
+      add(
+        new THREE.CapsuleGeometry(0.3, 0.55, 6, 12),
+        std(0x9293aa),
+        0,
+        1.15,
+        0,
+      );
+      add(
+        new THREE.SphereGeometry(0.27, 14, 10),
+        std(0xe5d4c1, 0xff2840, 0.4),
+        0,
+        1.86,
+        0,
+      );
+      add(
+        new THREE.BoxGeometry(1.55, 0.07, 0.17),
+        std(0x371b2b, 0xff426b, 2.5),
+        1.05,
+        1.05,
+        0,
+      );
+      h = 2.5;
     } else {
       const m = std(0x2a2230, 0x30103a, 1);
       add(new THREE.CapsuleGeometry(1.15, 1.7, 8, 14), m, 0, 1.95, 0);
-      const crown = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffc23a, emissiveIntensity: 2.6 });
-      const t = add(new THREE.TorusGeometry(0.75, 0.09, 8, 24), crown, 0, 4.15, 0);
+      const crown = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        emissive: 0xffc23a,
+        emissiveIntensity: 2.6,
+      });
+      const t = add(
+        new THREE.TorusGeometry(0.75, 0.09, 8, 24),
+        crown,
+        0,
+        4.15,
+        0,
+      );
       t.rotation.x = Math.PI / 2;
-      const eye = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff3a2a, emissiveIntensity: 3 });
+      const eye = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        emissive: 0xff3a2a,
+        emissiveIntensity: 3,
+      });
       add(new THREE.SphereGeometry(0.16, 8, 6), eye, 1.05, 3.1, 0.35);
       add(new THREE.SphereGeometry(0.16, 8, 6), eye, 1.05, 3.1, -0.35);
       h = 4.9;
     }
-    if (kind === "brute" || kind === "warden") {
+    if (kind === "brute" || kind === "warden" || kind === "champion") {
       const w = kind === "warden" ? 3.2 : 2.0;
-      const len = kind === "warden" ? 12 : 10;
+      const len = kind === "warden" ? 12 : kind === "champion" ? 6 : 10;
       tele = new THREE.Mesh(
         new THREE.PlaneGeometry(len, w),
-        new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+        new THREE.MeshBasicMaterial({
+          color: 0xff3020,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
       );
       tele.rotation.x = -Math.PI / 2;
       tele.position.set(len / 2, 0.05, 0);
       group.add(tele);
     }
-    const hpBg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x140808, depthTest: false }));
-    const hpFg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff4a3a, depthTest: false }));
+    const hpBg = new THREE.Sprite(
+      new THREE.SpriteMaterial({ color: 0x140808, depthTest: false }),
+    );
+    const hpFg = new THREE.Sprite(
+      new THREE.SpriteMaterial({ color: 0xff4a3a, depthTest: false }),
+    );
     const bw = kind === "warden" ? 4 : 1.3;
     hpBg.scale.set(bw, 0.13, 1);
     hpFg.scale.set(bw, 0.13, 1);
@@ -393,15 +648,38 @@ export class View {
     hpBg.visible = hpFg.visible = false;
     this.scene.add(hpBg, hpFg);
     this.scene.add(group);
-    return { group, mats, base: mats.map((m) => m.emissive.clone()), hpBg, hpFg, tele, h };
+    return {
+      group,
+      mats,
+      base: mats.map((m) => m.emissive.clone()),
+      hpBg,
+      hpFg,
+      tele,
+      h,
+    };
   }
 
-  private burst(x: number, y: number, z: number, n: number, color: number, speed: number) {
+  private burst(
+    x: number,
+    y: number,
+    z: number,
+    n: number,
+    color: number,
+    speed: number,
+  ) {
     for (let i = 0; i < n; i++) {
       let p = this.particles.find((q) => q.life <= 0);
       if (!p) {
         if (this.particles.length > 220) return;
-        const mesh = new THREE.Mesh(this.pGeo, new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+        const mesh = new THREE.Mesh(
+          this.pGeo,
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          }),
+        );
         this.scene.add(mesh);
         p = { mesh, vx: 0, vy: 0, vz: 0, life: 0, max: 1 };
         this.particles.push(p);
@@ -431,16 +709,27 @@ export class View {
           this.slashMat.color.setHex(e.amount === 2 ? 0xfff0d0 : 0xffb46a);
           break;
         case "hit":
+          this.damageText(e.x, e.z, String(e.amount ?? 0), "#fff0d4");
           this.burst(e.x, 1.1, e.z, 6, 0xffd9a0, 7);
           this.shake = Math.max(this.shake, (e.amount ?? 0) > 40 ? 0.28 : 0.14);
           stop = Math.max(stop, (e.amount ?? 0) > 40 ? 0.055 : 0.028);
           break;
         case "kill":
-          this.burst(e.x, 1.0, e.z, e.kind === "warden" ? 60 : 16, e.kind === "archer" ? 0xb070ff : 0xff5a3a, 9);
+          if ((e.amount ?? 0) > 0)
+            this.damageText(e.x, e.z, `+${e.amount}`, "#e9b76e", 2.8);
+          this.burst(
+            e.x,
+            1.0,
+            e.z,
+            e.kind === "warden" ? 60 : 16,
+            e.kind === "archer" ? 0xb070ff : 0xff5a3a,
+            9,
+          );
           this.shake = Math.max(this.shake, e.kind === "warden" ? 0.9 : 0.25);
           stop = Math.max(stop, 0.05);
           break;
         case "hurt":
+          this.damageText(e.x, e.z, `−${e.amount ?? 0}`, "#ff795c", 2.5);
           this.burst(e.x, 1.2, e.z, 10, 0xff2a2a, 6);
           this.shake = Math.max(this.shake, 0.5);
           break;
@@ -454,6 +743,16 @@ export class View {
         case "won":
           this.burst(e.x, 0.4, e.z, 40, 0xffd27a, 8);
           break;
+        case "burn":
+          this.burst(e.x, 0.6, e.z, 2, 0xff852a, 1.4);
+          break;
+        case "nova":
+          this.pulse(e.x, e.z, e.amount ?? 3);
+          this.burst(e.x, 0.4, e.z, 16, 0xffcd7e, 5);
+          break;
+        case "skill":
+          this.burst(e.x, 1, e.z, 24, 0xe9b76e, 4);
+          break;
       }
     }
     return stop;
@@ -463,14 +762,38 @@ export class View {
     this.time += dt;
     this.setCircle(w.floor - 1);
     const p = w.player;
+    this.slash.scale.setScalar(
+      (p.swingN % 3 === 0 ? 1.22 : 1) * (1 + 0.18 * rank(p.skills, "reach")),
+    );
 
     // hero
     this.hero.position.set(p.x, 0, p.z);
     this.hero.rotation.y = -dirAngle(p.aim);
     const dashing = p.dashT > 0;
     this.hero.scale.set(dashing ? 1.35 : 1, dashing ? 0.8 : 1, 1);
-    const blink = p.invuln > 0 && !dashing && Math.floor(this.time * 22) % 2 === 0;
-    this.hero.visible = w.phase !== "dead" && !blink;
+    const blink =
+      p.invuln > 0 && !dashing && Math.floor(this.time * 22) % 2 === 0;
+    this.hero.visible = (w.phase !== "dead" || !!this.heroModel) && !blink;
+    if (this.heroModel) {
+      const moving =
+        Math.abs(p.x - this.previousHero.x) +
+          Math.abs(p.z - this.previousHero.y) >
+        0.001;
+      this.heroModel.play(
+        w.phase === "dead"
+          ? "death"
+          : dashing
+            ? "dash"
+            : p.swingT > 0
+              ? "attack"
+              : moving
+                ? "run"
+                : "idle",
+      );
+      this.heroModel.flash(p.flash > 0 ? 0xff2222 : null);
+      this.heroModel.update(dt);
+    }
+    this.previousHero.set(p.x, p.z);
     for (let i = 0; i < this.heroMats.length; i++) {
       this.heroMats[i].emissive.copy(this.heroBase[i]);
       if (p.flash > 0) this.heroMats[i].emissive.setHex(0xff2222);
@@ -480,7 +803,9 @@ export class View {
       const e = 1 - (1 - s) * (1 - s);
       this.swordPivot.rotation.y = this.swingSide * (1.35 - e * 2.7);
     } else {
-      this.swordPivot.rotation.y += (-0.95 * this.swingSide - this.swordPivot.rotation.y) * Math.min(1, dt * 14);
+      this.swordPivot.rotation.y +=
+        (-0.95 * this.swingSide - this.swordPivot.rotation.y) *
+        Math.min(1, dt * 14);
     }
     if (this.slashT > 0) {
       this.slashT -= dt;
@@ -499,12 +824,35 @@ export class View {
       if (!v) {
         v = this.makeEnemy(e.kind);
         this.enemies.set(e.id, v);
+        const actor = v;
+        void this.models.create(e.kind, v.h - 0.3).then((model) => {
+          if (!model) return;
+          if (this.enemies.get(e.id) !== actor) {
+            model.dispose();
+            return;
+          }
+          for (const child of actor.group.children)
+            if (child !== actor.tele) child.visible = false;
+          actor.model = model;
+          actor.group.add(model.root);
+        });
       }
       this.syncEnemy(e, v);
+      v.model?.update(dt);
     }
     for (const [id, v] of this.enemies) {
       if (seen.has(id)) continue;
       this.scene.remove(v.group, v.hpBg, v.hpFg);
+      v.model?.dispose();
+      for (const child of v.group.children) {
+        if (!(child instanceof THREE.Mesh)) continue;
+        child.geometry.dispose();
+        if (Array.isArray(child.material))
+          child.material.forEach((m) => m.dispose());
+        else child.material.dispose();
+      }
+      v.hpBg.material.dispose();
+      v.hpFg.material.dispose();
       this.enemies.delete(id);
     }
 
@@ -532,9 +880,28 @@ export class View {
       const k = 1 + Math.sin(this.time * 5) * 0.06;
       this.portal.scale.set(k, 1, k);
     }
-    for (const m of this.torchMats) m.emissiveIntensity = 1.4 + Math.sin(this.time * 9 + m.id) * 0.3;
+    for (const m of this.torchMats)
+      m.emissiveIntensity = 1.4 + Math.sin(this.time * 9 + m.id) * 0.3;
 
     // particles
+    for (const text of this.damageTexts) {
+      text.life -= dt;
+      text.sprite.position.y += dt * 1.9;
+      text.sprite.material.opacity = Math.max(0, text.life / 0.4);
+      if (text.life <= 0) {
+        this.scene.remove(text.sprite);
+        text.sprite.material.map?.dispose();
+        text.sprite.material.dispose();
+      }
+    }
+    this.damageTexts = this.damageTexts.filter((text) => text.life > 0);
+    for (const p of this.pulses) {
+      if (p.life <= 0) continue;
+      p.life -= dt;
+      p.mesh.scale.setScalar(p.radius * (1 - p.life / 0.35));
+      p.mesh.material.opacity = Math.max(0, p.life / 0.35) * 0.65;
+      if (p.life <= 0) p.mesh.visible = false;
+    }
     for (const q of this.particles) {
       if (q.life <= 0) continue;
       q.life -= dt;
@@ -542,7 +909,10 @@ export class View {
       q.mesh.position.x += q.vx * dt;
       q.mesh.position.y = Math.max(0.05, q.mesh.position.y + q.vy * dt);
       q.mesh.position.z += q.vz * dt;
-      (q.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, q.life / q.max);
+      (q.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
+        0,
+        q.life / q.max,
+      );
       if (q.life <= 0) q.mesh.visible = false;
     }
 
@@ -555,7 +925,11 @@ export class View {
     const sx = (Math.random() - 0.5) * this.shake;
     const sz = (Math.random() - 0.5) * this.shake;
     const dist = CAM_DIST * Math.max(1, 1.7 / this.camera.aspect);
-    this.camera.position.set(this.target.x + sx, Math.sin(PITCH) * dist, this.target.z + Math.cos(PITCH) * dist + sz);
+    this.camera.position.set(
+      this.target.x + sx,
+      Math.sin(PITCH) * dist,
+      this.target.z + Math.cos(PITCH) * dist + sz,
+    );
     this.camera.lookAt(this.target.x + sx, 0, this.target.z + sz);
   }
 
@@ -565,15 +939,43 @@ export class View {
     const rising = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 0.9) : 1;
     v.group.scale.set(1, rising, 1);
     const wind = e.state === "windup";
+    if (v.model) {
+      v.model.play(
+        e.state === "act"
+          ? "dash"
+          : wind
+            ? "attack"
+            : e.state === "seek"
+              ? "run"
+              : "idle",
+      );
+      v.model.flash(
+        e.flash > 0
+          ? 0xffffff
+          : wind
+            ? 0xa55512
+            : e.burnT > 0
+              ? 0xaa3310
+              : null,
+      );
+    }
     for (let i = 0; i < v.mats.length; i++) {
       const m = v.mats[i];
       m.emissive.copy(v.base[i]);
-      if (wind && i === 0) m.emissive.setRGB(0.9, 0.55, 0.1).multiplyScalar(0.5 + 0.5 * Math.sin(this.time * 40));
+      if (e.burnT > 0) m.emissive.lerp(new THREE.Color(0xff5a16), 0.45);
+      if (wind && i === 0)
+        m.emissive
+          .setRGB(0.9, 0.55, 0.1)
+          .multiplyScalar(0.5 + 0.5 * Math.sin(this.time * 40));
       if (e.flash > 0) m.emissive.setRGB(1.6, 1.6, 1.6);
     }
     if (v.tele) {
       const charging = wind && !(e.kind === "warden" && e.pattern % 3 === 0);
-      (v.tele.material as THREE.MeshBasicMaterial).opacity = charging ? 0.22 + 0.12 * Math.sin(this.time * 30) : 0;
+      (v.tele.material as THREE.MeshBasicMaterial).opacity = charging
+        ? 0.22 + 0.12 * Math.sin(this.time * 30)
+        : 0;
+      if (e.kind === "champion")
+        v.tele.scale.x = e.attackKind === "swing" ? 0.5 : 1;
     }
     const show = e.spawn <= 0 && (e.hp < e.maxHp || e.kind === "warden");
     v.hpBg.visible = v.hpFg.visible = show;
@@ -588,7 +990,10 @@ export class View {
   /** Where the mouse points on the arena floor. */
   groundPoint(clientX: number, clientY: number, out: THREE.Vector3): boolean {
     const r = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    const ndc = new THREE.Vector2(
+      ((clientX - r.left) / r.width) * 2 - 1,
+      -((clientY - r.top) / r.height) * 2 + 1,
+    );
     this.ray.setFromCamera(ndc, this.camera);
     return this.ray.ray.intersectPlane(this.plane, out) !== null;
   }
@@ -600,6 +1005,13 @@ export class View {
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w, h);
     this.camera.aspect = w / h;
+    // Portrait panels pull the camera back to fit the arena. Keep that arena
+    // in front of the fog and far clipping plane at the new distance.
+    const dist = CAM_DIST * Math.max(1, 1.7 / this.camera.aspect);
+    this.camera.far = dist + 100;
+    const fog = this.scene.fog as THREE.Fog;
+    fog.near = dist + 4;
+    fog.far = dist + 36;
     this.camera.updateProjectionMatrix();
   }
 

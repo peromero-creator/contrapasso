@@ -1,6 +1,14 @@
 // Deterministic combat simulation. No DOM, no three.js, no Math.random, no trig:
 // the same inputs and seed always give the same run, so a server can replay it.
 import { DX, DZ, DIRS } from "./dirs.ts";
+import {
+  SKILL_IDS,
+  MAX_SKILL_RANK,
+  rank,
+  type SkillId,
+  type Skills,
+} from "./skills.ts";
+import { DUEL_TICKS, type CombatBuild } from "./build.ts";
 
 export const TICK_HZ = 60;
 export const DT = 1 / TICK_HZ;
@@ -16,9 +24,11 @@ export interface Input {
   aim: number;
   attack: boolean;
   dash: boolean;
+  /** Offered power slot, 1..3. Zero/undefined means no selection. */
+  choice?: number;
 }
 
-export type EnemyKind = "imp" | "archer" | "brute" | "warden";
+export type EnemyKind = "imp" | "archer" | "brute" | "warden" | "champion";
 export type EnemyState = "seek" | "windup" | "act" | "recover";
 
 export interface Enemy {
@@ -38,6 +48,13 @@ export interface Enemy {
   pattern: number;
   flash: number;
   spawn: number;
+  burnT: number;
+  burnCd: number;
+  skills?: Skills;
+  weaponLevel?: number;
+  armorLevel?: number;
+  retaliationCd?: number;
+  attackKind?: "dash" | "swing";
 }
 
 export interface Shot {
@@ -66,12 +83,32 @@ export interface Player {
   flash: number;
   coins: number;
   kills: number;
+  skills: Skills;
+  weaponLevel: number;
+  armorLevel: number;
+  burnT: number;
+  burnCd: number;
 }
 
-export type Phase = "fight" | "cleared" | "dead" | "won";
+export type Phase = "fight" | "reward" | "cleared" | "dead" | "won";
 
 export interface SimEvent {
-  type: "swing" | "hit" | "kill" | "hurt" | "dash" | "shot" | "spawn" | "cleared" | "floor" | "won" | "dead";
+  type:
+    | "swing"
+    | "hit"
+    | "kill"
+    | "hurt"
+    | "dash"
+    | "shot"
+    | "spawn"
+    | "cleared"
+    | "floor"
+    | "won"
+    | "dead"
+    | "reward"
+    | "skill"
+    | "nova"
+    | "burn";
   x: number;
   z: number;
   kind?: EnemyKind;
@@ -93,13 +130,19 @@ export interface World {
   shots: Shot[];
   events: SimEvent[];
   nextId: number;
+  offers: SkillId[];
+  mode: "solo" | "duel";
 }
 
-const STATS: Record<EnemyKind, { hp: number; r: number; speed: number; coins: number }> = {
+const STATS: Record<
+  EnemyKind,
+  { hp: number; r: number; speed: number; coins: number }
+> = {
   imp: { hp: 55, r: 0.55, speed: 4.4, coins: 3 },
   archer: { hp: 40, r: 0.5, speed: 3.2, coins: 4 },
   brute: { hp: 170, r: 0.95, speed: 2.5, coins: 9 },
   warden: { hp: 900, r: 1.5, speed: 3.1, coins: 60 },
+  champion: { hp: 100, r: 0.55, speed: 6.5, coins: 0 },
 };
 
 const P_R = 0.5;
@@ -123,7 +166,14 @@ function rand(w: World): number {
 
 const wavesFor = (floor: number) => (floor < 3 ? 2 : 3);
 
-export function createWorld(seed: number): World {
+export function createWorld(
+  seed: number,
+  trained: readonly SkillId[] = [],
+  equipment = { weaponLevel: 0, armorLevel: 0 },
+): World {
+  const skills: Skills = {};
+  for (const id of trained) if (SKILL_IDS.includes(id)) skills[id] = 1;
+  const maxHp = 100 + rank(skills, "iron") * 20 + equipment.armorLevel * 3;
   const w: World = {
     tick: 0,
     seed: seed >>> 0,
@@ -136,8 +186,8 @@ export function createWorld(seed: number): World {
     player: {
       x: 0,
       z: ARENA_HZ - 2.5,
-      hp: 100,
-      maxHp: 100,
+      hp: maxHp,
+      maxHp,
       aim: Math.floor(DIRS * 0.75),
       swingT: 0,
       swingN: 0,
@@ -149,12 +199,66 @@ export function createWorld(seed: number): World {
       flash: 0,
       coins: 0,
       kills: 0,
+      skills,
+      weaponLevel: equipment.weaponLevel,
+      armorLevel: equipment.armorLevel,
+      burnT: 0,
+      burnCd: 0,
     },
     enemies: [],
     shots: [],
     events: [],
     nextId: 1,
+    offers: [],
+    mode: "solo",
   };
+  return w;
+}
+
+/** One authenticated champion build against another. No Solo rewards or waves. */
+export function createDuelWorld(
+  seed: number,
+  challenger: CombatBuild,
+  defender: CombatBuild,
+): World {
+  const w = createWorld(seed, [], challenger);
+  w.mode = "duel";
+  w.floor = 5;
+  w.wavesInFloor = 1;
+  w.spawnDelay = 0;
+  Object.assign(w.player, {
+    x: -6,
+    z: 0,
+    aim: 0,
+    skills: { ...challenger.skills },
+  });
+  w.player.hp = w.player.maxHp =
+    100 + 20 * rank(challenger.skills, "iron") + challenger.armorLevel * 3;
+  const hp = 100 + 20 * rank(defender.skills, "iron") + defender.armorLevel * 3;
+  w.enemies.push({
+    id: w.nextId++,
+    kind: "champion",
+    x: 6,
+    z: 0,
+    hp,
+    maxHp: hp,
+    r: 0.55,
+    state: "seek",
+    t: 0,
+    cd: 0.5,
+    dx: -1,
+    dz: 0,
+    hitDone: false,
+    pattern: 0,
+    flash: 0,
+    spawn: 0.8,
+    burnT: 0,
+    burnCd: 0,
+    skills: { ...defender.skills },
+    weaponLevel: defender.weaponLevel,
+    armorLevel: defender.armorLevel,
+    retaliationCd: 0,
+  });
   return w;
 }
 
@@ -171,7 +275,14 @@ function waveSpec(floor: number, wave: number, last: boolean): EnemyKind[] {
   }
   push("imp", 2 + floor + wave);
   push("archer", Math.max(0, floor - 1 + (wave > 0 ? 1 : 0)));
-  push("brute", floor >= 3 ? Math.floor((floor - 1 + wave) / 2) : floor === 2 && wave === 1 ? 1 : 0);
+  push(
+    "brute",
+    floor >= 3
+      ? Math.floor((floor - 1 + wave) / 2)
+      : floor === 2 && wave === 1
+        ? 1
+        : 0,
+  );
   return out;
 }
 
@@ -210,6 +321,8 @@ function spawnEnemy(w: World, kind: EnemyKind) {
     pattern: 0,
     flash: 0,
     spawn: 0.7 + rand(w) * 0.35,
+    burnT: 0,
+    burnCd: 0,
   });
   w.events.push({ type: "spawn", x, z, kind });
 }
@@ -219,18 +332,88 @@ function spawnWave(w: World) {
   for (const k of waveSpec(w.floor, w.wave, last)) spawnEnemy(w, k);
 }
 
-function hurtPlayer(w: World, dmg: number) {
+function hurtPlayer(w: World, dmg: number, dot = false): boolean {
   const p = w.player;
-  if (p.invuln > 0 || w.phase !== "fight") return;
+  if ((!dot && p.invuln > 0) || w.phase !== "fight") return false;
+  dmg = Math.max(1, Math.round(dmg * (1 - 0.1 * rank(p.skills, "iron"))));
   p.hp -= dmg;
-  p.invuln = 0.55;
+  if (!dot) p.invuln = 0.55;
   p.flash = 0.25;
   w.events.push({ type: "hurt", x: p.x, z: p.z, amount: dmg });
+  if (!dot && rank(p.skills, "reprisal") > 0)
+    nova(w, p.x, p.z, 3.5, 16 * rank(p.skills, "reprisal"));
   if (p.hp <= 0) {
     p.hp = 0;
     w.phase = "dead";
     w.events.push({ type: "dead", x: p.x, z: p.z });
   }
+  return true;
+}
+
+function hurtEnemy(w: World, e: Enemy, raw: number, dot = false) {
+  const skills = e.skills ?? {};
+  const dmg = Math.max(1, Math.round(raw * (1 - 0.1 * rank(skills, "iron"))));
+  e.hp -= dmg;
+  e.flash = 0.14;
+  if (!dot)
+    w.events.push({ type: "hit", x: e.x, z: e.z, amount: dmg, kind: e.kind });
+  if (
+    !dot &&
+    e.hp > 0 &&
+    rank(skills, "reprisal") &&
+    (e.retaliationCd ?? 0) <= 0
+  ) {
+    e.retaliationCd = 1;
+    w.events.push({ type: "nova", x: e.x, z: e.z, amount: 3.5 });
+    if ((w.player.x - e.x) ** 2 + (w.player.z - e.z) ** 2 < 3.5 ** 2)
+      hurtPlayer(w, 16 * rank(skills, "reprisal"));
+  }
+}
+
+function nova(w: World, x: number, z: number, radius: number, dmg: number) {
+  for (const e of w.enemies) {
+    if (e.spawn > 0 || e.hp <= 0) continue;
+    const dx = e.x - x,
+      dz = e.z - z;
+    if (dx * dx + dz * dz <= (radius + e.r) * (radius + e.r)) {
+      hurtEnemy(w, e, dmg);
+    }
+  }
+  for (const s of w.shots)
+    if ((s.x - x) ** 2 + (s.z - z) ** 2 <= radius * radius) s.life = 0;
+  w.events.push({ type: "nova", x, z, amount: radius });
+}
+
+function offerSkills(w: World) {
+  const pool = SKILL_IDS.filter(
+    (id) => rank(w.player.skills, id) < MAX_SKILL_RANK,
+  );
+  for (let i = 0; i < Math.min(3, pool.length); i++) {
+    const j = i + Math.floor(rand(w) * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  w.offers = pool.slice(0, 3);
+  w.phase = "reward";
+  w.shots = [];
+  w.events.push({ type: "reward", x: w.player.x, z: w.player.z });
+}
+
+function chooseSkill(w: World, choice: number) {
+  const id = w.offers[choice - 1];
+  const p = w.player;
+  p.skills[id] = rank(p.skills, id) + 1;
+  if (id === "iron") {
+    p.maxHp += 20;
+    p.hp = Math.min(p.maxHp, p.hp + 20);
+  }
+  w.offers = [];
+  w.events.push({ type: "skill", x: p.x, z: p.z, amount: choice });
+  w.phase = w.floor === FLOORS ? "won" : "cleared";
+  w.events.push({
+    type: w.phase === "won" ? "won" : "cleared",
+    x: PORTAL.x,
+    z: PORTAL.z,
+  });
 }
 
 function clampArena(o: { x: number; z: number }, r: number) {
@@ -240,8 +423,24 @@ function clampArena(o: { x: number; z: number }, r: number) {
   if (o.z > ARENA_HZ - r) o.z = ARENA_HZ - r;
 }
 
-function fireShot(w: World, x: number, z: number, dx: number, dz: number, speed: number, dmg: number) {
-  w.shots.push({ id: w.nextId++, x, z, vx: dx * speed, vz: dz * speed, life: 3.2, dmg });
+function fireShot(
+  w: World,
+  x: number,
+  z: number,
+  dx: number,
+  dz: number,
+  speed: number,
+  dmg: number,
+) {
+  w.shots.push({
+    id: w.nextId++,
+    x,
+    z,
+    vx: dx * speed,
+    vz: dz * speed,
+    life: 3.2,
+    dmg,
+  });
   w.events.push({ type: "shot", x, z });
 }
 
@@ -250,22 +449,35 @@ function melee(w: World) {
   const ax = DX[p.aim];
   const az = DZ[p.aim];
   const heavy = p.swingN % 3 === 0;
-  const dmg = heavy ? Math.round(MELEE_DMG * 1.6) : MELEE_DMG;
+  const base = MELEE_DMG + p.weaponLevel * 2;
+  const dmg = heavy
+    ? Math.round(base * (1.6 + 0.6 * rank(p.skills, "verdict")))
+    : base;
   for (const e of w.enemies) {
-    if (e.spawn > 0) continue;
+    if (e.spawn > 0 || e.hp <= 0) continue;
     const ex = e.x - p.x;
     const ez = e.z - p.z;
     const d = Math.sqrt(ex * ex + ez * ez);
-    if (d > MELEE_RANGE + e.r) continue;
-    if (d > 0.001 && (ex * ax + ez * az) / d < MELEE_COS) continue;
-    e.hp -= dmg;
-    e.flash = 0.14;
-    const kb = e.kind === "warden" ? 0 : e.kind === "brute" ? 0.35 : heavy ? 1.4 : 0.8;
+    if (d > MELEE_RANGE + e.r + 0.6 * rank(p.skills, "reach")) continue;
+    if (
+      d > 0.001 &&
+      (ex * ax + ez * az) / d < MELEE_COS - 0.12 * rank(p.skills, "reach")
+    )
+      continue;
+    hurtEnemy(w, e, dmg);
+    if (rank(p.skills, "ember") > 0) e.burnT = 3;
+    const kb =
+      e.kind === "warden"
+        ? 0
+        : e.kind === "brute"
+          ? 0.35
+          : heavy
+            ? 1.4 + 0.3 * rank(p.skills, "verdict")
+            : 0.8;
     if (e.state !== "act") {
       e.x += ax * kb;
       e.z += az * kb;
     }
-    w.events.push({ type: "hit", x: e.x, z: e.z, kind: e.kind, amount: dmg });
   }
 }
 
@@ -280,10 +492,12 @@ function stepPlayer(w: World, input: Input) {
   if (input.dash && p.dashCd <= 0 && p.dashT <= 0) {
     p.dashDir = input.move >= 0 ? input.move : input.aim;
     p.dashT = DASH_TIME;
-    p.dashCd = DASH_CD;
+    p.dashCd = DASH_CD * (1 - 0.12 * rank(p.skills, "ash"));
     if (p.invuln < DASH_TIME + 0.08) p.invuln = DASH_TIME + 0.08;
     p.swingT = 0;
     w.events.push({ type: "dash", x: p.x, z: p.z, dir: p.dashDir });
+    if (rank(p.skills, "ash") > 0)
+      nova(w, p.x, p.z, 2.5, 18 * rank(p.skills, "ash"));
   }
 
   if (p.dashT > 0) {
@@ -296,22 +510,33 @@ function stepPlayer(w: World, input: Input) {
       p.aim = input.aim;
       p.swingN += 1;
       p.swingT = SWING_TIME;
-      p.attackCd = ATTACK_CD + (p.swingN % 3 === 0 ? 0.16 : 0);
+      p.attackCd =
+        (ATTACK_CD + (p.swingN % 3 === 0 ? 0.16 : 0)) *
+        (1 - 0.08 * rank(p.skills, "haste"));
       p.x += DX[p.aim] * 0.55;
       p.z += DZ[p.aim] * 0.55;
-      w.events.push({ type: "swing", x: p.x, z: p.z, dir: p.aim, amount: p.swingN % 3 === 0 ? 2 : 1 });
+      w.events.push({
+        type: "swing",
+        x: p.x,
+        z: p.z,
+        dir: p.aim,
+        amount: p.swingN % 3 === 0 ? 2 : 1,
+      });
       melee(w);
     }
     if (input.move >= 0) {
-      const slow = p.swingT > 0 ? 0.3 : 1;
-      p.x += DX[input.move] * P_SPEED * slow * DT;
-      p.z += DZ[input.move] * P_SPEED * slow * DT;
+      const slow = p.swingT > 0 ? 0.55 : 1;
+      const speed = P_SPEED * (1 + 0.08 * rank(p.skills, "haste"));
+      p.x += DX[input.move] * speed * slow * DT;
+      p.z += DZ[input.move] * speed * slow * DT;
     }
   }
   clampArena(p, P_R);
 }
 
 function stepEnemy(w: World, e: Enemy) {
+  // A killing swing resolves before enemies act on this tick.
+  if (e.hp <= 0) return;
   const p = w.player;
   const s = STATS[e.kind];
   if (e.flash > 0) e.flash -= DT;
@@ -320,6 +545,7 @@ function stepEnemy(w: World, e: Enemy) {
     return;
   }
   if (e.cd > 0) e.cd -= DT;
+  if ((e.retaliationCd ?? 0) > 0) e.retaliationCd! -= DT;
   let ex = p.x - e.x;
   let ez = p.z - e.z;
   const d = Math.sqrt(ex * ex + ez * ez);
@@ -333,6 +559,81 @@ function stepEnemy(w: World, e: Enemy) {
   const reach = e.r + P_R;
 
   switch (e.kind) {
+    case "champion": {
+      const skills = e.skills ?? {};
+      const attackReach = 2.5 + 0.6 * rank(skills, "reach");
+      if (e.state === "seek") {
+        e.dx = ex;
+        e.dz = ez;
+        const speed = s.speed * (1 + 0.08 * rank(skills, "haste"));
+        if (d > attackReach - 0.3) {
+          e.x += ex * speed * DT;
+          e.z += ez * speed * DT;
+        }
+        if (e.cd <= 0 && d < 9) {
+          e.pattern++;
+          e.hitDone = false;
+          e.state = "windup";
+          e.attackKind = d > attackReach + 0.5 ? "dash" : "swing";
+          e.t =
+            (d > attackReach + 0.5 ? 0.5 : 0.34) *
+            (1 - 0.08 * rank(skills, "haste"));
+          // Fix the attack kind and direction at the warning, never track the dodge.
+          e.t = Math.max(e.t, 0.2);
+        }
+      } else if (e.state === "windup") {
+        e.t -= DT;
+        if (e.t <= 0) {
+          if (e.attackKind === "dash") {
+            e.state = "act";
+            e.t = 0.2;
+            if (rank(skills, "ash")) {
+              w.events.push({ type: "nova", x: e.x, z: e.z, amount: 2.5 });
+              if (d < 2.5) hurtPlayer(w, 18 * rank(skills, "ash"));
+            }
+          } else {
+            const heavy = e.pattern % 3 === 0;
+            const facing = d < 0.001 ? 1 : ex * e.dx + ez * e.dz;
+            const damage = Math.round(
+              (22 + (e.weaponLevel ?? 0) * 2) *
+                (heavy ? 1.6 + 0.6 * rank(skills, "verdict") : 1),
+            );
+            if (
+              d <= attackReach &&
+              facing >= 0.15 - 0.1 * rank(skills, "reach") &&
+              hurtPlayer(w, damage)
+            ) {
+              if (rank(skills, "ember")) {
+                p.burnT = 3;
+                p.burnCd = 0.5;
+              }
+              if (rank(skills, "blood"))
+                e.hp = Math.min(e.maxHp, e.hp + 2 * rank(skills, "blood"));
+            }
+            e.state = "recover";
+            e.t = 0.38;
+            e.cd = 0.38 * (1 - 0.08 * rank(skills, "haste"));
+          }
+        }
+      } else if (e.state === "act") {
+        e.x += e.dx * 23 * DT;
+        e.z += e.dz * 23 * DT;
+        e.t -= DT;
+        if (!e.hitDone && d < 1.3) {
+          hurtPlayer(w, 18 + 6 * rank(skills, "ash"));
+          e.hitDone = true;
+        }
+        if (e.t <= 0) {
+          e.state = "recover";
+          e.t = 0.5;
+          e.cd = 0.6 * (1 - 0.12 * rank(skills, "ash"));
+        }
+      } else {
+        e.t -= DT;
+        if (e.t <= 0) e.state = "seek";
+      }
+      break;
+    }
     case "imp": {
       if (e.state === "seek") {
         e.dx = ex;
@@ -341,7 +642,7 @@ function stepEnemy(w: World, e: Enemy) {
         e.z += ez * s.speed * DT;
         if (d < reach + 0.75) {
           e.state = "windup";
-          e.t = 0.34;
+          e.t = 0.42;
         }
       } else if (e.state === "windup") {
         e.t -= DT;
@@ -405,7 +706,15 @@ function stepEnemy(w: World, e: Enemy) {
             const off = Math.floor(rand(w) * DIRS);
             for (let i = 0; i < n; i++) {
               const di = (off + Math.floor((i * DIRS) / n)) % DIRS;
-              fireShot(w, e.x + DX[di] * e.r, e.z + DZ[di] * e.r, DX[di], DZ[di], 8.5, 12);
+              fireShot(
+                w,
+                e.x + DX[di] * e.r,
+                e.z + DZ[di] * e.r,
+                DX[di],
+                DZ[di],
+                8.5,
+                12,
+              );
             }
             e.state = "recover";
             e.t = 0.9;
@@ -428,7 +737,12 @@ function stepEnemy(w: World, e: Enemy) {
           e.state = "recover";
           e.t = boss ? 0.7 : 0.95;
           e.cd = boss ? 1.1 : 1.6;
-          if (boss && e.hp < e.maxHp * 0.5 && e.pattern % 4 === 1 && w.enemies.length < 9) {
+          if (
+            boss &&
+            e.hp < e.maxHp * 0.5 &&
+            e.pattern % 4 === 1 &&
+            w.enemies.length < 9
+          ) {
             spawnEnemy(w, "imp");
             spawnEnemy(w, "imp");
           }
@@ -444,21 +758,47 @@ function stepEnemy(w: World, e: Enemy) {
 }
 
 export function step(w: World, input: Input): void {
-  w.tick += 1;
   if (w.phase === "dead" || w.phase === "won") return;
+  if (w.phase === "reward") {
+    if (!Number.isInteger(input.choice) || !w.offers[(input.choice ?? 0) - 1])
+      return;
+    w.tick += 1;
+    chooseSkill(w, input.choice!);
+    return;
+  }
+  w.tick += 1;
   const p = w.player;
 
   stepPlayer(w, input);
+  if (p.burnT > 0 && p.hp > 0) {
+    p.burnT -= DT;
+    p.burnCd -= DT;
+    if (p.burnCd <= 0) {
+      p.burnCd += 0.5;
+      hurtPlayer(w, 2 * rank(w.enemies[0]?.skills ?? {}, "ember"), true);
+    }
+  }
 
-  for (const e of w.enemies) stepEnemy(w, e);
+  for (const e of w.enemies) {
+    if (e.hp > 0 && e.burnT > 0) {
+      e.burnT -= DT;
+      e.burnCd -= DT;
+      if (e.burnCd <= 0) {
+        e.burnCd += 0.5;
+        hurtEnemy(w, e, 2 * rank(p.skills, "ember"), true);
+        w.events.push({ type: "burn", x: e.x, z: e.z });
+      }
+    }
+    if (p.hp > 0) stepEnemy(w, e);
+  }
 
   // keep enemies from stacking on each other
   for (let i = 0; i < w.enemies.length; i++) {
     const a = w.enemies[i];
-    if (a.spawn > 0) continue;
+    if (a.spawn > 0 || a.hp <= 0) continue;
     for (let j = i + 1; j < w.enemies.length; j++) {
       const b = w.enemies[j];
-      if (b.spawn > 0) continue;
+      if (b.spawn > 0 || b.hp <= 0) continue;
       const dx = b.x - a.x;
       const dz = b.z - a.z;
       const min = a.r + b.r;
@@ -479,6 +819,7 @@ export function step(w: World, input: Input): void {
 
   // shots
   for (const s of w.shots) {
+    if (s.life <= 0) continue;
     s.x += s.vx * DT;
     s.z += s.vz * DT;
     s.life -= DT;
@@ -490,7 +831,8 @@ export function step(w: World, input: Input): void {
         s.life = 0;
       }
     }
-    if (s.x < -ARENA_HX || s.x > ARENA_HX || s.z < -ARENA_HZ || s.z > ARENA_HZ) s.life = 0;
+    if (s.x < -ARENA_HX || s.x > ARENA_HX || s.z < -ARENA_HZ || s.z > ARENA_HZ)
+      s.life = 0;
   }
   if (w.shots.length) w.shots = w.shots.filter((s) => s.life > 0);
 
@@ -501,12 +843,32 @@ export function step(w: World, input: Input): void {
       died = true;
       p.coins += STATS[e.kind].coins;
       p.kills += 1;
-      w.events.push({ type: "kill", x: e.x, z: e.z, kind: e.kind, amount: STATS[e.kind].coins });
+      if (p.hp > 0)
+        p.hp = Math.min(p.maxHp, p.hp + 2 * rank(p.skills, "blood"));
+      w.events.push({
+        type: "kill",
+        x: e.x,
+        z: e.z,
+        kind: e.kind,
+        amount: STATS[e.kind].coins,
+      });
     }
   }
   if (died) w.enemies = w.enemies.filter((e) => e.hp > 0);
 
   // waves and floors
+  if (w.mode === "duel") {
+    if (w.phase === "fight" && !w.enemies.length) {
+      w.phase = "won";
+      w.shots = [];
+      w.events.push({ type: "won", x: p.x, z: p.z });
+    } else if (w.phase === "fight" && w.tick >= DUEL_TICKS) {
+      p.hp = 0;
+      w.phase = "dead";
+      w.events.push({ type: "dead", x: p.x, z: p.z });
+    }
+    return;
+  }
   if (w.phase === "fight") {
     if (w.spawnDelay > 0) {
       w.spawnDelay -= DT;
@@ -515,14 +877,8 @@ export function step(w: World, input: Input): void {
       if (w.wave + 1 < w.wavesInFloor) {
         w.wave += 1;
         w.spawnDelay = 0.9;
-      } else if (w.floor === FLOORS) {
-        w.phase = "won";
-        w.shots = [];
-        w.events.push({ type: "won", x: p.x, z: p.z });
       } else {
-        w.phase = "cleared";
-        w.shots = [];
-        w.events.push({ type: "cleared", x: PORTAL.x, z: PORTAL.z });
+        offerSkills(w);
       }
     }
   } else if (w.phase === "cleared") {

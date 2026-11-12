@@ -1,0 +1,49 @@
+import type {
+  Champion,
+  Receipt,
+  RunChallenge,
+  DuelOpponent,
+} from "./shared/protocol";
+import type { SkillId } from "./sim/skills";
+
+async function request<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`/api/${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers:
+      body === undefined ? undefined : { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const result = await response
+    .json()
+    .catch(() => ({ error: "Connection lost. Please try again." }));
+  if (!response.ok)
+    throw new Error(result.error ?? "Something went wrong. Please try again.");
+  return result;
+}
+export const api = {
+  profile: () => request<Champion>("profile"),
+  begin: (retry?: string, abandon?: string) =>
+    request<RunChallenge>("runs", { retry, abandon }),
+  submit: (id: string, inputs: number[]) =>
+    request<{ receipt: Receipt; champion: Champion }>("results", {
+      id,
+      inputs,
+    }),
+  train: (skill: SkillId) => request<Champion>("train", { skill }),
+  opponents: () => request<DuelOpponent[]>("opponents"),
+  duel: (opponentId: string) => request<RunChallenge>("duels", { opponentId }),
+  defense: (enabled: boolean) => request<Champion>("defense", { enabled }),
+  forfeit: (id: string) => request<Champion>("forfeit", { id }),
+  currentDuel: () => request<RunChallenge | null>("duel-current"),
+  lobby: () =>
+    request<{
+      champion: Champion;
+      opponents: DuelOpponent[];
+      active: RunChallenge | null;
+      stake: number;
+    }>("duel-lobby"),
+  progress: (id: string, inputs: number[]) =>
+    request<{ ticks: number }>("duel-progress", { id, inputs }),
+};

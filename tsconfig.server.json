@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "server",
+    "scripts/simtest.ts",
+    "scripts/refereetest.ts",
+    "scripts/dueltest.ts",
+    "scripts/near-prepare.ts",
+    "scripts/near-deploy.ts",
+    "src/sim",
+    "src/shared",
+    "src/dev",
+    "scripts/near-smoke.ts"
+  ]
+}

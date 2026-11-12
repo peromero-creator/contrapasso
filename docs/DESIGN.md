@@ -1,6 +1,6 @@
 # Contrapasso — game design
 
-Status: agreed with the owner on 2026-11-12 unless a section says "proposed".
+Working design. Planned economy features are distinguished from the implemented integration below.
 
 ## Idea
 
@@ -46,11 +46,11 @@ For the hackathon the duel is asynchronous: the player fights another player's c
 - Gear NFTs are dynamic: the "+" level, kills and past owners are written on the token.
 - Resale royalties also flow into the raffle pool.
 
-## Proposed defaults (owner has not objected; confirm before changing)
+## Proposed economy defaults
 
 | Open point | Default |
 |---|---|
-| "+" upgrade odds | +1 to +3 always succeed, +4 to +6 succeed 85% of the time, +7 to +9 70%. A failure burns only the coin. Maximum +9. The owner asked for a low failure chance. |
+| "+" upgrade odds | +1 to +3 always succeed, +4 to +6 succeed 85% of the time, +7 to +9 70%. A failure burns only the coin. Maximum +9. Keep failure chances low. |
 | Selling a champion | Equipped gear goes with it. Unequip an item first to keep it. Only equipped gear counts toward the champion's power. |
 | Where skills live | On the champion, so a trained champion has value. |
 | New players | No starting wheel. Everyone gets a free, account-bound starter weapon and armor that can be upgraded. |
@@ -73,3 +73,11 @@ A browser must not be able to claim a win. Fights are deterministic: the client 
 
 - `games`: "judged on the game loop, not the token", bonus if players never notice the chain.
 - `nfts`: NFTs as accounts that own money, hold inventory and earn.
+
+## Implemented integration (2026-11-12)
+
+The testnet contract and local relay implement the champion vault, permanent training, champion/starter gear NFTs and asynchronous Duel. Public testnet deployment is verified at `contrapasso-261112-a23809.testnet`; see [NEAR setup and trust boundaries](NEAR.md).
+
+Duel uses a 10-coin stake from each side, locked before combat. Only opted-in defenders with a funded vault are listed. Opponents use their deepest Solo build plus permanent training and equipped gear. A fight ends on death or after 90 simulation seconds; a challenge expires after 10 wall-clock minutes. The champion and its equipped gear cannot transfer during a Duel. The winner takes the 20-coin escrow pool; leaving or abandoning an opened challenge is a challenger loss. Duel creates no coin.
+
+The current guest account is custodial: the local server holds its key and pays testnet gas through a restricted relay key. This is a demo foundation. External wallet claiming, non-starter mints, upgrades and raffle mechanics are still planned.
