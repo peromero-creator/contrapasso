@@ -352,6 +352,11 @@ function updateHud(dt: number) {
     : "ATTUNE A CORE";
   $("core-meter").style.width = `${p.charge}%`;
   $("core-slot").classList.toggle("ready", p.charge >= 100);
+  $("core-slot").classList.toggle("unlearned", !p.core);
+  $("cast-slot").classList.toggle(
+    "unlearned",
+    !availableSpell(p.spell, p.skills),
+  );
   $("cast-slot").classList.toggle(
     "ready",
     availableSpell(p.spell, p.skills) && p.spellCd <= 0,
@@ -360,6 +365,8 @@ function updateHud(dt: number) {
     const el = $("technique-" + (i+1)), known = rank(p.skills,id)>0;
     el.querySelector('span')!.textContent = known ? p.techniqueCd[i]>0 ? `${TECHNIQUES[id].name} · ${p.techniqueCd[i].toFixed(1)}s` : TECHNIQUES[id].name : `LEARN ${TECHNIQUES[id].name.toUpperCase()}`;
     el.classList.toggle('ready',known && p.techniqueCd[i]<=0);
+    // an unlearned slot is only a reminder; keep it off the arena during a run
+    el.classList.toggle('unlearned', !known);
     (el.querySelector('b') as HTMLElement).style.width = `${known?Math.max(0,1-p.techniqueCd[i]/TECHNIQUES[id].cooldown)*100:0}%`;
   }
   $("combo-instruction").textContent =

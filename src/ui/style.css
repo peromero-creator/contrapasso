@@ -2544,3 +2544,9 @@ h1 {
   .tree-side .skill-theatre > div,.tree-side #skill-stage { height:225px; min-height:225px; }
 }
 .tree-branch-label { transform:translateX(-50%) scale(var(--label-scale,1)); transform-origin:50% 0; }
+
+/* skills not learned yet stay out of the play area during a run */
+.ability-bar > div.unlearned,
+.technique-bar > div.unlearned {
+  display: none;
+}

@@ -88,9 +88,11 @@ export class SkillTree {
     const viewport=this.root.querySelector<HTMLElement>('.tree-viewport')!,map=this.root.querySelector<HTMLElement>('.tree-map')!;
     const fit=()=>{const scale=Math.min((viewport.clientWidth-28)/map.offsetWidth,(viewport.clientHeight-28)/map.offsetHeight,1);this.camera={scale:Math.max(.12,scale),x:(viewport.clientWidth-map.offsetWidth*scale)/2,y:(viewport.clientHeight-map.offsetHeight*scale)/2};this.paintCamera();};
     const zoom=(factor:number,x=viewport.clientWidth/2,y=viewport.clientHeight/2)=>{const old=this.camera.scale,next=Math.max(.12,Math.min(2,old*factor));this.camera={scale:next,x:x-(x-this.camera.x)*next/old,y:y-(y-this.camera.y)*next/old};this.paintCamera();};
-    if(this.resetCamera){requestAnimationFrame(fit);this.resetCamera=false;}else this.paintCamera();
+    // On a narrow screen the whole tree only fits at an unreadable size, so open on the selected (or first) skill instead.
+    const open=()=>{fit();if(this.camera.scale<.6){const n=this.root.querySelector<HTMLElement>('[data-node][aria-pressed=true]')??this.root.querySelector<HTMLElement>('[data-node]');if(n){const s=.8;this.camera={scale:s,x:viewport.clientWidth/2-(n.offsetLeft+n.offsetWidth/2)*s,y:viewport.clientHeight/2-(n.offsetTop+n.offsetHeight/2)*s};this.paintCamera();}}};
+    if(this.resetCamera){requestAnimationFrame(open);this.resetCamera=false;}else this.paintCamera();
     let lastWidth=viewport.clientWidth,lastHeight=viewport.clientHeight;
-    this.observer=new ResizeObserver(()=>{if(viewport.clientWidth!==lastWidth||viewport.clientHeight!==lastHeight){lastWidth=viewport.clientWidth;lastHeight=viewport.clientHeight;fit();}});this.observer.observe(viewport);
+    this.observer=new ResizeObserver(()=>{if(viewport.clientWidth!==lastWidth||viewport.clientHeight!==lastHeight){lastWidth=viewport.clientWidth;lastHeight=viewport.clientHeight;open();}});this.observer.observe(viewport);
     for(const button of this.root.querySelectorAll<HTMLButtonElement>('[data-camera]'))button.onclick=()=>{
       const op=button.dataset.camera;
       if(op==='fit')fit();else if(op==='selected') {const n=this.root.querySelector<HTMLElement>('[data-node][aria-pressed=true]')!;this.camera.scale=1;this.camera.x=viewport.clientWidth/2-n.offsetLeft;this.camera.y=viewport.clientHeight/2-n.offsetTop;this.paintCamera();}else zoom(op==='in'?1.25:.8);
