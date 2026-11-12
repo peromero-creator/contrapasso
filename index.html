@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contrapasso</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/ui/style.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="hud" class="hidden">
+      <div class="hud-left">
+        <div class="bar"><div id="hp-fill"></div><span id="hp-text">100</span></div>
+        <div class="pips"><span id="dash-pip" class="pip">DASH</span></div>
+      </div>
+      <div class="hud-right">
+        <div id="circle">CIRCLE I · LIMBO</div>
+        <div id="wave">WAVE 1/2</div>
+        <div id="coins"><span class="coin"></span><b id="coin-n">0</b></div>
+      </div>
+      <div id="banner"></div>
+      <div id="help">WASD move · Mouse aim · Click attack · Space dash</div>
+    </div>
+
+    <div id="end" class="hidden">
+      <h2 id="end-title">YOU FELL</h2>
+      <p id="end-sub"></p>
+      <div class="end-stats"><span id="end-coins"></span><span id="end-kills"></span></div>
+      <button id="again" class="btn">DESCEND AGAIN</button>
+      <button id="to-menu" class="btn ghost">BACK</button>
+    </div>
+
+    <section id="modes">
+      <h2>CHOOSE YOUR DESCENT</h2>
+      <div class="cards">
+        <button class="card" id="mode-solo">
+          <span class="card-k">I</span>
+          <span class="card-t">SOLO</span>
+          <span class="card-d">Five circles. Earn coin. Fight your own hell.</span>
+        </button>
+        <button class="card locked" id="mode-duel" disabled>
+          <span class="card-k">II</span>
+          <span class="card-t">DUEL</span>
+          <span class="card-d">Face another sinner's champion. Opening soon.</span>
+        </button>
+      </div>
+    </section>
+
+    <section id="landing">
+      <div id="embers"></div>
+      <div class="landing-inner">
+        <p class="kicker">A DESCENT IN FIVE CIRCLES</p>
+        <h1>CONTRAPASSO</h1>
+        <p class="tag">Every sin returns as its own punishment.</p>
+        <button id="play" class="btn big">PLAY</button>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
