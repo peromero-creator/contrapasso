@@ -6,8 +6,8 @@ Deployed and verified on public NEAR testnet on 2026-11-12. No mainnet assets ar
 
 - Contract: [contrapasso-261112-a23809.testnet](https://testnet.nearblocks.io/address/contrapasso-261112-a23809.testnet)
 - Deployment: [5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5](https://testnet.nearblocks.io/txns/5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5)
-- WASM SHA-256: `29158e6696c1fb9f6f1af782f6a45af3b0c694559c54849da4ef0ad7fffcefe2`
-- Latest code-only update: [B6CAn9Mxg8dEuv5T4fwcdRbCLnp5PLWh42hrPge4FWft](https://testnet.nearblocks.io/txns/B6CAn9Mxg8dEuv5T4fwcdRbCLnp5PLWh42hrPge4FWft), version 0.5.0. Existing state and 24 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
+- WASM SHA-256: `97ab33a3aa47991af0f15e602bf456fd85eba067b0225a769b559a5dfee34c9e`
+- Latest code-only update: [GfDJxz1R86KffVq1Qx3BCGVmNpf6am9QzB3ocH2bmMF4](https://testnet.nearblocks.io/txns/GfDJxz1R86KffVq1Qx3BCGVmNpf6am9QzB3ocH2bmMF4), version 0.6.0. Existing state and 26 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
 - Published code and referee public key were read back and matched. The local server is connected through a restricted relay key.
 - Live verification passed: two guest champions played verified Solo, a permanent power was bought, defense was enabled, both Duel stakes were locked, and the winning replay paid the pool and updated both NFTs. Repeating a result did not award twice.
 - A separate silent browser run earned 165 coin, then won its Duel and finished with 175 coin and a 1–0 record, confirmed directly from NFT metadata.
@@ -50,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.4.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.5.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -79,7 +79,21 @@ The authorized referee is trusted to report valid gameplay and migration balance
 
 Available demo defenders are test champions built by recorded, verified bot Solo runs. Their matches are real replay-verifiable test matches, not evidence of human player activity.
 
-## Reliquary and native prize accounting
+## Arsenal and application treasury (0.6)
+
+Current editions offer Cinder Requiem (long sword), Tollkeeper (war hammer), and Widow’s Fang (dagger). The 10-coin reservation binds the weapon identity, and the 0.01-test-NEAR mint creates that gear NFT. Actual equipped metadata determines the authenticated combat build, model, attack timing and damage. Every + level adds two weapon damage; upgrades and kill history remain on the NFT. Permanent skill purchases enforce the same three-branch prerequisites in the game, referee and contract; skills travel with the champion.
+
+The owner retired the ticket-free `cinder-demo-1` round and moved its unallocated 0.01 test NEAR to the application treasury. New rounds reject ticket purchases and make no automatic prize allocation. Unpaid reservations still refund when an edition closes or is cancelled. Previous awarded prize vaults remain claimable. [Retirement proof](testnet-treasury-proof.json), [live weapon mint/equip/upgrade and skill proof](testnet-arsenal-proof.json).
+
+`retire_raffles` is owner-only and refuses to retire an active round with paid ticket rights. `withdraw_treasury({receiver_id, amount})` requires the offline owner and one yoctoNEAR. It locks the requested amount, preserves native liabilities until successful completion, and restores the treasury on a failed transfer. The web runtime never loads the owner key. Only royalties actually received through `collect_royalty` credit the treasury.
+
+`near:update` verifies the complete raw state at fixed finalized blocks, paging large snapshots before and after a code-only deployment. It never reinitializes the contract. Actual VM tests cover fresh 0.6 deployment and in-place upgrade from 0.5, including legacy prize rights and treasury callback failures. The live arsenal proof uses separate test champions; the original owner's 76-coin champion is preserved.
+
+Within an authorized testnet scope: `npm run near:treasury -- --execute` retires the old edition, `npm run near:round -- --id <unique-edition> --seconds 86400 --execute` opens a new one, and `npm run near:arsenal-smoke -- --execute` resumes the saved arsenal proof. It must remain on the edition recorded in its private session.
+
+## Historical mint and native prize accounting (0.5)
+
+The following records the prior raffle implementation and historical proof. It is retained for existing prize rights; current editions use the treasury above.
 
 Version 0.5 adds separate lookup-map prefixes without changing the serialized champion/NFT root. `near:update` deploys code only, compares the full raw state hash and NFT supply before/after, and never calls `init`. `game_config` advertises actual deployed features; the server does not trust a hand-edited local feature flag.
 

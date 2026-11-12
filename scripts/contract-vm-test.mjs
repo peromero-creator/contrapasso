@@ -81,11 +81,22 @@ try {
   await apply("alice", alice, "register", checkpoint);
   await apply("bob", bob, "register", checkpoint);
   if (upgradeIndex >= 0) {
+    await root.call(
+      game,
+      "open_round",
+      { id: "before-upgrade", duration_seconds: 30 },
+      { gas: GAS },
+    );
+    await worker.provider.fastForward(40);
     const before = await game.view("get_champion", { champion_id: "alice" });
     await game.deploy("build/contrapasso.wasm");
     assert.deepEqual(
       await game.view("get_champion", { champion_id: "alice" }),
-      { ...before, prizeYocto: before.prizeYocto ?? "0" },
+      {
+        ...before,
+        build: { ...before.build, weaponId: "starter" },
+        prizeYocto: before.prizeYocto ?? "0",
+      },
       "upgrading code must preserve the existing vault and build",
     );
     assert.ok((await game.view("game_config", {})).features.includes("claim"));
@@ -131,7 +142,7 @@ try {
       { gas: GAS },
     ),
   );
-  await apply("alice", alice, "train", { skill: "ash" });
+  await apply("alice", alice, "train", { skill: "haste" });
   await apply("bob", bob, "defense", { enabled: true });
   const target = await game.view("get_champion", { champion_id: "bob" });
   await apply("alice", alice, "duel_open", {
@@ -171,8 +182,8 @@ try {
     (await game.view("get_champion", { champion_id: "alice" })).coins,
     50,
   );
-  await assert.rejects(apply("alice", alice, "train", { skill: "reach" }));
-  await apply("alice", bob, "train", { skill: "reach" });
+  await assert.rejects(apply("alice", alice, "train", { skill: "ember" }));
+  await apply("alice", bob, "train", { skill: "ember" });
   await bob.call(
     game,
     "nft_approve",
@@ -241,157 +252,254 @@ try {
     won: false,
     powers: { ash: 1, reach: 1 },
   });
-  // Full native testnet economy in the actual WASM, including asynchronous callbacks.
-  const price = 10000000000000000000000n;
-  await root.call(
-    game,
-    "open_round",
-    { id: "vm-market", duration_seconds: 120 },
-    { gas: GAS },
-  );
-  await apply("bob", bob, "reserve_mint", { roundId: "vm-market" });
-  await apply("alice", charlie, "reserve_mint", { roundId: "vm-market" });
-  await assert.rejects(apply("bob", bob, "mint", { roundId: "vm-market" }));
-  const paidId = "vm-paid-idempotency";
-  await apply(
-    "bob",
-    bob,
-    "mint",
-    { roundId: "vm-market" },
-    { id: paidId },
-    { sender: bob, deposit: price },
-  );
-  await assert.rejects(
-    apply(
+  if (upgradeIndex >= 0) {
+    await apply("alice", charlie, "draw_round", { roundId: "before-upgrade" });
+    // Full native testnet economy in the actual WASM, including asynchronous callbacks.
+    const price = 10000000000000000000000n;
+    await root.call(
+      game,
+      "open_round",
+      { id: "vm-market", duration_seconds: 120 },
+      { gas: GAS },
+    );
+    await apply("bob", bob, "reserve_mint", { roundId: "vm-market" });
+    await apply("alice", charlie, "reserve_mint", { roundId: "vm-market" });
+    await assert.rejects(apply("bob", bob, "mint", { roundId: "vm-market" }));
+    const paidId = "vm-paid-idempotency";
+    await apply(
       "bob",
       bob,
       "mint",
       { roundId: "vm-market" },
       { id: paidId },
       { sender: bob, deposit: price },
-    ),
-  );
-  const relic = "relic:vm-market:1";
-  assert.equal(
-    (await game.view("market_view", { champion_id: "bob" })).round.poolYocto,
-    String(price),
-  );
-  await apply("bob", bob, "equip_gear", { slot: "weapon", gearId: relic });
-  await assert.rejects(
-    bob.call(
+    );
+    await assert.rejects(
+      apply(
+        "bob",
+        bob,
+        "mint",
+        { roundId: "vm-market" },
+        { id: paidId },
+        { sender: bob, deposit: price },
+      ),
+    );
+    const relic = "relic:vm-market:1";
+    assert.equal(
+      (await game.view("market_view", { champion_id: "bob" })).round.poolYocto,
+      String(price),
+    );
+    await apply("bob", bob, "equip_gear", { slot: "weapon", gearId: relic });
+    await assert.rejects(
+      bob.call(
+        game,
+        "nft_transfer",
+        { receiver_id: alice.accountId, token_id: relic },
+        { gas: GAS, attachedDeposit: 1n },
+      ),
+    );
+    await apply("bob", bob, "tickets", { roundId: "vm-market", count: 1 });
+    await worker.provider.fastForward(150);
+    const beforeRefund = (
+      await game.view("get_champion", { champion_id: "alice" })
+    ).coins;
+    await apply("alice", charlie, "draw_round", { roundId: "vm-market" });
+    assert.equal(
+      (await game.view("get_champion", { champion_id: "alice" })).coins,
+      beforeRefund + 10,
+    );
+    let market = await game.view("market_view", { champion_id: "bob" });
+    assert.equal(market.prizeYocto, String(price));
+    assert.equal(market.round.winners.length, 1);
+    await bob.call(
       game,
       "nft_transfer",
-      { receiver_id: alice.accountId, token_id: relic },
+      { receiver_id: charlie.accountId, token_id: "champion:bob" },
       { gas: GAS, attachedDeposit: 1n },
-    ),
-  );
-  await apply("bob", bob, "tickets", { roundId: "vm-market", count: 1 });
-  await worker.provider.fastForward(150);
-  const beforeRefund = (
-    await game.view("get_champion", { champion_id: "alice" })
-  ).coins;
-  await apply("alice", charlie, "draw_round", { roundId: "vm-market" });
-  assert.equal(
-    (await game.view("get_champion", { champion_id: "alice" })).coins,
-    beforeRefund + 10,
-  );
-  let market = await game.view("market_view", { champion_id: "bob" });
-  assert.equal(market.prizeYocto, String(price));
-  assert.equal(market.round.winners.length, 1);
-  await bob.call(
-    game,
-    "nft_transfer",
-    { receiver_id: charlie.accountId, token_id: "champion:bob" },
-    { gas: GAS, attachedDeposit: 1n },
-  );
-  assert.equal(
-    (await game.view("nft_token", { token_id: relic })).owner_id,
-    charlie.accountId,
-  );
-  assert.equal(
-    (await game.view("get_champion", { champion_id: "bob" })).prizeYocto,
-    String(price),
-  );
-  const missing = { accountId: "missing." + root.accountId };
-  await apply("bob", charlie, "claim", { receiver: missing.accountId });
-  const failedPayoutId = "vm-failed-prize-payout";
-  await apply("bob", missing, "withdraw_prize", {}, { id: failedPayoutId });
-  market = await game.view("market_view", { champion_id: "bob" });
-  assert.equal(market.pendingNative, false);
-  assert.equal(
-    market.prizeYocto,
-    String(price),
-    "failed callback restores the native prize",
-  );
-  assert.equal(
-    (await game.view("receipt_applied", { receipt_id: failedPayoutId }))
-      .nativeSuccess,
-    false,
-  );
-  await apply("bob", missing, "claim", { receiver: charlie.accountId });
-  await assert.rejects(
-    alice.call(
+    );
+    assert.equal(
+      (await game.view("nft_token", { token_id: relic })).owner_id,
+      charlie.accountId,
+    );
+    assert.equal(
+      (await game.view("get_champion", { champion_id: "bob" })).prizeYocto,
+      String(price),
+    );
+    const missing = { accountId: "missing." + root.accountId };
+    await apply("bob", charlie, "claim", { receiver: missing.accountId });
+    const failedPayoutId = "vm-failed-prize-payout";
+    await apply("bob", missing, "withdraw_prize", {}, { id: failedPayoutId });
+    market = await game.view("market_view", { champion_id: "bob" });
+    assert.equal(market.pendingNative, false);
+    assert.equal(
+      market.prizeYocto,
+      String(price),
+      "failed callback restores the native prize",
+    );
+    assert.equal(
+      (await game.view("receipt_applied", { receipt_id: failedPayoutId }))
+        .nativeSuccess,
+      false,
+    );
+    await apply("bob", missing, "claim", { receiver: charlie.accountId });
+    await assert.rejects(
+      alice.call(
+        game,
+        "withdraw_prize",
+        { champion_id: "bob" },
+        { gas: GAS, attachedDeposit: 1n },
+      ),
+    );
+    await charlie.call(
       game,
       "withdraw_prize",
       { champion_id: "bob" },
       { gas: GAS, attachedDeposit: 1n },
-    ),
-  );
-  await charlie.call(
-    game,
-    "withdraw_prize",
-    { champion_id: "bob" },
-    { gas: GAS, attachedDeposit: 1n },
-  );
-  assert.equal(
-    (await game.view("market_view", { champion_id: "bob" })).prizeYocto,
-    "0",
-  );
-  await apply("bob", charlie, "unequip_gear", { slot: "weapon" });
-  const quote = await game.view("nft_payout", {
-    token_id: relic,
-    balance: "101",
-    max_len_payout: 2,
-  });
-  assert.equal(quote.payout[game.accountId], "10");
-  assert.equal(quote.payout[charlie.accountId], "91");
-  await assert.rejects(
-    game.view("nft_payout", {
+    );
+    assert.equal(
+      (await game.view("market_view", { champion_id: "bob" })).prizeYocto,
+      "0",
+    );
+    await apply("bob", charlie, "unequip_gear", { slot: "weapon" });
+    const quote = await game.view("nft_payout", {
       token_id: relic,
-      balance: "101",
-      max_len_payout: 1,
-    }),
-  );
-  await charlie.call(
-    game,
-    "nft_transfer_payout",
-    {
-      token_id: relic,
-      receiver_id: alice.accountId,
       balance: "101",
       max_len_payout: 2,
-    },
-    { gas: GAS, attachedDeposit: 1n },
-  );
-  assert.equal(
-    (await game.view("nft_token", { token_id: relic })).owner_id,
-    alice.accountId,
-  );
-  await root.call(
-    game,
-    "collect_royalty",
-    {},
-    { gas: GAS, attachedDeposit: 11n },
-  );
+    });
+    assert.equal(quote.payout[game.accountId], "10");
+    assert.equal(quote.payout[charlie.accountId], "91");
+    await assert.rejects(
+      game.view("nft_payout", {
+        token_id: relic,
+        balance: "101",
+        max_len_payout: 1,
+      }),
+    );
+    await charlie.call(
+      game,
+      "nft_transfer_payout",
+      {
+        token_id: relic,
+        receiver_id: alice.accountId,
+        balance: "101",
+        max_len_payout: 2,
+      },
+      { gas: GAS, attachedDeposit: 1n },
+    );
+    assert.equal(
+      (await game.view("nft_token", { token_id: relic })).owner_id,
+      alice.accountId,
+    );
+    await root.call(
+      game,
+      "collect_royalty",
+      {},
+      { gas: GAS, attachedDeposit: 11n },
+    );
+    await root.call(
+      game,
+      "open_round",
+      { id: "royalty-carry", duration_seconds: 120 },
+      { gas: GAS },
+    );
+    assert.equal(
+      (await game.view("market_view", { champion_id: "bob" })).round.poolYocto,
+      "11",
+    );
+  }
+
+  // Retire legacy rounds, then exercise the new owner-controlled treasury and arsenal.
+  await assert.rejects(alice.call(game, "retire_raffles", {}, { gas: GAS }));
+  await root.call(game, "retire_raffles", {}, { gas: GAS });
   await root.call(
     game,
     "open_round",
-    { id: "royalty-carry", duration_seconds: 120 },
+    { id: "arsenal", duration_seconds: 120 },
     { gas: GAS },
   );
+  await apply("smith", alice, "register", { ...checkpoint, coins: 2000 });
+  await assert.rejects(apply("smith", alice, "train", { skill: "pyre" }));
+  for (const skill of ["ember", "reach", "verdict", "pyre"])
+    await apply("smith", alice, "train", { skill });
+  await assert.rejects(
+    apply("smith", alice, "tickets", { roundId: "arsenal", count: 1 }),
+  );
+  await apply("smith", alice, "reserve_mint", {
+    roundId: "arsenal",
+    weaponId: "tollkeeper",
+  });
+  await apply(
+    "smith",
+    alice,
+    "mint",
+    { roundId: "arsenal" },
+    {},
+    { sender: alice, deposit: 10000000000000000000000n },
+  );
+  const hammer = "relic:arsenal:1";
   assert.equal(
-    (await game.view("market_view", { champion_id: "bob" })).round.poolYocto,
-    "11",
+    JSON.parse(
+      (await game.view("nft_token", { token_id: hammer })).metadata.extra,
+    ).weaponId,
+    "tollkeeper",
+  );
+  await apply("smith", alice, "equip_gear", { slot: "weapon", gearId: hammer });
+  await apply("smith", alice, "upgrade", {
+    slot: "weapon",
+    gearId: hammer,
+    fromLevel: 0,
+    roll: 0,
+  });
+  assert.equal(
+    (await game.view("get_champion", { champion_id: "smith" })).build.weaponId,
+    "tollkeeper",
+  );
+  assert.equal(
+    JSON.parse(
+      (await game.view("nft_token", { token_id: hammer })).metadata.extra,
+    ).level,
+    1,
+  );
+  await apply("smith", alice, "claim", { receiver: bob.accountId });
+  assert.equal(
+    (await game.view("nft_token", { token_id: hammer })).owner_id,
+    bob.accountId,
+  );
+  assert.deepEqual(
+    (await game.view("get_champion", { champion_id: "smith" })).skills,
+    ["ember", "reach", "verdict", "pyre"],
+  );
+  const funds = (await game.view("market_view", { champion_id: "smith" }))
+    .treasuryYocto;
+  await assert.rejects(
+    alice.call(
+      game,
+      "withdraw_treasury",
+      { receiver_id: alice.accountId, amount: "7" },
+      { gas: GAS, attachedDeposit: 1n },
+    ),
+  );
+  await root.call(
+    game,
+    "withdraw_treasury",
+    { receiver_id: "missing." + root.accountId, amount: "7" },
+    { gas: GAS, attachedDeposit: 1n },
+  );
+  assert.equal(
+    (await game.view("market_view", { champion_id: "smith" })).treasuryYocto,
+    funds,
+  );
+  await root.call(
+    game,
+    "withdraw_treasury",
+    { receiver_id: root.accountId, amount: "7" },
+    { gas: GAS, attachedDeposit: 1n },
+  );
+  assert.equal(
+    BigInt(
+      (await game.view("market_view", { champion_id: "smith" })).treasuryYocto,
+    ),
+    BigInt(funds) - 7n,
   );
   const guest = { accountId: "f".repeat(64) };
   await apply("funded-guest", guest, "register", checkpoint);

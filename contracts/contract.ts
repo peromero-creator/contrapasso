@@ -1,3 +1,4 @@
+import { WEAPONS, weaponId } from "../src/sim/weapons.ts";
 import {
   NearBindgen,
   near,
@@ -24,6 +25,9 @@ import {
   marketView,
   openRound,
   resolveNative,
+  retireRaffles,
+  beginTreasuryTransfer,
+  resolveTreasuryTransfer,
 } from "./market.js";
 import { SPONSOR_YOCTO } from "../src/shared/market.ts";
 declare const env: {
@@ -97,6 +101,7 @@ class Contrapasso {
         this.pending.get(`champion:${id}`) === true ||
         !!pendingNative(this.marketStorage(), id),
       prize: (id: string) => prize(this.marketStorage(), id),
+      weapon: (c: any) => { const g = c.equipped?.weapon ? this.gear.get(c.equipped.weapon) : null; return weaponId(g?.weaponId ?? g?.collection); },
       marketAction: (c: any, ctx: any, action: any) =>
         marketAction(this.marketStorage(), ctx, c, action),
       mint: (champion: any, owner: string) => this.mint(champion, owner),
@@ -153,10 +158,11 @@ class Contrapasso {
       rounds: new LookupMap<any>("R"),
       champions: this.champions,
       used: this.used,
-      mintGear: (c: any, id: string, owner: string) => {
+      mintGear: (c: any, id: string, owner: string, identity = "cinder-requiem") => {
+        const spec = WEAPONS[weaponId(identity)];
         const metadata = new TokenMetadata(
-          "Cinder Requiem / " + id.split(":").slice(1).join(" #"),
-          "Limited Contrapasso testnet blade. Coin-funded upgrades determine power. All mint revenue enters the raffle pool.",
+          spec.name + " / " + id.split(":").slice(1).join(" #"),
+          spec.description + " Coin-funded upgrades and combat history stay on this NFT.",
           null,
           null,
           1n,
@@ -177,7 +183,9 @@ class Contrapasso {
           bound: false,
           kills: 0,
           pastOwners: [],
-          collection: "cinder-requiem",
+          collection: identity,
+          weaponId: identity,
+          archetype: spec.className,
         });
         new NftMint(owner, [id]).emit();
       },
@@ -211,6 +219,7 @@ class Contrapasso {
     c.build[data.slot === "weapon" ? "weaponLevel" : "armorLevel"] = remove
       ? 0
       : gear.level;
+    if (data.slot === "weapon") c.build.weaponId = remove ? "starter" : weaponId(gear.weaponId ?? gear.collection);
     c.defending = false;
     if (gear) {
       gear.equippedTo = c.id;
@@ -387,6 +396,27 @@ class Contrapasso {
       { id, durationSeconds: duration_seconds },
     );
   }
+  @call({})
+  retire_raffles() {
+    assert(near.predecessorAccountId() === this.ownerId, "Owner only");
+    return retireRaffles(this.marketStorage());
+  }
+  @call({ payableFunction: true })
+  withdraw_treasury({ receiver_id, amount }: { receiver_id: string; amount: string }) {
+    assert(near.predecessorAccountId() === this.ownerId, "Owner only");
+    assert(near.attachedDeposit() === 1n && validateAccountId(receiver_id), "One yoctoNEAR and a valid receiver required");
+    beginTreasuryTransfer(this.marketStorage(), receiver_id, amount);
+    NearPromise.new(receiver_id).transfer(BigInt(amount)).then(
+      NearPromise.new(near.currentAccountId()).functionCall("resolve_treasury", "{}", 0n, 50000000000000n)
+    ).build();
+  }
+  @call({ privateFunction: true })
+  resolve_treasury() {
+    assert(near.promiseResultsCount() === 1n, "Expected one transfer result");
+    let success = true;
+    try { near.promiseResult(0); } catch { success = false; }
+    return resolveTreasuryTransfer(this.marketStorage(), success);
+  }
   @view({})
   market_view({ champion_id }: { champion_id: string }) {
     return marketView(this.marketStorage(), champion_id);
@@ -411,8 +441,8 @@ class Contrapasso {
   game_config() {
     return {
       network: "testnet",
-      version: "0.5.0",
-      features: ["upgrade", "claim", "market", "royalties"],
+      version: "0.6.0",
+      features: ["upgrade", "claim", "market", "royalties", "arsenal", "skill_tree", "treasury"],
       referee_public_key: this.refereeKey,
       coin_daily_cap: 300,
       duel_stake: 10,
@@ -438,9 +468,11 @@ class Contrapasso {
             Number(near.blockTimestamp() / 1000000n),
           )
         : this.gear.get(id);
+      const blade = info?.kind === "weapon" ? WEAPONS[weaponId(info.weaponId ?? info.collection)] : null;
       token.metadata.extra = json({
         kind: id.startsWith("champion:") ? "champion" : "gear",
         ...info,
+        ...(blade ? { archetype: blade.className, damage: blade.damage + info.level * 2, reach: blade.reach, attackCooldown: blade.cooldown } : {}),
       });
     }
     return token;
@@ -671,7 +703,8 @@ class Contrapasso {
     const round = config.currentRound
       ? store.rounds.get(config.currentRound)
       : null;
-    if (
+    if (config.mode === "treasury") config.treasuryYocto = (BigInt(config.treasuryYocto ?? "0") + amount).toString();
+    else if (
       round &&
       !round.drawn &&
       Number(near.blockTimestamp() / 1000000n) < round.endsAt

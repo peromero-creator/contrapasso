@@ -1,8 +1,10 @@
+import { weaponId, type WeaponId } from "./weapons.ts";
 import { SKILL_IDS, type Skills } from "./skills.ts";
 
 export interface CombatBuild {
   skills: Skills;
   weaponLevel: number;
+  weaponId?: WeaponId;
   armorLevel: number;
 }
 export const DUEL_STAKE = 10;
@@ -17,9 +19,11 @@ export const DUEL_TICKS = 90 * 60;
 export const copyBuild = (build: CombatBuild): CombatBuild => ({
   skills: { ...build.skills },
   weaponLevel: build.weaponLevel,
+  weaponId: weaponId(build.weaponId),
   armorLevel: build.armorLevel,
 });
 export const sameBuild = (a: CombatBuild, b: CombatBuild) =>
+  weaponId(a.weaponId) === weaponId(b.weaponId) &&
   a.weaponLevel === b.weaponLevel &&
   a.armorLevel === b.armorLevel &&
   SKILL_IDS.every((id) => (a.skills[id] ?? 0) === (b.skills[id] ?? 0));

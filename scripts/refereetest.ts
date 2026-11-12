@@ -63,7 +63,8 @@ try {
   assert.throws(() => referee.submit(owner, replacement.id, [0]), /expired/);
   now += 24 * 60 * 60_000;
   assert.equal(referee.profile(owner).earnedToday, 0);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 12; i++) {
+    now += 24 * 60 * 60_000;
     const run = referee.begin(owner); const next = play(run);
     now += Math.ceil(next.world.tick / 60 * 1000);
     referee.submit(owner, run.id, next.inputs);

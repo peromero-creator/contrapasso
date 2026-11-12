@@ -39,9 +39,9 @@ Keep source files outside the web build, for example under `art/source/`. Config
 }
 ```
 
-A clip specification can also select a named or indexed animation: `{ "file": "art/source/actions.glb", "clip": "Run" }`. Canonical model keys are `hero`, `imp`, `archer`, `brute`, `warden`, and `sword`. Other model names can be packed for future props but are not placed in the arena automatically yet.
+A clip specification can also select a named or indexed animation: `{ "file": "art/source/actions.glb", "clip": "Run" }`. Runtime model keys are `hero`, `imp`, `archer`, `brute`, `warden`, `sword`, `hammer`, `dagger`, `shore-spider` and `ferryman`. Additional packed props require explicit placement.
 
-Painted floors cover one complete 30 × 19 arena. Supported circle keys are `LIMBO`, `LUST`, `GLUTTONY`, `GREED`, and `WRATH`; supported images are PNG, JPG and WebP. Keep perspective out of the painted image because the game camera supplies it.
+Painted floors cover one complete 34 × 22 arena. Supported circle keys are `LIMBO`, `LUST`, `GLUTTONY`, `GREED`, and `WRATH`; supported images are PNG, JPG and WebP. Keep perspective out of the painted image because the game camera supplies it.
 
 ## Build
 
@@ -59,8 +59,17 @@ The client caches templates, clones skinned actors safely, normalizes height and
 
 Record the actual asset pack, author, source URL and license in the manifest and credits before shipping. Do not copy characters or visual designs from other commercial games.
 
-The title-screen illustration was generated in the same Flow project from the existing penitent character reference: `art/source/cover.jpg`, shipped as `public/assets/ui/cover.jpg`.
+The title-screen illustration was generated in the same Flow project from the existing penitent character reference: `art/source/cover.jpg`, which remains the preserved original; the active enhanced export is described below.
 
 The limited blade uses `art/source/cinder-requiem.jpg` (Flow) and `art/source/cinder-requiem.glb` (Meshy image-to-3D, 4,000 target polygons). The shipped `sword` model is compressed and reduced to 512-pixel textures. It is shown when Cinder Requiem is equipped and shares the hero’s right-hand grip with the starter fallback, regardless of which model loads first. The concept is also used in the Reliquary and NFT cards.
 
 Raw duplicate exports and unused generation attempts stay outside Git under `art/source/raw/`. Runtime assets, source inputs needed by `art.config.json`, and provenance stay in the repository.
+
+
+## Arsenal and environment revision
+
+Tollkeeper (war hammer) and Widow’s Fang (dagger) use original Flow concepts and Meshy props, alongside Cinder Requiem. The existing hero rig has two additional Meshy animations: Heavy Hammer Swing and Thrust Slash. They are merged only after matching bone rest poses, trimmed locally, and played at the deterministic weapon's swing duration. NFT class selects the in-hand model; + level adds a restrained light, with embers from +3. Unowned preview artwork does not alter combat.
+
+`src/render/dressing.ts` adds original low-poly ruins, suspended chains, a ferryman and a many-faced shore spider. The ferryman and spider use original Flow concepts converted through Meshy, packed with 512-pixel textures. They sway and drift as ambient props outside combat boundaries; they have no combat AI or skeletal walking animation. Blood vessels are real deterministic drops, rendered separately from their healing rules.
+
+The original title composition is retained. Flow's available 2K enhancement produced `art/source/cover-enhanced-2k.jpg` (2752×1536); `public/assets/ui/cover-4k.jpg` is the 3840-pixel-wide display export, preserving aspect ratio. This is a Flow-enhanced 2K image resampled for a 4K display, not native 4K generation. Flow's 4K option required a subscription upgrade and was not purchased.

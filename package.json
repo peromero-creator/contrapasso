@@ -1,12 +1,12 @@
 {
   "name": "contrapasso",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "referee": "node server/index.ts",
-    "test": "node scripts/simtest.ts && node scripts/refereetest.ts && node scripts/dueltest.ts && node scripts/bridgetest.mjs && node scripts/contract-rules-test.mjs && node scripts/markettest.mjs && node scripts/assettest.mjs",
+    "test": "node scripts/simtest.ts && node scripts/refereetest.ts && node scripts/dueltest.ts && node scripts/bridgetest.mjs && node scripts/contract-rules-test.mjs && node scripts/markettest.mjs && node scripts/assettest.mjs && node scripts/expansiontest.ts && node scripts/near-state-test.ts",
     "assets": "node scripts/assets.mjs",
     "contract:build": "node scripts/contract-build.mjs",
     "near:prepare": "node scripts/near-prepare.ts",
@@ -19,7 +19,9 @@
     "near:update": "node scripts/near-update.ts",
     "near:feature-smoke": "node scripts/near-feature-smoke.ts",
     "near:round": "node scripts/near-round.ts",
-    "near:market-smoke": "node scripts/near-market-smoke.ts"
+    "near:market-smoke": "node scripts/near-market-smoke.ts",
+    "near:treasury": "node scripts/near-treasury.ts",
+    "near:arsenal-smoke": "node scripts/near-arsenal-smoke.ts"
   },
   "overrides": {
     "tar": "7.5.23",

@@ -35,6 +35,7 @@
             ><span>III / HEAVY</span>
           </div>
         </div>
+        <div id="held-weapon" class="eyebrow"></div>
         <div id="powers" aria-label="Active powers"></div>
       </div>
       <div class="hud-right">
@@ -197,7 +198,7 @@
         <div class="forge-heading">
           <div>
             <span class="eyebrow">YOUR CHAMPION REMEMBERS</span>
-            <h2 id="forge-title">KEEP THE VOW.</h2>
+            <h2 id="forge-title">CARVE YOUR FATE.</h2>
           </div>
           <button id="forge-close" class="btn ghost">
             BACK <span>×</span>
@@ -205,16 +206,19 @@
         </div>
         <p>
           Spend Solo coin to temper your gear or to learn a permanent power.
-          Both stay with your champion.
+          Skills stay on your champion NFT. Gear keeps its own level and
+          history.
         </p>
         <div class="forge-balance">
           <span class="coin"></span><b class="champion-coins">0</b> COIN
           <span id="daily-coin"></span>
         </div>
+        <span class="eyebrow forge-section"
+          >SKILL TREE · UNLOCK WITH EARNED COIN</span
+        >
+        <div id="forge-cards"></div>
         <span class="eyebrow forge-section">TEMPER YOUR GEAR</span>
         <div id="gear-cards"></div>
-        <span class="eyebrow forge-section">PERMANENT POWERS</span>
-        <div id="forge-cards"></div>
       </div>
     </section>
 
@@ -279,17 +283,19 @@
         <div class="market-banner">
           TESTNET EDITION · Demo funds only · No real money
         </div>
+        <div id="arsenal-choices" aria-label="Choose a weapon"></div>
         <div class="market-layout">
           <div class="relic-art">
             <img
+              id="relic-image"
               src="/assets/ui/cinder-requiem.jpg"
               alt="Cinder Requiem, a black iron blade with an ember fissure and bronze crescent guard"
             /><span>LIMITED RELIC / 001</span>
           </div>
           <div class="relic-detail">
-            <span class="eyebrow">ONE BLADE. ANOTHER DESCENT.</span>
-            <h3>CINDER REQUIEM</h3>
-            <p>
+            <span class="eyebrow">ONE RELIC. ANOTHER DESCENT.</span>
+            <h3 id="relic-title">CINDER REQUIEM</h3>
+            <p id="relic-description">
               A free-trading blade forged from the first circle. Starts at +0;
               your earned coin gives it power.
             </p>
@@ -299,11 +305,11 @@
         </div>
         <div class="raffle-panel">
           <div>
-            <span class="eyebrow">EVERY MINT FEEDS THE POOL</span>
-            <h3>THE ASH DRAW</h3>
+            <span class="eyebrow">EVERY MINT SUPPORTS THE WORLD</span>
+            <h3>THE INFERNAL TREASURY</h3>
             <p>
-              Up to three distinct champions share the full pool equally.
-              Tickets weight your chance; each champion can win once.
+              Native mint revenue stays in a transparent application fund,
+              controlled by the project owner for the game.
             </p>
           </div>
           <div id="raffle-stats"></div>
@@ -314,11 +320,10 @@
         <p id="market-result" role="status" aria-live="polite"></p>
         <button id="market-refresh" class="btn ghost">REFRESH TESTNET ↻</button>
         <p class="market-fine">
-          A reservation costs 10 Solo coin; an unpaid spot can be cancelled and
-          is refunded at the draw. Tickets cost 5 coin, up to 10 per champion.
-          Prizes follow the champion NFT. This demo uses NEAR block randomness
-          and publishes the draw seed; it is not production-grade raffle
-          randomness.
+          Earn access with 10 Solo coin, then pay the native NEAR mint price.
+          Unpaid reservations can be cancelled for a full coin refund. Testnet
+          uses free test NEAR. Marketplace pricing is set by buyers and sellers;
+          a mint does not promise profit or rewards.
         </p>
       </div>
     </section>
@@ -382,8 +387,8 @@
         </div>
         <div class="training-link">
           <div>
-            <span class="eyebrow">PERMANENT POWERS</span>
-            <p id="trained-powers">No vows taken. Your story starts below.</p>
+            <span class="eyebrow">SKILL TREE</span>
+            <div id="trained-powers">No vows taken. Your story starts below.</div>
           </div>
           <button id="train" class="btn ghost">
             TRAIN CHAMPION <span>↗</span>

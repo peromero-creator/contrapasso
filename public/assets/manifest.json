@@ -2,7 +2,7 @@
   "version": 1,
   "models": {
     "hero": {
-      "file": "/assets/models/hero-f47507e0c0b8.glb",
+      "file": "/assets/models/hero-455273196a5e.glb",
       "height": 2.2,
       "rotationY": 90,
       "clips": [
@@ -10,9 +10,11 @@
         "run",
         "attack",
         "dash",
-        "death"
+        "death",
+        "attack-hammer",
+        "attack-dagger"
       ],
-      "bytes": 965760,
+      "bytes": 1039432,
       "windows": {
         "attack": [
           0.35,
@@ -21,6 +23,14 @@
         "dash": [
           0.75,
           1.35
+        ],
+        "attack-hammer": [
+          0.35,
+          1.3
+        ],
+        "attack-dagger": [
+          0.55,
+          1.25
         ]
       },
       "credit": {
@@ -98,7 +108,7 @@
     },
     "sword": {
       "file": "/assets/models/sword-8ab5e1e3597e.glb",
-      "height": 1.55,
+      "height": 1.85,
       "rotationY": 0,
       "clips": [],
       "bytes": 181456,
@@ -107,6 +117,58 @@
         "author": "Made for Contrapasso",
         "license": "Project asset",
         "source": "Meshy image-to-3D from Google Flow concept art/source/cinder-requiem.jpg"
+      }
+    },
+    "hammer": {
+      "file": "/assets/models/hammer-cef45f21967d.glb",
+      "height": 1.65,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 204804,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D from Google Flow concept art/source/tollkeeper.jpg"
+      }
+    },
+    "dagger": {
+      "file": "/assets/models/dagger-b7f81f68bacf.glb",
+      "height": 0.95,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 191152,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D from Google Flow concept art/source/widows-fang.jpg"
+      }
+    },
+    "shore-spider": {
+      "file": "/assets/models/shore-spider-225d3e86ff8e.glb",
+      "height": 1.6,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 214532,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D from Google Flow concept art/source/shore-spider.jpg"
+      }
+    },
+    "ferryman": {
+      "file": "/assets/models/ferryman-8c0d959ff5b8.glb",
+      "height": 2.7,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 234616,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D from Google Flow concept art/source/ferryman.jpg"
       }
     }
   },

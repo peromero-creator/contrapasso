@@ -187,7 +187,7 @@ kbd {
   overflow: hidden;
   background:
     linear-gradient(90deg, #08090985 0%, #08090925 58%, #08090908),
-    url("/assets/ui/cover.jpg") center / cover no-repeat,
+    url("/assets/ui/cover-4k.jpg") center / cover no-repeat,
     #111110;
   transition: transform 0.8s cubic-bezier(0.7, 0, 0.2, 1);
 }
@@ -1748,5 +1748,188 @@ h1 {
   }
   .market-inner .forge-heading h2 {
     font-size: 36px;
+  }
+}
+
+/* Connected, coin-unlocked paths. */
+#forge {
+  background: radial-gradient(ellipse at 50% 30%, #31231c, #10110f);
+  justify-content: flex-start;
+}
+#forge-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.skill-branch {
+  --path: #d5915b;
+}
+.skill-branch.veil {
+  --path: #9eabc3;
+}
+.skill-branch.blood {
+  --path: #b88188;
+}
+.skill-branch header {
+  padding: 16px 0 24px;
+  color: var(--path);
+}
+.skill-branch h3 {
+  font: 700 32px var(--heading);
+  text-transform: uppercase;
+  margin: 8px 0 0;
+}
+.skill-path {
+  display: grid;
+  gap: 28px;
+}
+.skill-node {
+  position: relative;
+  min-height: 230px;
+  width: 100%;
+  border-top: 3px solid var(--path);
+}
+.skill-node:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  width: 2px;
+  height: 30px;
+  background: var(--path);
+  left: 50%;
+  top: 100%;
+  opacity: 0.5;
+}
+.skill-node.locked {
+  opacity: 0.62;
+  border-top-color: #635a51;
+}
+.skill-node.learned {
+  opacity: 1;
+  background: linear-gradient(135deg, #5c4a282d, #24221d);
+  border-color: var(--path);
+}
+.skill-node > span {
+  font-size: 12px;
+}
+.skill-node:disabled:not(.learned) {
+  opacity: 0.72;
+}
+.skill-node small {
+  font-size: 12px;
+  color: #bdb2a1;
+  line-height: 1.4;
+}
+.node-rank {
+  position: absolute;
+  right: 16px;
+  top: 14px;
+  font: 700 28px var(--heading);
+  opacity: 0.3;
+}
+.skills-badge {
+  display: inline-block;
+  position: relative;
+  text-align: left;
+  font: 600 12px var(--body);
+  color: var(--gold);
+}
+.skills-badge summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  border: 1px solid #7c6944;
+  background: #211e18ee;
+  letter-spacing: 0.13em;
+}
+.skills-badge summary b {
+  margin-left: 12px;
+  color: #eee5d4;
+}
+.skills-popover {
+  position: absolute;
+  z-index: 45;
+  left: 0;
+  top: 100%;
+  width: 270px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 12px;
+  background: #171510;
+  border: 1px solid #7c6944;
+  box-shadow: 0 12px 40px #0009;
+}
+#trained-powers .skills-popover {
+  top: auto;
+  bottom: 100%;
+}
+.skills-popover > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #ffffff12;
+}
+.skills-popover .skill-icon {
+  width: 24px;
+  height: 24px;
+}
+.skills-popover small {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 9px;
+}
+#powers {
+  pointer-events: auto;
+}
+#arsenal-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+.arsenal-choice {
+  display: grid;
+  grid-template-columns: 65px 1fr;
+  text-align: left;
+  padding: 12px;
+  gap: 4px 14px;
+  border: 1px solid #635541;
+  background: #25221b;
+  color: #d6ccb8;
+  cursor: pointer;
+}
+.arsenal-choice.selected {
+  border-color: #e3c487;
+  background: #423824;
+}
+.arsenal-choice img {
+  grid-row: span 2;
+  width: 65px;
+  height: 70px;
+  object-fit: contain;
+  background: #e9e5da;
+}
+.arsenal-choice span {
+  font: 500 10px var(--body);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  align-self: end;
+}
+.arsenal-choice strong {
+  font: 700 20px var(--heading);
+  text-transform: uppercase;
+}
+@media (max-width: 720px) {
+  #forge-cards {
+    grid-template-columns: 1fr;
+  }
+  .skill-path {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .skill-node:not(:last-child)::after {
+    display: none;
+  }
+  #arsenal-choices {
+    grid-template-columns: 1fr;
   }
 }

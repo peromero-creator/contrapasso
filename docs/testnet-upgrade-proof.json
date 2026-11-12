@@ -1,18 +1,21 @@
 {
   "network": "testnet",
   "contractId": "contrapasso-261112-a23809.testnet",
-  "transaction": "B6CAn9Mxg8dEuv5T4fwcdRbCLnp5PLWh42hrPge4FWft",
-  "oldWasmSha256": "886e59db6ec033fb2d2cdd147ee5976c70a1f983bf19a0f19d72a99e56b3ff3d",
-  "wasmSha256": "29158e6696c1fb9f6f1af782f6a45af3b0c694559c54849da4ef0ad7fffcefe2",
-  "stateHash": "5d343a2de371381d2b946ecf1eb570e463cc81568ff070a5dff2c0a21fd04ccf",
+  "transaction": "GfDJxz1R86KffVq1Qx3BCGVmNpf6am9QzB3ocH2bmMF4",
+  "oldWasmSha256": "29158e6696c1fb9f6f1af782f6a45af3b0c694559c54849da4ef0ad7fffcefe2",
+  "wasmSha256": "97ab33a3aa47991af0f15e602bf456fd85eba067b0225a769b559a5dfee34c9e",
+  "stateHash": "288f6a7b27220963dd0b7f65d5e6e5c07ef32e069913b09a47421534738e797c",
   "statePreserved": true,
-  "nftSupply": "24",
+  "nftSupply": "26",
   "features": [
     "upgrade",
     "claim",
     "market",
-    "royalties"
+    "royalties",
+    "arsenal",
+    "skill_tree",
+    "treasury"
   ],
-  "version": "0.5.0",
-  "verifiedAt": "2026-11-12T17:48:17.152Z"
+  "version": "0.6.0",
+  "verifiedAt": "2026-11-12T18:49:00.770Z"
 }

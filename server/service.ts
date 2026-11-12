@@ -20,6 +20,8 @@ export class GameService {
       if (this.near.config) {
         try {
           await this.near.flush();
+          if (!this.referee.profile(owner).chain?.pending)
+            await this.near.checkOwner(owner);
         } catch {
           /* Durable pending saves will retry; do not claim confirmation. */
         }
@@ -36,6 +38,17 @@ export class GameService {
         if (!existing) await this.near.checkOwner(owner);
         if (!this.near.config || !this.near.supports("market"))
           throw new RefereeError("The Reliquary is not connected yet.", 503);
+        const marketData = body.data as Record<string, unknown> | undefined;
+        if (
+          body.operation === "reserve_mint" &&
+          marketData?.weaponId &&
+          marketData.weaponId !== "cinder-requiem" &&
+          !this.near.supports("arsenal")
+        )
+          throw new RefereeError(
+            "The arsenal opens after the testnet update.",
+            503,
+          );
         this.referee.queueMarket(owner, body.id, body.operation, body.data);
         try {
           await this.near.flush();
@@ -58,6 +71,17 @@ export class GameService {
           result = this.referee.submit(owner, body.id, body.inputs);
           break;
         case "/api/train":
+          if (
+            this.near.config &&
+            ["pyre", "afterimage", "coup", "mercy"].includes(
+              String(body.skill),
+            ) &&
+            !this.near.supports("skill_tree")
+          )
+            throw new RefereeError(
+              "The new skill paths open after the testnet update.",
+              503,
+            );
           result = this.referee.train(owner, body.skill);
           break;
         case "/api/upgrade":

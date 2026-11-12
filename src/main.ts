@@ -1,3 +1,10 @@
+import {
+  WEAPONS,
+  WEAPON_IDS,
+  weapon,
+  weaponId,
+  type WeaponId,
+} from "./sim/weapons";
 import type { MarketOperation, MarketView } from "./shared/market";
 import * as THREE from "three";
 import { View, CIRCLES } from "./render/view";
@@ -20,7 +27,15 @@ import {
   upgradeChance,
   type GearSlot,
 } from "./sim/build";
-import { SKILLS, SKILL_IDS, rank, type SkillId } from "./sim/skills";
+import {
+  SKILLS,
+  SKILL_IDS,
+  SKILL_BRANCHES,
+  PREREQUISITES,
+  canLearn,
+  rank,
+  type SkillId,
+} from "./sim/skills";
 import { Sound } from "./audio/sound";
 import { api } from "./api";
 import type { Champion, RunChallenge, DuelOpponent } from "./shared/protocol";
@@ -88,15 +103,22 @@ function reflectSound() {
   button.disabled = silent;
   if (document.activeElement === button) button.blur();
 }
+function skillBadge(
+  skills: import("./sim/skills").Skills,
+  ids = SKILL_IDS.filter((id) => rank(skills, id) > 0),
+): string {
+  return `<details class="skills-badge"><summary>SKILLS <b>${ids.length}</b></summary><div class="skills-popover">${ids.length ? ids.map((id) => `<span>${skillIcon(id)}<strong>${SKILLS[id].name}</strong><small>RANK ${rank(skills, id) || 1}</small></span>`).join("") : "Earn Solo coin to unlock your first path."}</div></details>`;
+}
 function refreshChampion() {
   if (!champion) return;
   for (const el of document.querySelectorAll(".champion-coins"))
     el.textContent = String(champion.coins);
   $("champion-progress").textContent =
     `${champion.runs} DESCENTS · ${champion.victories} VICTORIES`;
-  $("trained-powers").textContent = champion.skills.length
-    ? champion.skills.map((id) => SKILLS[id].name).join(" · ")
-    : "No vows taken. Your story starts below.";
+  $("trained-powers").innerHTML = skillBadge(
+    champion.build.skills,
+    champion.skills,
+  );
   $("daily-coin").textContent =
     `${champion.earnedToday} / ${champion.dailyCap} earned today`;
   const chain = champion.chain;
@@ -110,7 +132,7 @@ function refreshChampion() {
   if (chain)
     link.href = `https://testnet.nearblocks.io/address/${chain.accountId}`;
   $("champion-gear").textContent =
-    `${champion.equipped?.weapon?.startsWith("relic:") ? "Cinder Requiem" : "Cinder blade"} +${champion.build.weaponLevel} · Ash armor +${champion.build.armorLevel} · Deepest circle ${champion.bestFloor} / 5`;
+    `${weapon(champion.build.weaponId).name} +${champion.build.weaponLevel} · Ash armor +${champion.build.armorLevel} · Deepest circle ${champion.bestFloor} / 5`;
   const duel = $<HTMLButtonElement>("mode-duel");
   duel.disabled = !chain || chain.pending;
   duel.classList.toggle("locked", duel.disabled);
@@ -319,15 +341,12 @@ function updateHud(dt: number) {
       "lit",
       p.swingN > 0 && i <= ((p.swingN - 1) % 3) + 1,
     );
+  $("held-weapon").textContent =
+    `${weapon(p.weaponId).name} +${p.weaponLevel} · ${weapon(p.weaponId).className}`;
   const powers = JSON.stringify(p.skills);
   if (powers !== shownPowers) {
     shownPowers = powers;
-    $("powers").innerHTML = SKILL_IDS.filter((id) => rank(p.skills, id) > 0)
-      .map(
-        (id) =>
-          `<span class="power-badge" title="${SKILLS[id].name} · Rank ${rank(p.skills, id)}">${skillIcon(id)}<b>${rank(p.skills, id)}</b></span>`,
-      )
-      .join("");
+    $("powers").innerHTML = skillBadge(p.skills);
   }
   if (bannerT > 0) {
     bannerT -= dt;
@@ -420,7 +439,10 @@ function enterRun(next: RunChallenge) {
   if (next.version !== SIM_VERSION)
     throw new Error("The game has updated. Reload to continue.");
   challenge = next;
-  view.useRelic(!!champion?.equipped?.weapon?.startsWith("relic:"));
+  view.useWeapon(
+    next.equipment.weaponId ?? "starter",
+    next.equipment.weaponLevel,
+  );
   world =
     next.mode === "duel"
       ? createDuelWorld(next.seed, next.challengerBuild!, next.opponent!.build)
@@ -510,16 +532,7 @@ function renderLobby() {
     button.className = "opponent-card";
     button.dataset.opponent = opponent.id;
     button.disabled = busy || !!champion.lockedBy || champion.coins < 10;
-    button.innerHTML = `<span class="eyebrow">MATCHED POWER / ${buildPower(opponent.build)}</span><strong></strong><span>${opponent.wins} W / ${opponent.losses} L · Blade +${opponent.build.weaponLevel} / Armor +${opponent.build.armorLevel}</span><span class="opponent-powers">${SKILL_IDS.filter(
-      (id) => rank(opponent.build.skills, id) > 0,
-    )
-      .map(
-        (id) =>
-          `<span title="${SKILLS[id].name} / ${rank(opponent.build.skills, id)}">${skillIcon(id)}<b>${rank(opponent.build.skills, id)}</b></span>`,
-      )
-      .join(
-        "",
-      )}</span><span class="opponent-fight">CHALLENGE · 10 COIN <b>↗</b></span>`;
+    button.innerHTML = `<span class="eyebrow">MATCHED POWER / ${buildPower(opponent.build)}</span><strong></strong><span>${opponent.wins} W / ${opponent.losses} L · Blade +${opponent.build.weaponLevel} / Armor +${opponent.build.armorLevel}</span><span class="opponent-powers">SKILLS · ${Object.keys(opponent.build.skills).length}</span>`;
     button.querySelector("strong")!.textContent = opponent.name;
     button.addEventListener("click", () => void startDuel(opponent.id));
     grid.appendChild(button);
@@ -634,6 +647,7 @@ const nearAmount = (yocto: string) => {
 };
 let marketState: MarketView | null = null;
 let renderedMarketOpen = false;
+let selectedRelic: WeaponId = "cinder-requiem";
 let pendingMarket: {
   championId: string;
   id: string;
@@ -654,6 +668,20 @@ function renderMarket() {
   const { round, reservation, prizeYocto } = marketState;
   const open = !!round && !round.drawn && round.endsAt > Date.now();
   renderedMarketOpen = open;
+  const selected = weapon(reservation?.weaponId ?? selectedRelic);
+  $("relic-title").textContent = selected.name;
+  $("relic-description").textContent =
+    selected.description +
+    " Starts at +0. Each upgrade adds 2 damage; level and kill history travel with the NFT.";
+  const art = $<HTMLImageElement>("relic-image");
+  art.src = `/assets/ui/${reservation?.weaponId ?? selectedRelic}.jpg`;
+  art.alt = selected.name;
+  $("arsenal-choices").innerHTML = WEAPON_IDS.filter((id) => id !== "starter")
+    .map(
+      (id) =>
+        `<button class="arsenal-choice ${id === (reservation?.weaponId ?? selectedRelic) ? "selected" : ""}" data-relic="${id}" ${reservation?.status === "reserved" || reservation?.status === "minted" || busy || pendingMarket ? "disabled" : ""}><img src="/assets/ui/${id}.jpg" alt=""/><span>${WEAPONS[id].className}</span><strong>${WEAPONS[id].name}</strong></button>`,
+    )
+    .join("");
   const metrics = (items: [string, string][]) =>
     `<div class="market-metrics">${items.map(([n, v]) => `<div><b ${n === "Closes in" ? 'id="market-countdown"' : ""}>${escapeHtml(v)}</b><span>${n}</span></div>`).join("")}</div>`;
   $("market-stats").innerHTML = metrics([
@@ -673,7 +701,7 @@ function renderMarket() {
     actions =
       marketButton(
         "mint",
-        "MINT RESERVED BLADE ↗",
+        "MINT RESERVED WEAPON ↗",
         !open ||
           BigInt(marketState.nativeBalanceYocto ?? "0") <
             150000000000000000000000n,
@@ -703,51 +731,33 @@ function renderMarket() {
     actions +=
       "<p>Finish a Solo descent to earn mint access and demo funds.</p>";
   $("market-actions").innerHTML = actions;
-  const held = round?.tickets[champion.id] ?? 0,
-    total = Object.values(round?.tickets ?? {}).reduce(
-      (n, count) => n + count,
-      0,
-    );
   const remaining = round
     ? Math.max(0, Math.ceil((round.endsAt - Date.now()) / 1000))
     : 0;
   $("raffle-stats").innerHTML = metrics([
-    ["Prize pool", `${nearAmount(round?.poolYocto ?? "0")} test NEAR`],
-    ["Your tickets / total", `${held} / ${total}`],
-    ["Round", round?.id ?? "Awaiting edition"],
     [
-      round?.drawn ? "Draw" : "Closes in",
+      "Application treasury",
+      `${nearAmount(marketState.treasuryYocto ?? "0")} test NEAR`,
+    ],
+    [
+      "This edition's revenue",
+      `${nearAmount(round?.poolYocto ?? "0")} test NEAR`,
+    ],
+    ["Edition", round?.id ?? "Awaiting edition"],
+    [
+      round?.drawn ? "Status" : "Closes in",
       round?.drawn
-        ? `Block ${round.drawBlock}`
-        : `${Math.floor(remaining / 60)}m ${remaining % 60}s`,
+        ? "Closed"
+        : `${Math.floor(remaining / 3600)}h ${Math.floor((remaining % 3600) / 60)}m`,
     ],
   ]);
-  $("raffle-actions").innerHTML = open
-    ? `<label for="ticket-count">Tickets</label><select id="ticket-count" ${busy || pendingMarket ? "disabled" : ""}>${[
-        1, 2, 3, 5, 10,
-      ]
-        .filter((n) => held + n <= 10)
-        .map((n) => `<option value="${n}">${n} · ${n * 5} coin</option>`)
-        .join("")}</select>` +
-      marketButton(
-        "tickets",
-        "TAKE TICKETS",
-        held >= 10 || champion.coins < 5 || champion.runs < 1,
-      )
-    : round && !round.drawn
-      ? marketButton("draw_round", "DRAW & REFUND UNPAID SPOTS ↗")
+  $("raffle-actions").innerHTML =
+    round && !round.drawn && !open && round.revenueMode === "treasury"
+      ? marketButton("draw_round", "CLOSE EDITION & REFUND UNPAID SPOTS ↗")
       : "";
-  $("raffle-winners").innerHTML = round?.drawn
-    ? (round.winners.length
-        ? round.winners
-            .map(
-              (w) =>
-                `${escapeHtml(w.championId === champion!.id ? "Your champion" : shortAccount(w.championId))} · ${nearAmount(w.amountYocto)} test NEAR`,
-            )
-            .join("<br>")
-        : "No tickets this round. The full pool carries into the next edition.") +
-      `<details><summary>Published draw seed</summary><code>${escapeHtml(round.entropy ?? "")}</code></details>`
-    : "";
+  $("raffle-winners").textContent =
+    "Funds stay in the application treasury under project-owner control. No tickets, automatic prize distribution or investment returns.";
+  $("prize-vault").classList.toggle("hidden", BigInt(prizeYocto) === 0n);
   $("prize-vault").innerHTML =
     `<span class="eyebrow">YOUR CHAMPION’S PRIZE VAULT</span><h3>${nearAmount(prizeYocto)} TEST NEAR</h3><p>Withdraw to the current NFT owner. Taking the champion to your wallet takes this vault with it.</p>${marketButton("withdraw_prize", "WITHDRAW PRIZE ↗", BigInt(prizeYocto) === 0n)}`;
   if (pendingMarket)
@@ -842,6 +852,14 @@ $("market-refresh").addEventListener("click", async () => {
   }
 });
 $("market").addEventListener("click", (e) => {
+  const choice = (e.target as HTMLElement).closest<HTMLButtonElement>(
+    "button[data-relic]",
+  );
+  if (choice && !choice.disabled) {
+    selectedRelic = weaponId(choice.dataset.relic);
+    renderMarket();
+    return;
+  }
   const button = (e.target as HTMLElement).closest<HTMLButtonElement>(
     "button[data-market],button[data-market-retry]",
   );
@@ -850,8 +868,7 @@ $("market").addEventListener("click", (e) => {
     return void doMarket(pendingMarket.operation, pendingMarket.data);
   const operation = button.dataset.market as MarketOperation;
   const data: Record<string, unknown> = { roundId: marketState?.round?.id };
-  if (operation === "tickets")
-    data.count = Number($<HTMLSelectElement>("ticket-count").value);
+  if (operation === "reserve_mint") data.weaponId = selectedRelic;
   void doMarket(operation, data);
 });
 $("nft-tokens").addEventListener("click", (e) => {
@@ -873,7 +890,7 @@ setInterval(() => {
   if (open !== renderedMarketOpen) renderMarket();
   const clock = document.getElementById("market-countdown");
   if (clock)
-    clock.textContent = `${Math.floor(remaining / 60)}m ${remaining % 60}s`;
+    clock.textContent = `${Math.floor(remaining / 3600)}h ${Math.floor((remaining % 3600) / 60)}m`;
 }, 1000);
 let claimArmed = false;
 let claimSourceId: string | null = null;
@@ -894,19 +911,19 @@ async function renderNft() {
       const rows: [string, string][] = isChampion
         ? [
             ["Vault", `${x.coins ?? 0} coin`],
-            [
-              "Prize vault",
-              `${nearAmount(String(x.prizeYocto ?? "0"))} test NEAR`,
-            ],
+            ...(BigInt(String(x.prizeYocto ?? "0")) > 0n
+              ? [
+                  [
+                    "Legacy prize",
+                    `${nearAmount(String(x.prizeYocto))} test NEAR`,
+                  ] as [string, string],
+                ]
+              : []),
             ["Solo", `${x.runs ?? 0} descents · ${x.victories ?? 0} victories`],
             ["Duel", `${x.duelWins ?? 0} won · ${x.duelLosses ?? 0} lost`],
             [
-              "Powers",
-              Array.isArray(x.skills) && x.skills.length
-                ? (x.skills as SkillId[])
-                    .map((id) => SKILLS[id]?.name ?? id)
-                    .join(", ")
-                : "none yet",
+              "Skills",
+              `${Array.isArray(x.skills) ? x.skills.length : 0} unlocked`,
             ],
           ]
         : [
@@ -920,6 +937,18 @@ async function renderNft() {
             ],
             ["Bound", x.bound ? "travels with its champion" : "free"],
           ];
+      const identity = weaponId(
+        String(x.weaponId ?? x.collection ?? "starter"),
+      );
+      if (!isChampion && x.kind === "weapon")
+        rows.unshift(
+          ["Class", weapon(identity).className],
+          [
+            "Damage",
+            String(weapon(identity).damage + Number(x.level ?? 0) * 2),
+          ],
+          ["Reach", `${weapon(identity).reach} m`],
+        );
       const slot = x.kind === "armor" ? "armor" : "weapon";
       const equipped = champion?.equipped?.[slot] === token.tokenId;
       const available = !x.bound || x.championId === champion?.id;
@@ -927,7 +956,7 @@ async function renderNft() {
         !isChampion && view.features?.includes("market") && available
           ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${equipped ? "UNEQUIP" : "EQUIP"}</button>`
           : "";
-      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${x.collection === "cinder-requiem" ? '<img src="/assets/ui/cinder-requiem.jpg" alt="Cinder Requiem blade"/>' : ""}<strong>${escapeHtml(token.title)}</strong><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl>${gearButton}</article>`;
+      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${!isChampion && identity !== "starter" ? `<img src="/assets/ui/${identity}.jpg" alt="${weapon(identity).name}"/>` : ""}<strong>${escapeHtml(token.title)}</strong><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${gearButton}</article>`;
     })
     .join("");
   if (view.onChain && view.contractId)
@@ -1001,9 +1030,8 @@ $("claim-button").addEventListener("click", async () => {
   }
 });
 const gearName = (slot: GearSlot) =>
-  slot === "weapon" && champion?.equipped?.weapon?.startsWith("relic:")
-    ? "Cinder Requiem"
-    : GEAR[slot].name;
+  slot === "weapon" ? weapon(champion?.build.weaponId).name : "Ash Armor";
+
 const GEAR: Record<
   GearSlot,
   { name: string; effect: (level: number) => string }
@@ -1056,10 +1084,17 @@ function renderForge() {
   if (!champion) return;
   renderGear();
   const grid = $("forge-cards");
-  grid.innerHTML = SKILL_IDS.map((id) => {
-    const known = champion!.skills.includes(id);
-    return `<button class="training-card${known ? " learned" : ""}" data-skill="${id}" ${known || champion!.coins < SKILLS[id].cost || busy ? "disabled" : ""}>${skillIcon(id)}<strong>${SKILLS[id].name}</strong><span>${SKILLS[id].rank}</span><b>${known ? "VOW TAKEN" : `${SKILLS[id].cost} COIN`}</b></button>`;
-  }).join("");
+  grid.innerHTML = SKILL_BRANCHES.map(
+    (branch) =>
+      `<section class="skill-branch ${branch.id}"><header><span class="eyebrow">${branch.subtitle}</span><h3>${branch.name}</h3></header><div class="skill-path">${branch.skills
+        .map((id, i) => {
+          const known = champion!.skills.includes(id),
+            ready = canLearn(champion!.skills, id),
+            pre = PREREQUISITES[id];
+          return `<button class="training-card skill-node${known ? " learned" : ""}${!ready && !known ? " locked" : ""}" data-skill="${id}" ${known || !ready || champion!.coins < SKILLS[id].cost || busy || champion!.chain?.pending ? "disabled" : ""}><span class="node-rank">0${i + 1}</span>${skillIcon(id)}<strong>${SKILLS[id].name}</strong><span>${SKILLS[id].description}</span><small>${SKILLS[id].rank}</small><b>${known ? "UNLOCKED · ON YOUR NFT" : !ready && pre ? `REQUIRES ${SKILLS[pre].name.toUpperCase()}` : `${SKILLS[id].cost} COIN · UNLOCK`}</b></button>`;
+        })
+        .join("")}</div></section>`,
+  ).join("");
   for (const button of grid.querySelectorAll<HTMLButtonElement>("button"))
     button.addEventListener("click", async () => {
       if (busy) return;

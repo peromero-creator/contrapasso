@@ -23,6 +23,7 @@ export interface MintReservation {
   expiresAt: number;
   status: "reserved" | "minted" | "cancelled";
   tokenId?: string;
+  weaponId?: import("../sim/weapons.ts").WeaponId;
 }
 export interface RaffleWinner {
   championId: string;
@@ -31,6 +32,7 @@ export interface RaffleWinner {
 export interface MintRound {
   id: string;
   title: string;
+  revenueMode?: "treasury" | "raffle";
   startsAt: number;
   endsAt: number;
   cap: number;
@@ -50,6 +52,9 @@ export interface MintRound {
 }
 export interface MarketView {
   onChain: boolean;
+  revenueMode?: "treasury" | "raffle";
+  treasuryYocto?: string;
+  treasuryPending?: boolean;
   round: MintRound | null;
   reservation: MintReservation | null;
   prizeYocto: string;

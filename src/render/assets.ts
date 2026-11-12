@@ -110,9 +110,14 @@ export class AnimatedModel {
     });
     for (const mesh of skinned) {
       mesh.geometry.computeBoundingBox();
-      const local = mesh.geometry.boundingBox!.getSize(new THREE.Vector3()).length();
+      const local = mesh.geometry
+        .boundingBox!.getSize(new THREE.Vector3())
+        .length();
       const width = (0.035 * local) / Math.max(0.001, worldDiagonal);
-      const ink = new THREE.MeshBasicMaterial({ color: 0x120a0a, side: THREE.BackSide });
+      const ink = new THREE.MeshBasicMaterial({
+        color: 0x120a0a,
+        side: THREE.BackSide,
+      });
       ink.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader.replace(
           "#include <begin_vertex>",
@@ -146,7 +151,7 @@ export class AnimatedModel {
     this.active?.fadeOut(0.07);
     next.reset().fadeIn(0.07);
     const once =
-      ["attack", "dash", "death"].includes(state) &&
+      (state.startsWith("attack") || ["dash", "death"].includes(state)) &&
       this.actions.get(state) === next;
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
     next.clampWhenFinished = once;

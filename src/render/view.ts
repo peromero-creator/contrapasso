@@ -1,3 +1,5 @@
+import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
+import { Underworld } from "./dressing";
 // Everything visual. Reads the simulation state, never changes it.
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -98,6 +100,7 @@ interface EnemyView {
   tele: THREE.Mesh | null;
   h: number;
   model?: AnimatedModel;
+  weaponModel?: AnimatedModel;
 }
 
 interface Particle {
@@ -233,12 +236,19 @@ export class View {
   private swordPivot = new THREE.Group();
   private swordGrip = new THREE.Group();
   private starterBlade = new THREE.Group();
-  private relicBlade: THREE.Group | null = null;
-  private relicEquipped = false;
-  useRelic(equipped: boolean) {
-    this.relicEquipped = equipped;
-    this.starterBlade.visible = !equipped || !this.relicBlade;
-    if (this.relicBlade) this.relicBlade.visible = equipped;
+  private relicBlades = new Map<WeaponId, THREE.Group>();
+  private equippedWeapon: WeaponId = "starter";
+  private weaponLevel = 0;
+  private weaponGlow = new THREE.PointLight(0xff9d58, 0, 2.2);
+  private underworld!: Underworld;
+  useWeapon(identity: WeaponId, level = 0) {
+    this.equippedWeapon = identity;
+    this.weaponLevel = level;
+    this.starterBlade.visible =
+      identity === "starter" || !this.relicBlades.has(identity);
+    for (const [id, root] of this.relicBlades) root.visible = id === identity;
+    this.weaponGlow.color.setHex(weapon(identity).color);
+    this.weaponGlow.intensity = level * 0.25;
   }
   private slash = new THREE.Group();
   private slashMat!: THREE.MeshBasicMaterial;
@@ -348,6 +358,7 @@ export class View {
     );
     this.ground.rotation.x = -Math.PI / 2;
     this.scene.add(this.ground);
+    this.underworld = new Underworld(this.scene, this.models);
 
     // the void around the arena, a dark stone rim and a thin glowing edge
     const flat = (
@@ -560,14 +571,20 @@ export class View {
         // The entire grip moves to the hand, including a relic loaded before the hero.
       }
     });
-    void this.models.create("sword", 1.55).then((model) => {
-      if (!model) return;
-      this.relicBlade = model.root;
-      model.root.rotation.z = -Math.PI / 2;
-      model.root.position.x = -0.25;
-      this.swordGrip.add(model.root);
-      this.useRelic(this.relicEquipped);
-    });
+    this.swordGrip.add(this.weaponGlow);
+    this.weaponGlow.position.x = 0.8;
+    for (const id of WEAPON_IDS) {
+      const spec = weapon(id);
+      if (!spec.model) continue;
+      void this.models.create(spec.model, spec.height).then((model) => {
+        if (!model) return;
+        model.root.rotation.z = -Math.PI / 2;
+        model.root.position.x = -0.15;
+        this.relicBlades.set(id, model.root);
+        this.swordGrip.add(model.root);
+        this.useWeapon(this.equippedWeapon, this.weaponLevel);
+      });
+    }
 
     this.slashMat = new THREE.MeshBasicMaterial({
       color: 0xffb46a,
@@ -891,6 +908,14 @@ export class View {
           this.pulse(e.x, e.z, e.amount ?? 3);
           this.burst(e.x, 0.4, e.z, 16, 0xffcd7e, 5);
           break;
+        case "heal":
+          this.burst(e.x, 0.8, e.z, 16, 0x84e8b7, 3);
+          this.pulse(e.x, e.z, 1.2);
+          break;
+        case "echo":
+          this.burst(e.x, 0.5, e.z, 22, 0xadc1ef, 4);
+          this.pulse(e.x, e.z, 2.8);
+          break;
         case "skill":
           this.burst(e.x, 1, e.z, 24, 0xe9b76e, 4);
           break;
@@ -903,8 +928,23 @@ export class View {
     this.time += dt;
     this.setCircle(w.floor - 1);
     const p = w.player;
+    if (
+      p.weaponId !== this.equippedWeapon ||
+      p.weaponLevel !== this.weaponLevel
+    )
+      this.useWeapon(p.weaponId, p.weaponLevel);
+    this.underworld.sync(w, dt);
+    this.slashMat.color.setHex(weapon(p.weaponId).color);
+    if (
+      p.weaponLevel >= 3 &&
+      w.tick % Math.max(2, 10 - p.weaponLevel) === 0 &&
+      p.swingT > 0
+    )
+      this.burst(p.x, 0.8, p.z, 2, weapon(p.weaponId).color, 1.5);
     this.slash.scale.setScalar(
-      (p.swingN % 3 === 0 ? 1.22 : 1) * (1 + 0.18 * rank(p.skills, "reach")),
+      (weapon(p.weaponId).reach / 2.7) *
+        (p.swingN % 3 === 0 ? 1.22 : 1) *
+        (1 + 0.18 * rank(p.skills, "reach")),
     );
 
     // hero
@@ -926,10 +966,15 @@ export class View {
           : dashing
             ? "dash"
             : p.swingT > 0
-              ? "attack"
+              ? p.weaponId === "tollkeeper"
+                ? "attack-hammer"
+                : p.weaponId === "widows-fang"
+                  ? "attack-dagger"
+                  : "attack"
               : moving
                 ? "run"
                 : "idle",
+        p.swingT > 0 ? weapon(p.weaponId).swing : undefined,
       );
       this.heroModel.flash(p.flash > 0 ? 0xff2222 : null);
       this.heroModel.update(dt);
@@ -940,7 +985,7 @@ export class View {
       if (p.flash > 0) this.heroMats[i].emissive.setHex(0xff2222);
     }
     if (p.swingT > 0) {
-      const s = 1 - p.swingT / 0.2;
+      const s = 1 - p.swingT / weapon(p.weaponId).swing;
       const e = 1 - (1 - s) * (1 - s);
       this.swordPivot.rotation.y = this.swingSide * (1.35 - e * 2.7);
     } else {
@@ -977,6 +1022,28 @@ export class View {
               child.visible = false;
           actor.model = model;
           actor.group.add(model.root);
+          if (e.kind === "champion") {
+            const spec = weapon(e.weaponId),
+              hand = model.bone("RightHand");
+            if (hand && spec.model)
+              void this.models.create(spec.model, spec.height).then((blade) => {
+                if (!blade) return;
+                if (this.enemies.get(e.id) !== actor) {
+                  blade.dispose();
+                  return;
+                }
+                actor.group.updateWorldMatrix(true, true);
+                const scale = hand.getWorldScale(new THREE.Vector3()),
+                  grip = new THREE.Group();
+                grip.scale.set(1 / scale.x, 1 / scale.y, 1 / scale.z);
+                grip.rotation.set(...GRIP);
+                blade.root.rotation.z = -Math.PI / 2;
+                blade.root.position.x = -0.15;
+                actor.weaponModel = blade;
+                grip.add(blade.root);
+                hand.add(grip);
+              });
+          }
         });
       }
       this.syncEnemy(e, v);
@@ -985,6 +1052,7 @@ export class View {
     for (const [id, v] of this.enemies) {
       if (seen.has(id)) continue;
       this.scene.remove(v.group, v.hpBg, v.hpFg);
+      v.weaponModel?.dispose();
       v.model?.dispose();
       for (const child of v.group.children) {
         if (!(child instanceof THREE.Mesh)) continue;
@@ -1097,13 +1165,17 @@ export class View {
         e.state === "act"
           ? "dash"
           : wind
-            ? "attack"
+            ? e.weaponId === "tollkeeper"
+              ? "attack-hammer"
+              : e.weaponId === "widows-fang"
+                ? "attack-dagger"
+                : "attack"
             : e.state === "seek"
               ? "run"
               : "idle";
       v.model.play(
         state,
-        state === "attack"
+        state.startsWith("attack")
           ? WINDUP[e.kind]
           : state === "dash"
             ? CHARGE[e.kind]

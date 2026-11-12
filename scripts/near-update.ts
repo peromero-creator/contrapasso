@@ -8,6 +8,7 @@ import {
 import { createHash, createPublicKey } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { testnetProvider } from "../server/rpc.ts";
+import { contractStateHash } from "./near-state.ts";
 import { refereeKey } from "../server/keys.ts";
 const sha = (value: Uint8Array | string) =>
   createHash("sha256").update(value).digest("hex");
@@ -70,10 +71,8 @@ if (!process.argv.includes("--execute")) {
   const local = JSON.parse(readFileSync(".data/state.json", "utf8"));
   if (local.outbox.length)
     throw new Error("Drain pending operations before updating");
-  const allState = async () => {
-    const s = await p.viewContractState({ contractId: config.contractId });
-    return sha(JSON.stringify(s.values));
-  };
+  const allState = () =>
+    contractStateHash((params) => p.query<any>(params), config.contractId);
   const before = await allState(),
     supply = await view("nft_total_supply");
   const owner = JSON.parse(readFileSync(".data/near-plan.json", "utf8"));

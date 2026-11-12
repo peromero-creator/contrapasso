@@ -260,6 +260,14 @@ try {
   // Market intents debit only after confirmation and survive an uncertain relay response.
   capabilities.push("market");
   near.checked = false;
+  store.market.set("config", {
+    currentRound: null,
+    roundIds: [],
+    sponsored: 0,
+    liabilityYocto: "0",
+    carryYocto: "0",
+    mode: "raffle",
+  });
   openRound(store, { nowMs: now }, { id: "bridge-round", durationSeconds: 30 });
   const marketCoins = referee.profile(bob).coins;
   const reserveId = randomUUID(),

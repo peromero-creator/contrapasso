@@ -1,3 +1,4 @@
+import { WEAPONS } from "../src/sim/weapons.ts";
 import {
   MINT_ENTRY_COIN,
   TICKET_COIN,
@@ -19,6 +20,8 @@ export const economy = (store) =>
     sponsored: 0,
     liabilityYocto: "0",
     carryYocto: "0",
+    mode: "treasury",
+    treasuryYocto: "0",
   };
 export const prize = (store, id) => store.market.get(`prize:${id}`) ?? "0";
 export const pendingNative = (store, id) => store.market.get(`native:${id}`);
@@ -40,7 +43,8 @@ export function openRound(store, ctx, { id, durationSeconds = 120 }) {
   );
   const round = {
     id,
-    title: "Cinder Requiem",
+    title: (config.mode ?? "raffle") === "treasury" ? "Arsenal of the Descent" : "Cinder Requiem",
+    revenueMode: config.mode ?? "raffle",
     startsAt: ctx.nowMs,
     endsAt: ctx.nowMs + durationSeconds * 1000,
     cap: MINT_CAP,
@@ -185,6 +189,11 @@ export function marketAction(store, ctx, c, action) {
       const r = reservation(store, round.id, id);
       if (r?.status === "reserved") refund(store, round, r, c);
     }
+    if (round.revenueMode === "treasury") {
+      round.drawn = true;
+      store.rounds.set(round.id, round);
+      return;
+    }
     const ids = selectWinners(round.tickets, ctx.entropy),
       pool = BigInt(round.poolYocto);
     round.entropy = ctx.entropy
@@ -227,6 +236,9 @@ export function marketAction(store, ctx, c, action) {
   const round = active(store, ctx, data.roundId);
   if (action.operation === "reserve_mint") {
     check(c.runs > 0, "Earn mint access in Solo");
+    const choice = data.weaponId ?? "cinder-requiem";
+    check(choice !== "starter" && WEAPONS[choice], "Unknown relic");
+    check(round.revenueMode === "treasury" || choice === "cinder-requiem", "Legacy edition is Cinder Requiem only");
     const old = reservation(store, round.id, c.id);
     check(
       !old || old.status === "cancelled",
@@ -248,6 +260,7 @@ export function marketAction(store, ctx, c, action) {
       championId: c.id,
       expiresAt: round.endsAt,
       status: "reserved",
+      weaponId: choice,
     });
     if (!round.reservationIds.includes(c.id)) round.reservationIds.push(c.id);
   } else if (action.operation === "mint") {
@@ -266,11 +279,13 @@ export function marketAction(store, ctx, c, action) {
     r.status = "minted";
     r.tokenId = `relic:${round.id}:${round.minted}`;
     store.reservations.set(key, r);
-    store.mintGear(c, r.tokenId, action.ownerId);
+    store.mintGear(c, r.tokenId, action.ownerId, r.weaponId ?? "cinder-requiem");
     round.poolYocto = add(round.poolYocto, round.priceYocto);
+    if (round.revenueMode === "treasury") config.treasuryYocto = add(config.treasuryYocto, round.priceYocto);
     config.liabilityYocto = add(config.liabilityYocto, round.priceYocto);
     store.market.set("config", config);
   } else if (action.operation === "tickets") {
+    check(round.revenueMode !== "treasury", "Raffles are retired");
     check(
       c.runs > 0 && integer(data.count, TICKET_LIMIT) && data.count > 0,
       "Invalid ticket count",
@@ -322,6 +337,9 @@ export function marketView(store, championId) {
     round = config.currentRound ? store.rounds.get(config.currentRound) : null;
   return {
     round,
+    revenueMode: config.mode ?? "raffle",
+    treasuryYocto: config.treasuryYocto ?? "0",
+    treasuryPending: !!store.market.get("treasury:pending"),
     reservation: round ? reservation(store, round.id, championId) : null,
     prizeYocto: prize(store, championId),
     sponsored: !!store.market.get(`funded:${championId}`),
@@ -329,4 +347,45 @@ export function marketView(store, championId) {
     pendingNative: !!pendingNative(store, championId),
     history: config.roundIds.slice(-5).map((id) => store.rounds.get(id)),
   };
+}
+
+/** Retire ticket sales without confiscating outstanding entries or native prizes. */
+export function retireRaffles(store) {
+  const config = economy(store);
+  if (config.mode === "treasury") return config;
+  const round = config.currentRound ? store.rounds.get(config.currentRound) : null;
+  if (round && !round.drawn) {
+    check(Object.values(round.tickets).every(n => n === 0), "Settle existing ticket holders first");
+    for (const id of round.reservationIds) {
+      const r = reservation(store, round.id, id);
+      if (r?.status === "reserved") refund(store, round, r);
+    }
+    config.treasuryYocto = add(config.treasuryYocto, round.poolYocto);
+    round.drawn = true;
+    round.retired = true;
+    store.rounds.set(round.id, round);
+  }
+  config.treasuryYocto = add(config.treasuryYocto, config.carryYocto);
+  config.carryYocto = "0";
+  config.mode = "treasury";
+  store.market.set("config", config);
+  return config;
+}
+export function beginTreasuryTransfer(store, receiver, amount) {
+  const config = economy(store);
+  check(typeof amount === "string" && /^[0-9]{1,39}$/.test(amount) && BigInt(amount) > 0n, "Invalid treasury amount");
+  check(!store.market.get("treasury:pending"), "Treasury transfer pending");
+  check(BigInt(config.treasuryYocto ?? "0") >= BigInt(amount), "Insufficient treasury funds");
+  config.treasuryYocto = (BigInt(config.treasuryYocto) - BigInt(amount)).toString();
+  store.market.set("treasury:pending", { receiver, amount });
+  store.market.set("config", config);
+}
+export function resolveTreasuryTransfer(store, success) {
+  const pending = store.market.get("treasury:pending"), config = economy(store);
+  check(pending, "No treasury transfer");
+  if (success) config.liabilityYocto = (BigInt(config.liabilityYocto) - BigInt(pending.amount)).toString();
+  else config.treasuryYocto = add(config.treasuryYocto, pending.amount);
+  store.market.remove("treasury:pending");
+  store.market.set("config", config);
+  return { ...pending, success };
 }

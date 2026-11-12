@@ -17,7 +17,7 @@ In Dante's poem a _contrapasso_ is a punishment that mirrors the sin. In this ga
 
 ## Solo
 
-A run is five floors, one circle each. Each floor is one arena with waves of enemies; the boss waits on the fifth floor. After a floor the player picks one of three powers. Solo is where coin is earned.
+A run is five floors, one circle each. Each floor is one arena with waves of enemies; the boss waits on the fifth floor. After a floor the player chooses an offered rank for an already unlocked power; with no eligible power, the gate opens immediately. Solo is where coin is earned.
 
 ## Duel
 
@@ -31,20 +31,20 @@ For the hackathon the duel is asynchronous: the player fights another player's c
 - "+" upgrades of weapons and armor,
 - the duel entry stake,
 - the right to enter an NFT mint,
-- raffle tickets (with whatever is left).
+- access to limited NFT editions.
 
 **NFTs** are everything a player can customise: weapons, armor and the champion itself.
 
 - Gear is released in limited mints (for example 500 or 1000 pieces).
 - Entering a mint costs coin, so only people who played can mint. The mint price itself is paid in real value.
-- All mint revenue goes into a pool that is handed to ticket holders by raffle. The system feeds itself and the team keeps nothing.
+- Mint revenue accumulates in an application treasury controlled by the project owner. Its later in-game use is a product decision; there are no new ticket sales or automatic distributions.
 - Gear changes how the hero plays more than how strong they are. Power comes from "+" upgrades and skills, which cost coin, not money.
 
 **NEAR-style NFT behaviour** (what the `nfts` track asks for):
 
 - The champion NFT acts like an account: it holds its equipped gear, a coin vault and its win/loss record. Sell the champion and all of it moves with the NFT.
 - Gear NFTs are dynamic: the "+" level, kills and past owners are written on the token.
-- Resale royalties also flow into the raffle pool.
+- Paid resale royalties also flow into the application treasury.
 
 ## Proposed economy defaults
 
@@ -55,15 +55,13 @@ For the hackathon the duel is asynchronous: the player fights another player's c
 | Where skills live   | On the champion, so a trained champion has value.                                                                                                                                        |
 | New players         | No starting wheel. Everyone gets a free, account-bound starter weapon and armor that can be upgraded.                                                                                    |
 | Mint oversubscribed | A coin deposit reserves a spot. If the mint sells out first, the coin is refunded.                                                                                                       |
-| Raffle timing       | One draw per mint, up to three distinct winners. The testnet draw uses NEAR block randomness and publishes its seed for replay; stronger adversarial randomness remains production work. |
 | Duel payout         | The challenger stakes coin. A win takes the same amount from the defending champion's vault; a loss pays the stake into that vault. No coin is created.                                  |
 | Duel fairness       | Match by gear power so bought gear cannot stomp new players.                                                                                                                             |
 
 ## Known gaps
 
-- **Bots.** Coin leads to real value through the raffle, so bots that really play are worth running. The referee server stops fake results, not bots. For the demo: a daily coin cap.
-- **Raffle and the law.** A raffle with real money can count as a game of chance in some countries. On testnet this is not an issue; say so in the README.
-- **Scope.** Judges want the foundation. One weapon mint and one champion are enough for the demo.
+- **Bots.** The referee stops fake results, not bots that actually play. Earned mint access still needs bot controls; the demo has a daily coin cap.
+- **Scope.** Demonstrate a complete playable loop and meaningful NFT ownership. A public player count is not listed as an eligibility requirement; this does not replace showing a convincing game.
 
 ## Anti-cheat
 
@@ -74,7 +72,9 @@ A browser must not be able to claim a win. Fights are deterministic: the client 
 - `games`: "judged on the game loop, not the token", bonus if players never notice the chain.
 - `nfts`: NFTs as accounts that own money, hold inventory and earn.
 
-## Implemented integration (2026-11-12)
+## Integration history (0.5, 2026-11-12)
+
+The raffle below describes the prior deployed revision. Revision 0.6 removes new ticket sales in favor of a treasury, preserving historical liabilities.
 
 The testnet contract and local relay implement the champion vault, permanent training, champion/starter gear NFTs and asynchronous Duel. Public testnet deployment is verified at `contrapasso-261112-a23809.testnet`; see [NEAR setup and trust boundaries](NEAR.md).
 
@@ -91,6 +91,16 @@ Tickets cost 5 coin, up to 10 per champion and 200 per round. After the deadline
 Native prizes belong to the champion NFT, can be withdrawn to its current owner, and return to the vault if a transfer fails. Transfers and gameplay writes lock while a native payout is pending. One bounded demo grant of 0.2 test NEAR is available after Solo, for up to six guest champions. The contract preserves prize liabilities and a minimum free reserve before sponsoring a guest. These are free testnet funds, with no real-money entry or payout.
 
 NEP-199 royalty quotes allocate 10% to the contract and 90% to the seller. Marketplaces must honor the quote and actually pay `collect_royalty` to credit the tracked pool. A quote alone does not move funds.
+
+## Weapon and skill-tree revision (0.6)
+
+This revision turns relics into distinct combat archetypes with matching in-hand models, persistent upgrades and transferable history. Three initial paths: long sword (reach), war hammer (slow impact) and dagger (fast close combat). Customization stays attached to owned NFTs; appearance alone must never select unowned combat power.
+
+All new permanent skill unlocks cost earned coin, with shared prerequisite rules in the referee and contract. A three-branch skill tree replaces the flat list. Circle rewards improve skills already unlocked on the champion for that descent; they do not grant free permanent unlocks. Existing paid skills remain owned. Compact Skills badges reveal details instead of printing every power on cards.
+
+Mint access and native payment remain separate. The owner chose to remove raffle sales and hold revenue in the application treasury. Existing round liabilities are honored when retiring the prior round; unallocated revenue moves to the treasury. No new fungible token or mainnet deployment is part of this revision.
+
+The arena expands from 30×19 to 34×22, with healing pickups and perimeter ruins, hanging chains and ambient inhabitants outside the combat boundary. Every seventh Solo kill drops a blood vessel restoring 18 life (boosted by Stolen Mercy); full-health players do not consume it. Further ranged weapons, larger arenas and additional animation sets follow the verified first set.
 
 ## Next steps
 

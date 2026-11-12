@@ -1,5 +1,5 @@
 // Shared contract rules. No network, filesystem, clock or randomness.
-import { SKILLS, SKILL_IDS } from "../src/sim/skills.ts";
+import { SKILLS, SKILL_IDS, canLearn } from "../src/sim/skills.ts";
 import {
   fairMatch,
   copyBuild,
@@ -9,6 +9,7 @@ import {
   upgradeChance,
 } from "../src/sim/build.ts";
 
+import { weaponId, WEAPON_IDS } from "../src/sim/weapons.ts";
 import { MARKET_OPERATIONS } from "../src/shared/market.ts";
 export const CHAIN_DOMAIN = "contrapasso:testnet:v1";
 export const CAP = 300;
@@ -34,11 +35,12 @@ export function powers(value) {
 }
 export function build(value) {
   requireThat(
-    value && number(value.weaponLevel, 9) && number(value.armorLevel, 9),
+    value && (value.weaponId === undefined || WEAPON_IDS.includes(value.weaponId)) && number(value.weaponLevel, 9) && number(value.armorLevel, 9),
     "Invalid gear",
   );
   return {
     skills: powers(value.skills),
+    weaponId: weaponId(value.weaponId),
     weaponLevel: value.weaponLevel,
     armorLevel: value.armorLevel,
   };
@@ -48,12 +50,14 @@ export function readChampion(store, id, nowMs) {
   if (!c) return null;
   const result = clone(c);
   result.ownerId = store.owner(id);
+  if (store.weapon) result.build.weaponId = store.weapon(result);
   if (store.prize) result.prizeYocto = store.prize(id);
   if (result.day !== Math.floor(nowMs / 86400000)) result.earnedToday = 0;
   return result;
 }
 function owned(store, id, owner, revision) {
   const c = store.champions.get(id);
+  if (c && store.weapon) c.build.weaponId = store.weapon(c);
   requireThat(c && store.owner(id) === owner, "Champion ownership changed");
   requireThat(c.revision === revision, "Champion changed; refresh");
   requireThat(!store.pendingTransfer(id), "NFT transfer is pending");
@@ -235,6 +239,7 @@ export function applyAction(store, context, action) {
         SKILL_IDS.includes(data.skill) && !c.skills.includes(data.skill),
         "Invalid training",
       );
+      requireThat(canLearn(c.skills, data.skill), "Unlock the preceding skill first");
       const cost = SKILLS[data.skill].cost;
       requireThat(c.coins >= cost, "Not enough coin");
       c.coins -= cost;

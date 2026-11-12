@@ -179,16 +179,16 @@ assert.equal(total(), before);
 assert.equal(maps.champions.get("alice").duelLosses, 1);
 maps.owners.set("alice", "buyer.testnet");
 assert.throws(
-  () => apply(action("alice", "train", { skill: "reach" })),
+  () => apply(action("alice", "train", { skill: "ember" })),
   /ownership/,
 );
 const owned = readChampion(store, "alice", now);
 assert.equal(owned.ownerId, "buyer.testnet");
 assert.equal(owned.coins, maps.champions.get("alice").coins);
 apply(
-  action("alice", "train", { skill: "reach" }, { ownerId: "buyer.testnet" }),
+  action("alice", "train", { skill: "ember" }, { ownerId: "buyer.testnet" }),
 );
-assert.ok(maps.champions.get("alice").skills.includes("reach"));
+assert.ok(maps.champions.get("alice").skills.includes("ember"));
 now += 86400000;
 assert.equal(readChampion(store, "alice", now).earnedToday, 0);
 // "+" upgrades: cost, odds, cap, and a failure that burns only the coin

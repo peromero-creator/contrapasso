@@ -1,3 +1,4 @@
+import { weapon, weaponId, type WeaponId } from "./weapons.ts";
 // Deterministic combat simulation. No DOM, no three.js, no Math.random, no trig:
 // the same inputs and seed always give the same run, so a server can replay it.
 import { DX, DZ, DIRS } from "./dirs.ts";
@@ -12,8 +13,8 @@ import { DUEL_TICKS, type CombatBuild } from "./build.ts";
 
 export const TICK_HZ = 60;
 export const DT = 1 / TICK_HZ;
-export const ARENA_HX = 15;
-export const ARENA_HZ = 9.5;
+export const ARENA_HX = 17;
+export const ARENA_HZ = 11;
 export const FLOORS = 5;
 export const PORTAL = { x: 0, z: -ARENA_HZ + 1.6, r: 1.5 };
 
@@ -52,6 +53,8 @@ export interface Enemy {
   burnCd: number;
   skills?: Skills;
   weaponLevel?: number;
+  weaponId?: WeaponId;
+  comboT?: number;
   armorLevel?: number;
   retaliationCd?: number;
   attackKind?: "dash" | "swing";
@@ -89,6 +92,8 @@ export interface Player {
   kills: number;
   skills: Skills;
   weaponLevel: number;
+  weaponId: WeaponId;
+  comboT: number;
   armorLevel: number;
   burnT: number;
   burnCd: number;
@@ -112,7 +117,9 @@ export interface SimEvent {
     | "reward"
     | "skill"
     | "nova"
-    | "burn";
+    | "burn"
+    | "heal"
+    | "echo";
   x: number;
   z: number;
   kind?: EnemyKind;
@@ -135,6 +142,8 @@ export interface World {
   events: SimEvent[];
   nextId: number;
   offers: SkillId[];
+  unlocked: readonly SkillId[];
+  pickups: { id: number; x: number; z: number; healing: number }[];
   mode: "solo" | "duel";
 }
 
@@ -173,7 +182,11 @@ const wavesFor = (floor: number) => (floor < 3 ? 2 : 3);
 export function createWorld(
   seed: number,
   trained: readonly SkillId[] = [],
-  equipment = { weaponLevel: 0, armorLevel: 0 },
+  equipment: {
+    weaponLevel: number;
+    armorLevel: number;
+    weaponId?: WeaponId;
+  } = { weaponLevel: 0, armorLevel: 0 },
 ): World {
   const skills: Skills = {};
   for (const id of trained) if (SKILL_IDS.includes(id)) skills[id] = 1;
@@ -205,6 +218,8 @@ export function createWorld(
       kills: 0,
       skills,
       weaponLevel: equipment.weaponLevel,
+      weaponId: weaponId(equipment.weaponId),
+      comboT: 0,
       armorLevel: equipment.armorLevel,
       burnT: 0,
       burnCd: 0,
@@ -214,6 +229,8 @@ export function createWorld(
     events: [],
     nextId: 1,
     offers: [],
+    unlocked: [...trained],
+    pickups: [],
     mode: "solo",
   };
   return w;
@@ -260,6 +277,7 @@ export function createDuelWorld(
     burnCd: 0,
     skills: { ...defender.skills },
     weaponLevel: defender.weaponLevel,
+    weaponId: weaponId(defender.weaponId),
     armorLevel: defender.armorLevel,
     retaliationCd: 0,
   });
@@ -389,7 +407,7 @@ function nova(w: World, x: number, z: number, radius: number, dmg: number) {
 }
 
 function offerSkills(w: World) {
-  const pool = SKILL_IDS.filter(
+  const pool = w.unlocked.filter(
     (id) => rank(w.player.skills, id) < MAX_SKILL_RANK,
   );
   for (let i = 0; i < Math.min(3, pool.length); i++) {
@@ -397,7 +415,13 @@ function offerSkills(w: World) {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   w.offers = pool.slice(0, 3);
-  w.phase = "reward";
+  w.phase = w.offers.length ? "reward" : w.floor === FLOORS ? "won" : "cleared";
+  if (!w.offers.length)
+    w.events.push({
+      type: w.phase as "won" | "cleared",
+      x: PORTAL.x,
+      z: PORTAL.z,
+    });
   w.shots = [];
   w.events.push({ type: "reward", x: w.player.x, z: w.player.z });
 }
@@ -455,22 +479,30 @@ function melee(w: World) {
   const ax = DX[p.aim];
   const az = DZ[p.aim];
   const heavy = p.swingN % 3 === 0;
-  const base = MELEE_DMG + p.weaponLevel * 2;
-  const dmg = heavy
-    ? Math.round(base * (1.6 + 0.6 * rank(p.skills, "verdict")))
-    : base;
+  const blade = weapon(p.weaponId);
+  const base = blade.damage + p.weaponLevel * 2;
+  const dmg = Math.round(
+    (heavy ? base * (blade.heavy + 0.6 * rank(p.skills, "verdict")) : base) *
+      (p.comboT > 0 ? 1 + 0.25 * rank(p.skills, "coup") : 1),
+  );
+  p.comboT = 0;
+  if (heavy && p.weaponId === "tollkeeper")
+    nova(w, p.x + ax * 1.5, p.z + az * 1.5, 2.5, 10 + p.weaponLevel);
   for (const e of w.enemies) {
     if (e.spawn > 0 || e.hp <= 0) continue;
     const ex = e.x - p.x;
     const ez = e.z - p.z;
     const d = Math.sqrt(ex * ex + ez * ez);
-    if (d > MELEE_RANGE + e.r + 0.6 * rank(p.skills, "reach")) continue;
+    if (d > blade.reach + e.r + 0.6 * rank(p.skills, "reach")) continue;
     if (
       d > 0.001 &&
-      (ex * ax + ez * az) / d < MELEE_COS - 0.12 * rank(p.skills, "reach")
+      (ex * ax + ez * az) / d < blade.arc - 0.12 * rank(p.skills, "reach")
     )
       continue;
+    const burning = e.burnT > 0;
     hurtEnemy(w, e, dmg);
+    if (heavy && burning && rank(p.skills, "pyre"))
+      nova(w, e.x, e.z, 2.5, 12 * rank(p.skills, "pyre"));
     if (rank(p.skills, "ember") > 0) e.burnT = 3;
     const kb =
       e.kind === "warden"
@@ -485,8 +517,8 @@ function melee(w: World) {
               ? 2.1 + 0.45 * rank(p.skills, "verdict")
               : 1.25;
     if (e.state !== "act" && kb > 0) {
-      e.knockX = (ax * kb) / KNOCK_TIME;
-      e.knockZ = (az * kb) / KNOCK_TIME;
+      e.knockX = (ax * kb * blade.knock) / KNOCK_TIME;
+      e.knockZ = (az * kb * blade.knock) / KNOCK_TIME;
       e.knockT = KNOCK_TIME;
     }
   }
@@ -494,6 +526,7 @@ function melee(w: World) {
 
 function stepPlayer(w: World, input: Input) {
   const p = w.player;
+  if (p.comboT > 0) p.comboT -= DT;
   if (p.attackCd > 0) p.attackCd -= DT;
   if (p.dashCd > 0) p.dashCd -= DT;
   if (p.invuln > 0) p.invuln -= DT;
@@ -503,6 +536,7 @@ function stepPlayer(w: World, input: Input) {
   if (input.dash && p.dashCd <= 0 && p.dashT <= 0) {
     p.dashDir = input.move >= 0 ? input.move : input.aim;
     p.dashT = DASH_TIME;
+    p.comboT = 1 + DASH_TIME;
     p.dashCd = DASH_CD * (1 - 0.12 * rank(p.skills, "ash"));
     if (p.invuln < DASH_TIME + 0.08) p.invuln = DASH_TIME + 0.08;
     p.swingT = 0;
@@ -515,17 +549,22 @@ function stepPlayer(w: World, input: Input) {
     p.dashT -= DT;
     p.x += DX[p.dashDir] * DASH_SPEED * DT;
     p.z += DZ[p.dashDir] * DASH_SPEED * DT;
+    if (p.dashT <= 0 && rank(p.skills, "afterimage")) {
+      nova(w, p.x, p.z, 2.8, 12 * rank(p.skills, "afterimage"));
+      w.events.push({ type: "echo", x: p.x, z: p.z });
+    }
   } else {
     if (p.swingT <= 0) p.aim = input.aim;
     if (input.attack && p.attackCd <= 0) {
       p.aim = input.aim;
       p.swingN += 1;
-      p.swingT = SWING_TIME;
+      const blade = weapon(p.weaponId);
+      p.swingT = blade.swing;
       p.attackCd =
-        (ATTACK_CD + (p.swingN % 3 === 0 ? 0.16 : 0)) *
+        (blade.cooldown + (p.swingN % 3 === 0 ? blade.cooldown * 0.4 : 0)) *
         (1 - 0.08 * rank(p.skills, "haste"));
-      p.x += DX[p.aim] * 0.55;
-      p.z += DZ[p.aim] * 0.55;
+      p.x += DX[p.aim] * blade.lunge;
+      p.z += DZ[p.aim] * blade.lunge;
       w.events.push({
         type: "swing",
         x: p.x,
@@ -580,7 +619,9 @@ function stepEnemy(w: World, e: Enemy) {
   switch (e.kind) {
     case "champion": {
       const skills = e.skills ?? {};
-      const attackReach = 2.5 + 0.6 * rank(skills, "reach");
+      const blade = weapon(e.weaponId);
+      if ((e.comboT ?? 0) > 0) e.comboT! -= DT;
+      const attackReach = blade.reach + 0.6 * rank(skills, "reach");
       if (e.state === "seek") {
         e.dx = ex;
         e.dz = ez;
@@ -614,13 +655,35 @@ function stepEnemy(w: World, e: Enemy) {
             const heavy = e.pattern % 3 === 0;
             const facing = d < 0.001 ? 1 : ex * e.dx + ez * e.dz;
             const damage = Math.round(
-              (22 + (e.weaponLevel ?? 0) * 2) *
-                (heavy ? 1.6 + 0.6 * rank(skills, "verdict") : 1),
+              (blade.damage + (e.weaponLevel ?? 0) * 2) *
+                (heavy ? blade.heavy + 0.6 * rank(skills, "verdict") : 1) *
+                ((e.comboT ?? 0) > 0 ? 1 + 0.25 * rank(skills, "coup") : 1),
             );
-            if (
+            const direct =
               d <= attackReach &&
-              facing >= 0.15 - 0.1 * rank(skills, "reach") &&
-              hurtPlayer(w, damage)
+              facing >= blade.arc - 0.12 * rank(skills, "reach");
+            const shock =
+              heavy &&
+              e.weaponId === "tollkeeper" &&
+              (p.x - e.x - e.dx * 1.5) ** 2 + (p.z - e.z - e.dz * 1.5) ** 2 <=
+                2.5 ** 2;
+            const pyre =
+              direct && heavy && p.burnT > 0 ? 12 * rank(skills, "pyre") : 0;
+            if (shock || pyre)
+              w.events.push({
+                type: "nova",
+                x: e.x + e.dx * 1.5,
+                z: e.z + e.dz * 1.5,
+                amount: 2.5,
+              });
+            if (
+              (direct || shock) &&
+              hurtPlayer(
+                w,
+                (direct ? damage : 0) +
+                  (shock ? 10 + (e.weaponLevel ?? 0) : 0) +
+                  pyre,
+              )
             ) {
               if (rank(skills, "ember")) {
                 p.burnT = 3;
@@ -630,8 +693,9 @@ function stepEnemy(w: World, e: Enemy) {
                 e.hp = Math.min(e.maxHp, e.hp + 2 * rank(skills, "blood"));
             }
             e.state = "recover";
-            e.t = 0.38;
-            e.cd = 0.38 * (1 - 0.08 * rank(skills, "haste"));
+            e.comboT = 0;
+            e.t = blade.swing;
+            e.cd = blade.cooldown * (1 - 0.08 * rank(skills, "haste"));
           }
         }
       } else if (e.state === "act") {
@@ -646,6 +710,11 @@ function stepEnemy(w: World, e: Enemy) {
           e.state = "recover";
           e.t = 0.5;
           e.cd = 0.6 * (1 - 0.12 * rank(skills, "ash"));
+          e.comboT = 1;
+          if (rank(skills, "afterimage")) {
+            w.events.push({ type: "echo", x: e.x, z: e.z });
+            if (d < 2.8) hurtPlayer(w, 12 * rank(skills, "afterimage"));
+          }
         }
       } else {
         e.t -= DT;
@@ -862,6 +931,8 @@ export function step(w: World, input: Input): void {
       died = true;
       p.coins += STATS[e.kind].coins;
       p.kills += 1;
+      if (w.mode === "solo" && p.kills % 7 === 0)
+        w.pickups.push({ id: w.nextId++, x: e.x, z: e.z, healing: 18 });
       if (p.hp > 0)
         p.hp = Math.min(p.maxHp, p.hp + 2 * rank(p.skills, "blood"));
       w.events.push({
@@ -874,6 +945,23 @@ export function step(w: World, input: Input): void {
     }
   }
   if (died) w.enemies = w.enemies.filter((e) => e.hp > 0);
+
+  for (const item of w.pickups) {
+    if (
+      p.hp > 0 &&
+      p.hp < p.maxHp &&
+      (p.x - item.x) ** 2 + (p.z - item.z) ** 2 < 1.2 ** 2
+    ) {
+      const restored = Math.min(
+        p.maxHp - p.hp,
+        Math.round(item.healing * (1 + 0.5 * rank(p.skills, "mercy"))),
+      );
+      p.hp += restored;
+      item.healing = 0;
+      w.events.push({ type: "heal", x: p.x, z: p.z, amount: restored });
+    }
+  }
+  w.pickups = w.pickups.filter((item) => item.healing > 0);
 
   // waves and floors
   if (w.mode === "duel") {
@@ -905,6 +993,7 @@ export function step(w: World, input: Input): void {
     const dz = p.z - PORTAL.z;
     if (dx * dx + dz * dz < PORTAL.r * PORTAL.r) {
       w.floor += 1;
+      w.pickups = [];
       w.wave = 0;
       w.wavesInFloor = wavesFor(w.floor);
       w.spawnDelay = 1.0;

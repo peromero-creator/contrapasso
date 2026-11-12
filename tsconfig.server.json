@@ -22,6 +22,10 @@
     "scripts/near-update.ts",
     "scripts/near-round.ts",
     "scripts/near-market-smoke.ts",
-    "scripts/near-feature-smoke.ts"
+    "scripts/near-feature-smoke.ts",
+    "scripts/near-treasury.ts",
+    "scripts/near-arsenal-smoke.ts",
+    "scripts/near-state-test.ts",
+    "scripts/expansiontest.ts"
   ]
 }

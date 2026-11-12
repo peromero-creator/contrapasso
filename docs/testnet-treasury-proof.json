@@ -1,0 +1,18 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "before": {
+    "round": "cinder-demo-1",
+    "mode": "raffle",
+    "unpaid": 0,
+    "poolYocto": "10000000000000000000000",
+    "treasuryYocto": "0"
+  },
+  "transaction": "kvJvX7LxvcPX7VFcxnABkWSdsKWCKeyTi7kSWRDKmRS",
+  "after": {
+    "mode": "treasury",
+    "treasuryYocto": "10000000000000000000000",
+    "roundClosed": true
+  },
+  "verifiedAt": "2026-11-12T18:49:12.625Z"
+}

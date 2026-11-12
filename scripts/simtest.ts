@@ -7,7 +7,7 @@ import { SKILL_IDS, type SkillId } from "../src/sim/skills.ts";
 
 function bot(w: World): Input {
   const p = w.player;
-  if (w.phase === "reward") return { move: -1, aim: p.aim, attack: false, dash: false, choice: 1 + w.floor % 3 };
+  if (w.phase === "reward") return { move: -1, aim: p.aim, attack: false, dash: false, choice: 1 + w.floor % Math.max(1, w.offers.length) };
   let best = null as null | { d: number; x: number; z: number };
   for (const e of w.enemies) {
     if (e.spawn > 0) continue;
@@ -15,7 +15,7 @@ function bot(w: World): Input {
     if (!best || d < best.d) best = { d, x: e.x, z: e.z };
   }
   if (w.phase === "cleared") {
-    const a = dirIndex(0 - p.x, -7.9 - p.z);
+    const a = dirIndex(0 - p.x, PORTAL.z - p.z);
     return { move: a, aim: a, attack: false, dash: false };
   }
   if (!best) return { move: -1, aim: p.aim, attack: false, dash: false };
@@ -91,6 +91,7 @@ assert.equal(portal.floor, 2);
 assert.equal(portal.player.hp, 85);
 assert.equal(portal.phase, "fight");
 const victory = arena();
+victory.unlocked = ["ember", "iron", "haste"];
 victory.floor = 5;
 victory.wave = 2;
 victory.wavesInFloor = 3;

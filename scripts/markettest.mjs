@@ -14,6 +14,9 @@ import {
   prize,
   pendingNative,
   selectWinners,
+  retireRaffles,
+  beginTreasuryTransfer,
+  resolveTreasuryTransfer,
 } from "../contracts/market.js";
 import { MINT_PRICE_YOCTO } from "../src/shared/market.ts";
 const names = [
@@ -42,6 +45,14 @@ const store = {
   mintGear: (c, id, owner) => maps.gear.set(id, { owner }),
   marketAction: (c, ctx, a) => marketAction(store, ctx, c, a),
 };
+store.market.set("config", {
+  currentRound: null,
+  roundIds: [],
+  sponsored: 0,
+  liabilityYocto: "0",
+  carryYocto: "0",
+  mode: "raffle",
+});
 let now = 100000,
   seq = 0;
 const ctx = {
@@ -238,4 +249,38 @@ try {
 }
 console.log(
   "Market rules: PASS (limited reservations, refunds, paid mint replay protection, tickets, draw conservation, transfer locks, failed payouts, NFT-owned prizes, carry)",
+);
+
+// Retire a no-ticket legacy round without losing unpaid access or prize liabilities.
+apply(action("p1", "reserve_mint", { roundId: "carry" }));
+const refundBalance = maps.champions.get("p1").coins;
+retireRaffles(store);
+assert.equal(maps.champions.get("p1").coins, refundBalance + 10);
+assert.equal(economy(store).treasuryYocto, MINT_PRICE_YOCTO);
+const liability = BigInt(economy(store).liabilityYocto);
+beginTreasuryTransfer(store, "game.testnet", "7");
+assert.throws(
+  () => beginTreasuryTransfer(store, "game.testnet", "1"),
+  /pending/,
+);
+resolveTreasuryTransfer(store, false);
+assert.equal(economy(store).treasuryYocto, MINT_PRICE_YOCTO);
+beginTreasuryTransfer(store, "game.testnet", "7");
+resolveTreasuryTransfer(store, true);
+assert.equal(BigInt(economy(store).liabilityYocto), liability - 7n);
+assert.throws(
+  () => beginTreasuryTransfer(store, "game.testnet", MINT_PRICE_YOCTO),
+  /Insufficient/,
+);
+openRound(store, ctx, { id: "arsenal", durationSeconds: 30 });
+assert.throws(
+  () => apply(action("p0", "tickets", { roundId: "arsenal", count: 1 })),
+  /retired/,
+);
+apply(
+  action("p0", "reserve_mint", { roundId: "arsenal", weaponId: "tollkeeper" }),
+);
+assert.equal(store.reservations.get("arsenal:p0").weaponId, "tollkeeper");
+console.log(
+  "Treasury: PASS (retirement refunds, liabilities isolated, failure restoration, duplicate payout lock, no tickets, reserved weapon identity)",
 );

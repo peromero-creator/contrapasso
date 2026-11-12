@@ -17,7 +17,12 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createWorld, createDuelWorld, step } from "../src/sim/world.ts";
 import { SIM_VERSION, unpackInput } from "../src/sim/input.ts";
-import { SKILL_IDS, SKILLS, type SkillId } from "../src/sim/skills.ts";
+import {
+  SKILL_IDS,
+  SKILLS,
+  canLearn,
+  type SkillId,
+} from "../src/sim/skills.ts";
 import {
   copyBuild,
   fairMatch,
@@ -319,8 +324,9 @@ export class Referee {
     );
     let seed = this.nextSeed() >>> 0,
       skills = [...a.skills];
-    let equipment = {
+    let equipment: RunChallenge["equipment"] = {
       weaponLevel: a.build.weaponLevel,
+      weaponId: a.build.weaponId,
       armorLevel: a.build.armorLevel,
     };
     if (retry !== undefined) {
@@ -389,6 +395,7 @@ export class Referee {
     );
     const skill = id as SkillId;
     demand(!a.skills.includes(skill), "You already know this power.", 409);
+    demand(canLearn(a.skills, skill), "Unlock the preceding skill first.", 409);
     demand(a.coins >= SKILLS[skill].cost, "Earn more coin in Solo first.");
     a.coins -= SKILLS[skill].cost;
     a.skills.push(skill);
@@ -569,6 +576,7 @@ export class Referee {
       skills: [...a.skills],
       equipment: {
         weaponLevel: a.build.weaponLevel,
+        weaponId: a.build.weaponId,
         armorLevel: a.build.armorLevel,
       },
       challengerBuild: copyBuild(a.build),
@@ -879,6 +887,15 @@ export class Referee {
         "Choose 1 to 10 tickets.",
       );
       data.count = body.count;
+    }
+    if (operation === "reserve_mint" && body.weaponId !== undefined) {
+      demand(
+        ["cinder-requiem", "tollkeeper", "widows-fang"].includes(
+          String(body.weaponId),
+        ),
+        "Unknown relic.",
+      );
+      data.weaponId = body.weaponId;
     }
     if (operation === "equip_gear" || operation === "unequip_gear") {
       demand(
