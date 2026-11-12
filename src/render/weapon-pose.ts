@@ -30,3 +30,12 @@ export function orientWeapon(
     0,
   );
 }
+
+/** Reuse the existing rig, keeping contacts synchronized to each technique. */
+export function abilityClip(id: import('../sim/abilities').AbilityId, identity: WeaponId) {
+  if (id.includes('-') && !id.endsWith('-spell')) {
+    if (identity === 'vesper-reed') return 'cast';
+    return attackClip(identity, id.endsWith('-4') || id.endsWith('-3') ? 3 : 1);
+  }
+  return id === 'iron' ? 'ultimate-iron' : id === 'ember' || id === 'ash' ? 'ultimate' : 'cast';
+}

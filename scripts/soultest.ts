@@ -53,7 +53,7 @@ const frames = (w: ReturnType<typeof arena>, n: number, input = idle) => {
 for (const cast of [true, false])
   for (const ultimate of [true, false])
     for (const choice of [0, 1, 2, 3]) {
-      const input = { ...idle, cast, ultimate, choice };
+      const input = { ...idle, cast, ultimate, choice, technique: 0 };
       assert.deepEqual(unpackInput(packInput(input)), input);
     }
 const untrained = createWorld(1, [], {
@@ -175,7 +175,7 @@ r.attune(owner, "ember");
 assert.equal(r.begin(owner).equipment.core, "ember");
 assert.equal(r.profile(owner).build.core, "ember");
 console.log(
-  "Soul skills: PASS (27-bit inputs, paid gates, windup, staff fan, cooldown, charge conservation, three cores, rival casting, replay and authenticated attunement)",
+  "Soul skills: PASS (30-bit inputs, paid gates, windup, staff fan, cooldown, charge conservation, three cores, rival casting, replay and authenticated attunement)",
 );
 
 const lethalSiphon = arena("iron");lethalSiphon.player.hp=1;lethalSiphon.player.charge=100;lethalSiphon.enemies[0].skills={reprisal:3};lethalSiphon.enemies[0].x=1;step(lethalSiphon,{...idle,ultimate:true});frames(lethalSiphon,45);assert.equal(lethalSiphon.player.hp,0,"siphon cannot revive a lethal retaliation");assert.equal(lethalSiphon.phase,"dead");

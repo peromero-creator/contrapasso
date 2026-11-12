@@ -1,9 +1,13 @@
-export const SKILL_IDS = ["ember", "reach", "verdict", "haste", "ash", "iron", "blood", "reprisal", "pyre", "afterimage", "coup", "mercy"] as const;
+import { TECHNIQUE_IDS, TECHNIQUES, techniqueId, techniqueParents, techniqueCost } from "./techniques.ts";
+export const SKILL_IDS = ["ember", "reach", "verdict", "haste", "ash", "iron", "blood", "reprisal", "pyre", "afterimage", "coup", "mercy", "nova-spell", "siphon-spell", ...TECHNIQUE_IDS] as const;
 export type SkillId = typeof SKILL_IDS[number];
 export type Skills = Partial<Record<SkillId, number>>;
 export const MAX_SKILL_RANK = 3;
 
 export const SKILLS: Record<SkillId, { name: string; icon: string; description: string; rank: string; bossPattern: string; cost: number }> = {
+  ...Object.fromEntries(TECHNIQUE_IDS.map(id => [id, { name: TECHNIQUES[id].name, icon: "✧", description: TECHNIQUES[id].description, rank: "+15% technique damage per rank", bossPattern: id, cost: techniqueCost(id) }])) as Record<import("./techniques.ts").TechniqueId, { name: string; icon: string; description: string; rank: string; bossPattern: string; cost: number }>,
+  "nova-spell": { name: "Cinder Circle", icon: "◉", description: "Q erupts around you, burning nearby enemies. Select in the spell slot.", rank: "+8 eruption damage per rank", bossPattern: "circle", cost: 35 },
+  "siphon-spell": { name: "Blood Thread", icon: "◆", description: "Q siphons enemies in a narrow lane and restores life. Select in the spell slot.", rank: "+8 siphon damage per rank", bossPattern: "thread", cost: 35 },
   ember: { name: "Ember Edge", icon: "✦", description: "Weapon hits ignite enemies. Q casts a piercing Soul Lance; a staff casts three. Unlocks the Furnace Heart core.", rank: "+4 burn damage per second", bossPattern: "burning-cleave", cost: 45 },
   reach: { name: "Gravespan", icon: "⌁", description: "A longer reach. A wider arc. Leave nowhere to hide.", rank: "+0.6 blade reach and a wider arc", bossPattern: "wide-cleave", cost: 45 },
   verdict: { name: "Third Verdict", icon: "Ⅲ", description: "Every third swing strikes harder and pushes further.", rank: "+60% base damage on third swings", bossPattern: "triple-cleave", cost: 60 },
@@ -31,4 +35,4 @@ export const PREREQUISITES: Partial<Record<SkillId, SkillId>> = {
   blood: "iron", reprisal: "blood", mercy: "reprisal",
 };
 export const canLearn = (owned: readonly SkillId[], id: SkillId) =>
-  !PREREQUISITES[id] || owned.includes(PREREQUISITES[id]!);
+  techniqueId(id) ? techniqueParents(id as import("./techniques.ts").TechniqueId).every(p => owned.includes(p)) : !PREREQUISITES[id] || owned.includes(PREREQUISITES[id]!);

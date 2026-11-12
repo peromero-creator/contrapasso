@@ -1,7 +1,8 @@
+import { techniqueId } from "../sim/techniques";
 import type { SkillId } from "../sim/skills";
 
 // Original line icons, kept in code so the interface needs no image downloads.
-const paths: Record<SkillId, string> = {
+const paths: Partial<Record<SkillId, string>> = {
   pyre: '<path d="m12 2 3 7 6 3-6 3-3 7-3-7-6-3 6-3Z"/>',
   afterimage: '<path d="m3 4 7 8-7 8m6-16 7 8-7 8m6-16 7 8-7 8"/>',
   coup: '<path d="m4 20 16-16M5 9l10 10M3 4h6M4 3v6"/>',
@@ -19,4 +20,4 @@ const paths: Record<SkillId, string> = {
     '<path d="m12 2 2 6 6-2-2 6 4 3-7 1-3 6-2-6-7 1 4-5-3-5 6 1 2-6Z"/>',
 };
 export const skillIcon = (id: SkillId) =>
-  `<svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id]}</svg>`;
+  `<svg class="skill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id] ?? (id === "nova-spell" ? paths.pyre : id === "siphon-spell" ? paths.blood : techniqueId(id)?.startsWith("staff") ? '<path d="M7 21 15 3m-3 0 5 2 2-2M9 8l7 3M4 12l2-2m12 5 2-2"/>' : techniqueId(id)?.startsWith("hammer") ? '<path d="m7 22 6-14M7 3l10 4-2 6-10-4Z"/>' : techniqueId(id)?.startsWith("axe") ? '<path d="m6 22 8-20m-1 3c8 0 8 7 5 11l-8-5"/>' : techniqueId(id)?.startsWith("crossbow") ? '<path d="m4 20 16-16M4 6c5 0 14 9 14 14M4 6l14 14M11 3l10 10"/>' : techniqueId(id)?.startsWith("dagger") ? paths.coup : techniqueId(id)?.startsWith("spear") ? '<path d="m4 21 12-14m-3-2 7-3-2 8-5-5Z"/>' : paths.reach)}</svg>`;

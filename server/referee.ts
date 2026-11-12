@@ -1,3 +1,4 @@
+import { SPELL_IDS, SPELLS, spellId } from "../src/sim/abilities.ts";
 import { coreId } from "../src/sim/abilities.ts";
 import { WEAPON_IDS } from "../src/sim/weapons.ts";
 import {
@@ -330,6 +331,7 @@ export class Referee {
       weaponLevel: a.build.weaponLevel,
       weaponId: a.build.weaponId,
       core: a.build.core,
+      spell: a.build.spell,
       armorLevel: a.build.armorLevel,
     };
     if (retry !== undefined) {
@@ -389,17 +391,23 @@ export class Referee {
       resumeInputs: run.mode === "duel" ? (progress ?? []) : undefined,
     });
   }
-  attune(owner: string, value: unknown): Champion {
+  attune(owner: string, value: unknown, slot: unknown = "core"): Champion {
     const a = this.account(owner, true);
     demand(!a.lockedBy, "Finish your Duel first.");
-    const core = coreId(value);
-    demand(core && a.skills.includes(core), "Unlock this core skill first.");
-    a.build.core = core;
+    demand(slot === "core" || slot === "spell", "Unknown ability slot.");
+    const core = coreId(value), spell = spellId(value);
+    if (slot === "spell") {
+      demand(SPELL_IDS.includes(value as any) && a.skills.includes(SPELLS[spell].skill), "Learn this spell first.");
+      a.build.spell = spell;
+    } else {
+      demand(core && a.skills.includes(core), "Unlock this core skill first.");
+      a.build.core = core;
+    }
     this.enqueue({
       id: `attune:${randomUUID()}`,
       operation: "attune",
       championId: a.id,
-      data: { core },
+      data: slot === "spell" ? { spell, slot } : { core },
     });
     this.save();
     return this.profile(owner);
@@ -596,6 +604,7 @@ export class Referee {
         weaponLevel: a.build.weaponLevel,
         weaponId: a.build.weaponId,
         core: a.build.core,
+      spell: a.build.spell,
         armorLevel: a.build.armorLevel,
       },
       challengerBuild: copyBuild(a.build),

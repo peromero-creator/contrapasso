@@ -1,6 +1,9 @@
+import { TECHNIQUES, techniqueId } from "../sim/techniques";
+import { abilityClip } from "./weapon-pose";
 import { SoulFx } from "./soul-fx";
 import { createWorld } from "../sim/world";
 import {
+  abilityDuration, abilityContact, isSpell, SPELLS, coreId,
   CAST_TIME,
   CAST_CONTACT,
   CORE_TIME,
@@ -146,6 +149,7 @@ export class RelicStage {
   private hero: AnimatedModel | null = null;
   private blade: AnimatedModel | null = null;
   private grip = new THREE.Group();
+  private starter = new THREE.Group();
   private identity: WeaponId = "starter";
   private generation = 0;
   private timer = 0;
@@ -161,6 +165,10 @@ export class RelicStage {
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     this.camera.position.set(3.5, 2.8, 5.5);
     this.camera.lookAt(0.25, 1.1, 0);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.55,.07,.17),new THREE.MeshStandardMaterial({color:0x2a1a10,emissive:0xffa040,emissiveIntensity:2.6}));
+    blade.position.x=1.05;
+    const hilt=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.5),new THREE.MeshStandardMaterial({color:0x3a2a20}));
+    hilt.position.x=.3; this.starter.add(blade,hilt); this.grip.add(this.starter); this.starter.visible=false;
     this.ready = models.create("hero", 2.2).then((hero) => {
       if (!hero) {
         this.label.textContent = "Preview unavailable";
@@ -203,7 +211,7 @@ export class RelicStage {
     this.label.textContent = "Loading moves…";
     await this.ready;
     const spec = weapon(id),
-      blade = await models.create(spec.model, spec.height);
+      blade = spec.model ? await models.create(spec.model, spec.height) : null;
     if (revision !== this.generation) {
       blade?.dispose();
       return;
@@ -213,6 +221,7 @@ export class RelicStage {
       this.blade.dispose();
     }
     this.blade = blade;
+    this.starter.visible = id === "starter";
     if (blade) {
       orientWeapon(blade.root, spec);
       this.grip.add(blade.root);
@@ -221,7 +230,7 @@ export class RelicStage {
     this.combo = 0;
     this.playing = false;
     this.hero?.play("idle");
-    this.label.textContent = blade
+    this.label.textContent = blade || id === "starter"
       ? "SILENT MOVES PREVIEW"
       : "Model unavailable";
   }
@@ -232,7 +241,7 @@ export class RelicStage {
     if (!this.canvas.checkVisibility() || document.hidden) return;
     const width = this.canvas.clientWidth,
       height = this.canvas.clientHeight;
-    if (!width || !height || !this.hero || !this.blade) return;
+    if (!width || !height || !this.hero || (!this.blade && this.identity !== "starter")) return;
     if (
       this.renderer.domElement.width !==
         Math.round(width * this.renderer.getPixelRatio()) ||
@@ -243,24 +252,20 @@ export class RelicStage {
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
     }
-    this.previewWorld.player.core = this.ability === "lance" ? null : this.ability;
+    this.previewWorld.player.core = coreId(this.ability);
     this.previewWorld.player.wardT = this.ability === "iron" && this.elapsed > CORE_CONTACT && this.elapsed < 4 ? 1 : 0;
     this.fx.sync(this.previewWorld, dt);
     if (this.ability) {
       this.timer -= dt;
-      const duration = this.ability === "lance" ? CAST_TIME : CORE_TIME;
-      const contact = this.ability === "lance" ? CAST_CONTACT : CORE_CONTACT;
+      const duration = abilityDuration(this.ability);
+      const contact = abilityContact(this.ability);
       if (this.timer <= 0) {
         this.playing = true;
         this.elapsed = 0;
         this.emitted = 0;
         this.timer = 4.8;
         this.hero.play(
-          this.ability === "lance"
-            ? "cast"
-            : this.ability === "iron"
-              ? "ultimate-iron"
-              : "ultimate",
+          abilityClip(this.ability, this.identity),
           duration,
           true,
         );
@@ -271,14 +276,14 @@ export class RelicStage {
           x: 0,
           z: 0,
         });
-        this.label.textContent = `SILENT PREVIEW · ${this.ability === "lance" ? "SOUL LANCE" : CORES[this.ability].name.toUpperCase()}`;
+        this.label.textContent = `SILENT PREVIEW · ${(isSpell(this.ability) ? SPELLS[this.ability].name : techniqueId(this.ability) ? TECHNIQUES[techniqueId(this.ability)!].name : CORES[coreId(this.ability)!].name).toUpperCase()}`;
       }
       this.elapsed += dt;
       const count =
-        this.ability === "ember" ? 3 : this.ability === "ash" ? 6 : 1;
+        techniqueId(this.ability) ? TECHNIQUES[techniqueId(this.ability)!].pulses ?? 1 : this.ability === "ember" ? 3 : this.ability === "ash" ? 6 : 1;
       if (
         this.emitted < count &&
-        this.elapsed >= contact + this.emitted * 0.5
+        this.elapsed >= contact + this.emitted * (techniqueId(this.ability) ? .28 : .5)
       ) {
         this.fx.event({
           type: "ability",

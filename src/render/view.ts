@@ -1,6 +1,8 @@
+import { techniqueId, TECHNIQUES } from "../sim/techniques";
+import { abilityClip } from "./weapon-pose";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { SoulFx } from "./soul-fx";
-import { CAST_TIME, CORE_TIME } from "../sim/abilities";
+import { CAST_TIME, CORE_TIME, abilityDuration } from "../sim/abilities";
 import { attackClip, orientWeapon } from "./weapon-pose";
 import { Gore } from "./gore";
 import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
@@ -1054,11 +1056,7 @@ export class View {
         w.phase === "dead"
           ? "death"
           : p.castT > 0
-            ? p.castId === "lance"
-              ? "cast"
-              : p.castId === "iron"
-                ? "ultimate-iron"
-                : "ultimate"
+            ? abilityClip(p.castId!, p.weaponId)
             : dashing
               ? "dash"
               : p.swingT > 0
@@ -1067,9 +1065,7 @@ export class View {
                   ? "run"
                   : "idle",
         p.castT > 0
-          ? p.castId === "lance"
-            ? CAST_TIME
-            : CORE_TIME
+          ? abilityDuration(p.castId!)
           : p.swingT > 0
             ? weapon(p.weaponId).swing
             : undefined,
@@ -1081,8 +1077,7 @@ export class View {
     }
     this.echoCd -= dt;
     if (
-      p.dashT > 0 &&
-      rank(p.skills, "afterimage") &&
+      ((p.dashT > 0 && rank(p.skills, "afterimage")) || (p.castT > 0 && p.castPending && techniqueId(p.castId) && TECHNIQUES[techniqueId(p.castId)!].dash)) &&
       this.echoCd <= 0 &&
       this.heroModel
     ) {
@@ -1350,11 +1345,7 @@ export class View {
     if (v.model) {
       const state =
         (e.ability?.castT ?? 0) > 0
-          ? e.ability?.castId === "lance"
-            ? "cast"
-            : e.ability?.castId === "iron"
-              ? "ultimate-iron"
-              : "ultimate"
+          ? abilityClip(e.ability!.castId!, e.weaponId ?? "starter")
           : e.state === "act"
             ? "dash"
             : wind
@@ -1364,7 +1355,9 @@ export class View {
                 : "idle";
       v.model.play(
         state,
-        state === "cast"
+        (e.ability?.castT ?? 0) > 0
+          ? abilityDuration(e.ability!.castId!)
+          : state === "cast"
           ? CAST_TIME
           : state.startsWith("ultimate")
             ? CORE_TIME

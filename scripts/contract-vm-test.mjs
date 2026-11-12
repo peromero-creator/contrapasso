@@ -713,6 +713,24 @@ try {
   await alice.call(game,"nft_transfer",{receiver_id:charlie.accountId,token_id:"champion:core-a"},{gas:GAS,attachedDeposit:1n});
   assert.equal((await game.view("get_champion",{champion_id:"core-a"})).build.core,"ember");
   await assert.rejects(apply("core-a",alice,"attune",{core:"ember"}));
+  // New skills are ordinary paid progression, with converging prerequisites and a selected Q slot.
+  await apply("weapon-scholar", alice, "register", { ...checkpoint, coins: 300 });
+  await assert.rejects(apply("weapon-scholar", alice, "train", {skill:"staff-4"}));
+  await assert.rejects(apply("weapon-scholar", alice, "attune", {slot:"spell",spell:"nova-spell"}));
+  for (const skill of ["staff-1", "staff-2"]) await apply("weapon-scholar", alice, "train", {skill});
+  await assert.rejects(apply("weapon-scholar", alice, "train", {skill:"staff-4"}));
+  for (const skill of ["staff-3", "staff-4", "nova-spell"]) await apply("weapon-scholar", alice, "train", {skill});
+  await apply("weapon-scholar", alice, "attune", {slot:"spell",spell:"nova-spell"});
+  const scholar = await game.view("get_champion", {champion_id:"weapon-scholar"});
+  assert.equal(scholar.coins, 115);
+  assert.equal(scholar.build.spell,"nova-spell");
+  await assert.rejects(apply("weapon-scholar",alice,"train",{skill:"staff-1"}));
+  await alice.call(game,"nft_transfer",{receiver_id:charlie.accountId,token_id:"champion:weapon-scholar"},{gas:GAS,attachedDeposit:1n});
+  const transferredScholar = await game.view("get_champion", {champion_id:"weapon-scholar"});
+  assert.equal(transferredScholar.build.spell,"nova-spell");
+  assert.ok(transferredScholar.skills.includes("staff-4"));
+  await assert.rejects(apply("weapon-scholar",alice,"attune",{slot:"spell",spell:"nova-spell"}));
+  console.log("Weapon tree VM: PASS (converging prerequisites, exact coin, spell ownership, transfer retention)");
   console.log("Soul core VM: PASS (paid unlock, attunement, Duel lock, transfer and stale owner)");
 } finally {
   await worker.tearDown();

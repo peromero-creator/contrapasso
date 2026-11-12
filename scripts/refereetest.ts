@@ -69,7 +69,7 @@ try {
     now += Math.ceil(next.world.tick / 60 * 1000);
     referee.submit(owner, run.id, next.inputs);
   }
-  for (const id of SKILL_IDS) if (!referee.profile(owner).skills.includes(id)) referee.train(owner, id);
+  for (const id of SKILL_IDS.filter(id => !id.includes("-"))) if (!referee.profile(owner).skills.includes(id)) referee.train(owner, id);
   const final = referee.begin(owner); const finish = play(final);
   now += Math.ceil(finish.world.tick / 60 * 1000);
   const won = referee.submit(owner, final.id, finish.inputs);

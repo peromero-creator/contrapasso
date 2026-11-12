@@ -21,7 +21,7 @@ Open [localhost:5173](http://127.0.0.1:5173/). This starts the game and local re
 6. **Player Market** lists unequipped tradable weapon NFTs for 0.001–1 test NEAR. Purchases preserve the token’s upgrades and history; 90% becomes seller proceeds and 10% enters the treasury. Withdraw proceeds from the same screen.
 7. With testnet connected, **Duel** lists matched defenders. Both vaults stake 10 coin; the winner takes 20. Fights last up to 90 seconds. Forfeit or abandonment loses the challenger stake. Enable defense to let others challenge your build.
 
-Escape pauses; losing focus also pauses. Q casts Soul Lance after learning Ember Edge. R releases an attuned soul core at 100% charge; N restarts Solo. Sound defaults off; M enables it. [Silent mode](http://127.0.0.1:5173/?silent=1) hard-disables audio. The development-only `?silent=1&autoplay=1` bot still requires manual power choices.
+Escape pauses; losing focus also pauses. 1–4 trigger learned techniques for the equipped weapon. Q casts the spell selected in the skill tree (Soul Lance, Cinder Circle or Blood Thread). R releases an attuned soul core at 100% charge; N restarts Solo. Sound defaults off; M enables it. [Silent mode](http://127.0.0.1:5173/?silent=1) hard-disables audio. The development-only `?silent=1&autoplay=1` bot still requires manual power choices.
 
 ## Features and status
 

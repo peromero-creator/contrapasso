@@ -92,6 +92,7 @@ export interface RunChallenge {
   expiresAt: number;
   mode: "solo" | "duel";
   equipment: {
+    spell?: import("../sim/abilities.ts").SpellId;
     core?: import("../sim/abilities.ts").CoreId | null;
     weaponLevel: number;
     armorLevel: number;

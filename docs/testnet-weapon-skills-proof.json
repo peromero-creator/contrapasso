@@ -1,0 +1,131 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "verifiedAt": "2026-11-12T21:38:10.048Z",
+  "championId": "5221ceac-7b90-442b-91d7-dbd45c656766",
+  "before": {
+    "id": "5221ceac-7b90-442b-91d7-dbd45c656766",
+    "coins": 155,
+    "skills": [
+      "ember",
+      "reach"
+    ],
+    "weaponId": "starter"
+  },
+  "training": [
+    {
+      "skill": "sword-1",
+      "coinsAfter": 135,
+      "transaction": "3zSAMZMc85N7oT1CQ4xuDXDheV2anQEssqHovLRVu96S"
+    },
+    {
+      "skill": "sword-2",
+      "coinsAfter": 100,
+      "transaction": "52ZDctL3Fom1tDjbqyXoKcFJMcsXndWyeYLZtb6Disoq"
+    },
+    {
+      "skill": "sword-3",
+      "coinsAfter": 65,
+      "transaction": "2YYUboUZSP5Q4LkJTomJ2TE4PMxS5FBvyV8p1XbrFUee"
+    },
+    {
+      "skill": "sword-4",
+      "coinsAfter": 5,
+      "transaction": "BoZnvA3TErZFPzp1oVUkJUAA49qLtLGhyNFxFT918fSp"
+    }
+  ],
+  "combat": {
+    "ticks": 3597,
+    "casts": 11,
+    "ultimates": 3,
+    "techniques": {
+      "sword-2": 7,
+      "sword-4": 4,
+      "sword-1": 9,
+      "sword-3": 5
+    },
+    "kills": 34,
+    "floor": 3,
+    "outcome": "dead"
+  },
+  "resultTransaction": "GFdckvQwV5qaHoWBWtSYaA2iBHi45KwLLJVJWg6FLkbS",
+  "coinsAfter": 5,
+  "skillsAfter": [
+    "ember",
+    "reach",
+    "sword-1",
+    "sword-2",
+    "sword-3",
+    "sword-4"
+  ],
+  "duplicateSafe": true,
+  "originalOwnerCoin": 76,
+  "silentBrowser": {
+    "championId": "fc2758e7-d6a0-4b40-8d40-8d7caaf30a04",
+    "initialEarnedCoin": 123,
+    "shortHoldCancelled": true,
+    "coinAfterShortHold": 123,
+    "pointerPurchase": {
+      "skill": "sword-1",
+      "cost": 20,
+      "coinsAfter": 103
+    },
+    "keyboardPurchase": {
+      "skill": "sword-2",
+      "cost": 35,
+      "coinsAfter": 68
+    },
+    "spellPurchase": {
+      "skill": "nova-spell",
+      "cost": 35,
+      "coinsAfter": 33
+    },
+    "selectedSpell": "nova-spell",
+    "selectionTransaction": "Q9dpeBPQ7aEdXiDfsx9r8f2RjfdZn5JVusc9dsovjHM",
+    "verifiedCoins": 33,
+    "verifiedSkills": [
+      "sword-1",
+      "sword-2",
+      "nova-spell"
+    ],
+    "combat": {
+      "version": "0.9.0",
+      "runId": "56a34116-c583-4517-97f3-ff633156aa6e",
+      "championId": "fc2758e7-d6a0-4b40-8d40-8d7caaf30a04",
+      "seed": 3956284659,
+      "outcome": "dead",
+      "floor": 3,
+      "ticks": 4193,
+      "kills": 46,
+      "earnedCoins": 165,
+      "awardedCoins": 165,
+      "powers": {
+        "sword-1": 2,
+        "sword-2": 1,
+        "nova-spell": 2
+      },
+      "mode": "solo",
+      "coinDelta": 165
+    },
+    "resultTransaction": "8LXhHMVCUndhJsaz3qtPD6odpXXgoGR2g32j1FMSVzY9",
+    "coinsAfterCombat": 198,
+    "spellAfterCombat": "nova-spell",
+    "runsAfterCombat": 2,
+    "readyLoadout": {
+      "skills": [
+        "sword-1",
+        "sword-2",
+        "nova-spell",
+        "sword-3",
+        "sword-4",
+        "iron"
+      ],
+      "spell": "nova-spell",
+      "core": "iron",
+      "coins": 43,
+      "runs": 2,
+      "transaction": "DB4Hg5fsNJbrde6B4h6znAnRjrjFqB5rrvSUcoQKNBts",
+      "nftSupply": "38"
+    }
+  }
+}

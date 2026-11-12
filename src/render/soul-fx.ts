@@ -1,3 +1,4 @@
+import { TECHNIQUES, techniqueId } from "../sim/techniques";
 import * as T from "three";
 import { CORES, CAST_TIME, CORE_TIME, type AbilityId } from "../sim/abilities";
 import type { SimEvent, World } from "../sim/world";
@@ -46,6 +47,8 @@ interface Motif {
   kind: AbilityId | "combo" | "trail";
   inward: boolean;
   travel?: boolean;
+  sweep?: number;
+  extend?: boolean;
 }
 export class SoulFx {
   private motifs: Motif[] = [];
@@ -158,8 +161,12 @@ export class SoulFx {
   }
   event(e: SimEvent) {
     if (e.type !== "ability" && e.type !== "combo" && e.type !== "echo") return;
+    if (e.ability === "siphon-spell") { this.thread(e); return; }
+    const visualAbility = e.ability === "nova-spell" ? "ember" : e.ability;
+    const technique = techniqueId(e.ability);
+    if (technique) { this.technique(e, technique); return; }
     const kind =
-      e.type === "combo" ? "combo" : e.type === "echo" ? "ash" : e.ability!;
+      e.type === "combo" ? "combo" : e.type === "echo" ? "ash" : visualAbility as keyof typeof colors;
     const color =
       e.side === "enemy"
         ? 0xb15b64
@@ -171,14 +178,14 @@ export class SoulFx {
     const charge = e.stage === "charge",
       lance = kind === "lance";
     const max = charge
-      ? lance
+      ? lance || e.ability === "nova-spell"
         ? CAST_TIME
         : CORE_TIME
       : kind === "combo"
         ? 0.4
         : 0.9;
     const radius =
-      e.amount ??
+      e.amount ?? (e.ability === "nova-spell" ? 4 : undefined) ??
       (lance
         ? 1.2
         : charge
@@ -251,6 +258,55 @@ export class SoulFx {
     });
     while (this.motifs.length > 32) this.dispose(this.motifs.shift()!);
   }
+  private thread(e: SimEvent) {
+    const root = new T.Group(), charge = e.stage === "charge";
+    root.position.set(e.x,.1,e.z); root.rotation.y=-(e.dir??0)*Math.PI*2/1024;
+    for(let i=0;i<5;i++) {
+      const ribbon=this.part(root,trailGeo,e.side === "enemy" ? 0xa95766 : 0xbc7b88,charge?.15:.55-i*.05);
+      ribbon.position.set(3.5,.45+i*.1,(i-2)*.18);
+      ribbon.scale.set(7/1.5,1,.7);
+    }
+    this.root.add(root);
+    this.motifs.push({root,life:charge?CAST_TIME:.65,max:charge?CAST_TIME:.65,radius:1,kind:"combo",inward:true,extend:!charge});
+    while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
+  }
+  private technique(e: SimEvent, id: import('../sim/techniques').TechniqueId) {
+    // A directed cut, ground fracture, or volley silhouette follows the real hit geometry.
+    if (e.stage === "release") return; // Contact pulses carry the visible impact.
+    const spec = TECHNIQUES[id], charge = e.stage === "charge";
+    const root = new T.Group(); root.position.set(e.x, .08, e.z);
+    root.rotation.y = -(e.dir ?? 0) * Math.PI * 2 / 1024;
+    const color = e.side === "enemy" ? 0xb15b64 : id.startsWith('staff') ? 0x8dbfc0 : id.startsWith('dagger') ? 0x9eae8f : id.startsWith('axe') ? 0xb66e59 : 0xc4ad88;
+    const radius = charge ? 1.1 : spec.reach;
+    if (spec.pattern === 'line' || spec.pattern === 'fan') {
+      for (let i = 0; i < (spec.pattern === 'fan' ? spec.spread ?? 1 : 3); i++) {
+        const cut = this.part(root, trailGeo, color, charge ? .2 : .65);
+        cut.position.set(charge ? .6 : spec.reach * .5, .45 + i * .1, spec.pattern === 'line' ? (i - 1) * .25 : 0);
+        cut.scale.set(charge ? 1 : spec.reach / 1.5, 1, 1.5);
+        if (spec.pattern === 'fan') cut.rotation.y = (i - ((spec.spread ?? 1) - 1) / 2) * .18;
+      }
+    } else {
+      for (let i = 0; i < (charge ? 1 : 3); i++) {
+        const cut = this.part(root, orbitBlade, color, charge ? .2 : .6 - i * .12);
+        cut.scale.setScalar(radius * (1 - .12 * i));
+        cut.position.y = .3 + i * .18;
+        cut.rotation.y = spec.pattern === 'burst' ? i * Math.PI * 2 / 3 : -.8;
+      }
+      if (id.startsWith('hammer') && !charge) {
+        const circle = this.part(root, ring, color, .32);
+        circle.rotation.x = -Math.PI / 2; circle.scale.setScalar(radius);
+        for (let i = 0; i < 8; i++) {
+          const crack = this.part(root, trailGeo, color, .35);
+          const a = i * Math.PI / 4;
+          crack.position.set(Math.cos(a) * radius * .5, .02, Math.sin(a) * radius * .5);
+          crack.rotation.y = -a; crack.scale.x = radius * .55;
+        }
+      }
+    }
+    this.root.add(root);
+    this.motifs.push({ root, life: charge ? spec.contact : .55, max: charge ? spec.contact : .55, radius: 1, kind: "combo", inward: false, sweep: !charge && (spec.pattern === "arc" || spec.pattern === "burst") ? spec.pattern === "burst" ? 4 : 2 : 0, extend: !charge && spec.pattern === "line" });
+    while (this.motifs.length > 32) this.dispose(this.motifs.shift()!);
+  }
   private dispose(m: Motif) {
     this.root.remove(m.root);
     m.root.traverse((n) => {
@@ -283,6 +339,8 @@ export class SoulFx {
     for (const m of this.motifs) {
       m.life -= dt;
       const t = 1 - Math.max(0, m.life) / m.max;
+      if (m.sweep) m.root.rotation.y += m.sweep * dt;
+      if (m.extend) m.root.scale.x = .55 + .45 * (1 - (1 - t) ** 3);
       if (m.travel) {
         for (const b of m.root.children) {
           b.position.x += dt * 8;

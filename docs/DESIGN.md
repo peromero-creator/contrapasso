@@ -130,6 +130,16 @@ Core choice travels with the champion NFT and is included in referee-issued Solo
 
 The skill tree includes a silent hero-animation theatre, core descriptions and paid unlock paths. Cast, charged release and judgment clips use the existing hero rig. Layered flame silhouettes, inscribed seals, orbit cuts, siphon ribbons and a restrained ward distinguish abilities; Ashen Echo leaves brief frozen character silhouettes during dash. No bloom or full-screen flash is added. Surrounding catacomb foundations, rib niches, skull piles, hanging censers, stalactites and small hooded ambient figures enrich the five circles outside the combat boundary. Ambient figures use simple procedural geometry and gentle drift, not new enemies or full skeletal walking clips.
 
+## Living arsenal and branching skill tree (0.10)
+
+The skill atlas separates seven weapon families, Q spells, R ultimates and shared soul vows. Each weapon family has four paid techniques mapped to 1–4: the first opens two sibling nodes, and learning both siblings opens the capstone. Costs are 20 / 35 / 35 / 60 earned coin. These are ordinary character progression, with no separate skill NFTs, mint fee or new collection. Existing learned vows and existing champion persistence remain intact.
+
+Select a node to inspect its effect. Hold the learn control for 1.1 seconds to fill its bar and node ring; releasing early, losing focus, cancelling the pointer or hiding the page cancels without a request. A completed hold sends one purchase. Authoritative ownership, prerequisites and coin checks still run on the referee and contract. The UI marks the skill learned only after the saved profile reports it. Mouse, touch and keyboard Space/Enter share the same hold behavior.
+
+Weapon techniques only work with their corresponding family in hand. Blades share a branch between Cinder Blade and Cinder Requiem. Hammers emphasize fractures and wards; daggers favor lunges and siphoning; crossbows use piercing volleys; staves use soul fans, rings and harvests; axes cleave, pull and execute; spears thrust through narrow lanes. Every technique has a committed animation, timed contact and independent cooldown. Multi-contact moves use 0.28-second spacing and fixed cast aim; circular attacks follow the caster. Contact damage gains two per weapon level and 15% per circle rank above one. Only learned techniques for the current weapon are offered as circle rewards or included in Duel gear-power matching.
+
+Q has three selectable spells. Soul Lance retains its Ember Edge gate; Cinder Circle and Blood Thread each cost 35 coin. Circle burns a four-step radius; Thread siphons a seven-step narrow lane and heals six life per hit. Q's first-contact 25% weaving bonus also applies to weapon techniques, consumed once rather than once per pulse. One Q selection is saved as `build.spell`, validated against learned skills and carried in issued Solo/Duel loadouts. The three existing R cores remain separate. Duel rivals use the same active-ability rules. Simulation 0.9 uses a 30-bit input including a 0–4 weapon-technique slot; reward choice keys remain 1–3 only while the reward screen is open.
+
 ## Next steps
 
 1. Record the final demo and review the delivery checklist in `docs/SUBMISSION.md`.

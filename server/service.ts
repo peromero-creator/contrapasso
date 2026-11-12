@@ -103,14 +103,16 @@ export class GameService {
           result = this.referee.submit(owner, body.id, body.inputs);
           break;
         case "/api/attune":
+          if (body.slot === "spell" && this.near.config && !this.near.supports("weapon_skills")) throw new RefereeError("Spell selection opens after the testnet update.", 503);
           if (this.near.config && !this.near.supports("soul_core"))
             throw new RefereeError(
               "Core attunement opens after the testnet update.",
               503,
             );
-          result = this.referee.attune(owner, body.core);
+          result = this.referee.attune(owner, body.slot === "spell" ? body.spell : body.core, body.slot ?? "core");
           break;
         case "/api/train":
+          if (/^(sword|hammer|dagger|crossbow|staff|axe|spear)-[1-4]$|^(nova|siphon)-spell$/.test(String(body.skill)) && this.near.config && !this.near.supports("weapon_skills")) throw new RefereeError("Weapon skills open after the testnet update.", 503);
           if (
             this.near.config &&
             ["pyre", "afterimage", "coup", "mercy"].includes(

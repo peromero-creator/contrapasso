@@ -39,6 +39,7 @@ export const api = {
       id,
       inputs,
     }),
+  selectSpell: (spell: import("./sim/abilities").SpellId) => request<Champion>("attune", { slot: "spell", spell }),
   attune: (core: import("./sim/abilities").CoreId) =>
     request<Champion>("attune", { core }),
   train: (skill: SkillId) => request<Champion>("train", { skill }),

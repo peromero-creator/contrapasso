@@ -477,8 +477,8 @@ class Contrapasso {
   game_config() {
     return {
       network: "testnet",
-      version: "0.9.0",
-      features: ["upgrade", "claim", "market", "royalties", "arsenal", "skill_tree", "treasury", "ranged", "exchange", "expanded_arsenal", "repeat_mint", "soul_core"],
+      version: "0.10.0",
+      features: ["upgrade", "claim", "market", "royalties", "arsenal", "skill_tree", "treasury", "ranged", "exchange", "expanded_arsenal", "repeat_mint", "soul_core", "weapon_skills"],
       referee_public_key: this.refereeKey,
       coin_daily_cap: 300,
       duel_stake: 10,

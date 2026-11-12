@@ -1,9 +1,22 @@
+import { techniqueId, TECHNIQUES, type TechniqueId } from "./techniques.ts";
 import { rank, type Skills } from "./skills.ts";
 
 // A core is an attunement of a paid skill, not a second currency or free unlock.
 export const CORE_IDS = ["ember", "ash", "iron"] as const;
 export type CoreId = (typeof CORE_IDS)[number];
-export type AbilityId = "lance" | CoreId;
+export const SPELL_IDS = ["lance", "nova-spell", "siphon-spell"] as const;
+export type SpellId = typeof SPELL_IDS[number];
+export const SPELLS: Record<SpellId, { name: string; skill: "ember" | "nova-spell" | "siphon-spell"; description: string }> = {
+  lance: { name: "Soul Lance", skill: "ember", description: "A piercing soul lance; staves release three. Follow with a weapon hit for +25% damage." },
+  "nova-spell": { name: "Cinder Circle", skill: "nova-spell", description: "An eruption within four steps ignites nearby enemies. Follow with a weapon hit for +25% damage." },
+  "siphon-spell": { name: "Blood Thread", skill: "siphon-spell", description: "Siphon a narrow seven-step lane, healing six life per victim. Follow with a weapon hit for +25% damage." },
+};
+export const spellId = (v: unknown): SpellId => SPELL_IDS.includes(v as SpellId) ? v as SpellId : "lance";
+export const isSpell = (v: unknown): v is SpellId => SPELL_IDS.includes(v as SpellId);
+export const availableSpell = (v: unknown, skills: Skills) => rank(skills, SPELLS[spellId(v)].skill) > 0;
+export type AbilityId = SpellId | CoreId | TechniqueId;
+export const abilityDuration = (id: AbilityId) => techniqueId(id) ? TECHNIQUES[id as TechniqueId].duration : isSpell(id) ? CAST_TIME : CORE_TIME;
+export const abilityContact = (id: AbilityId) => techniqueId(id) ? TECHNIQUES[id as TechniqueId].contact : isSpell(id) ? CAST_CONTACT : CORE_CONTACT;
 export const CORES: Record<
   CoreId,
   { name: string; description: string; color: number }
@@ -44,6 +57,8 @@ export const spellCooldown = (skills: Skills) =>
   5 - 0.4 * rank(skills, "haste");
 export interface AbilityState {
   core: CoreId | null;
+  spell: SpellId;
+  techniqueCd: number[];
   charge: number;
   castT: number;
   castId: AbilityId | null;
@@ -54,8 +69,10 @@ export interface AbilityState {
   wardT: number;
   weaveT: number;
 }
-export const abilityState = (core: unknown, skills: Skills): AbilityState => ({
+export const abilityState = (core: unknown, skills: Skills, spell: unknown = "lance"): AbilityState => ({
   core: availableCore(core, skills),
+  spell: spellId(spell),
+  techniqueCd: [0, 0, 0, 0],
   charge: 0,
   castT: 0,
   castId: null,

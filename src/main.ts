@@ -1,4 +1,7 @@
+import { SkillTree } from "./ui/skill-tree";
+import { TECHNIQUES, techniqueId, weaponTechniques } from "./sim/techniques";
 import {
+  SPELLS, spellId, isSpell, availableSpell,
   CORES,
   CORE_IDS,
   coreId,
@@ -89,6 +92,7 @@ let mouseX = window.innerWidth / 2,
 let mouseDown = false,
   dashQueued = 0,
   attackQueued = 0,
+  techniqueQueued = 0,
   castQueued = false,
   coreQueued = false;
 let aim = Math.floor(DIRS * 0.75);
@@ -103,6 +107,7 @@ function clearInput() {
   mouseDown = false;
   dashQueued = attackQueued = choiceQueued = 0;
   castQueued = coreQueued = false;
+  techniqueQueued = 0;
 }
 function reflectSound() {
   const button = $<HTMLButtonElement>("sound-toggle");
@@ -194,8 +199,10 @@ function readInput(): Input {
         : attackQueued - 1;
   const cast = castQueued,
     ultimate = coreQueued;
+  const technique = techniqueQueued;
   castQueued = coreQueued = false;
-  return { move, aim, attack, dash, cast, ultimate };
+  techniqueQueued = 0;
+  return { move, aim, attack, dash, cast, ultimate, technique };
 }
 function choose(choice: number) {
   if (world.phase !== "reward" || paused || choiceQueued) return;
@@ -237,6 +244,7 @@ window.addEventListener("keydown", (e) => {
   if (!e.repeat && ["Space", "ShiftLeft", "KeyK"].includes(e.code))
     dashQueued = 8;
   if (!e.repeat && e.code === "KeyJ") attackQueued = 8;
+  if (!e.repeat && /^Digit[1-4]$/.test(e.code)) techniqueQueued = Number(e.code.slice(-1));
   if (!e.repeat && e.code === "KeyQ") castQueued = true;
   if (!e.repeat && e.code === "KeyR") coreQueued = true;
   keys.add(e.code);
@@ -300,6 +308,7 @@ function setPaused(value: boolean) {
   }
 }
 function showReward() {
+  if (world.phase !== "reward" || !world.offers.length) return;
   clearInput();
   acc = freeze = 0;
   $("hud").inert = true;
@@ -331,13 +340,13 @@ function updateHud(dt: number) {
   dashPip.classList.toggle("ready", p.dashCd <= 0);
   $("dash-meter").style.width =
     `${Math.max(0, 1 - p.dashCd / (0.75 * (1 - 0.12 * rank(p.skills, "ash")))) * 100}%`;
-  $("cast-label").textContent = !rank(p.skills, "ember")
-    ? "UNLOCK EMBER EDGE"
+  $("cast-label").textContent = !availableSpell(p.spell, p.skills)
+    ? "LEARN A Q SPELL"
     : p.spellCd > 0
-      ? `SOUL LANCE · ${p.spellCd.toFixed(1)}s`
-      : "SOUL LANCE";
+      ? `${SPELLS[p.spell].name} · ${p.spellCd.toFixed(1)}s`
+      : SPELLS[p.spell].name;
   $("cast-meter").style.width =
-    `${rank(p.skills, "ember") ? Math.max(0, 1 - p.spellCd / spellCooldown(p.skills)) * 100 : 0}%`;
+    `${availableSpell(p.spell, p.skills) ? Math.max(0, 1 - p.spellCd / spellCooldown(p.skills)) * 100 : 0}%`;
   $("core-label").textContent = p.core
     ? `${CORES[p.core].name} · ${Math.floor(p.charge)}%`
     : "ATTUNE A CORE";
@@ -345,8 +354,14 @@ function updateHud(dt: number) {
   $("core-slot").classList.toggle("ready", p.charge >= 100);
   $("cast-slot").classList.toggle(
     "ready",
-    !!rank(p.skills, "ember") && p.spellCd <= 0,
+    availableSpell(p.spell, p.skills) && p.spellCd <= 0,
   );
+  for (const [i, id] of weaponTechniques(p.weaponId).entries()) {
+    const el = $("technique-" + (i+1)), known = rank(p.skills,id)>0;
+    el.querySelector('span')!.textContent = known ? p.techniqueCd[i]>0 ? `${TECHNIQUES[id].name} · ${p.techniqueCd[i].toFixed(1)}s` : TECHNIQUES[id].name : `LEARN ${TECHNIQUES[id].name.toUpperCase()}`;
+    el.classList.toggle('ready',known && p.techniqueCd[i]<=0);
+    (el.querySelector('b') as HTMLElement).style.width = `${known?Math.max(0,1-p.techniqueCd[i]/TECHNIQUES[id].cooldown)*100:0}%`;
+  }
   $("combo-instruction").textContent =
     p.weaveT > 0
       ? "SOUL-WOVEN · +25%"
@@ -1260,84 +1275,39 @@ function renderGear() {
     });
 }
 let skillStage: RelicStage | null = null;
-function showSkillPreview(id: AbilityId) {
-  skillStage ??= new RelicStage(
-    $<HTMLCanvasElement>("skill-stage"),
-    $("skill-preview-label"),
-  );
-  void skillStage.select(
-    id === "lance" ? "vesper-reed" : (champion?.build.weaponId ?? "starter"),
-  );
+function showSkillPreview(id: AbilityId, identity?: WeaponId, scroll = true) {
+  skillStage ??= new RelicStage($<HTMLCanvasElement>("skill-stage"),$("skill-preview-label"));
+  void skillStage.select(identity ?? champion?.build.weaponId ?? "starter");
   skillStage.preview(id);
-  $("skill-preview-name").textContent =
-    id === "lance" ? "Soul Lance" : CORES[id].name;
-  $("skill-preview-description").textContent =
-    id === "lance"
-      ? "Q · A piercing cast. Vesper Reed releases three lances. Burning targets detonate with Funeral Pyre. Your next weapon attack within 2.5 seconds deals 25% more damage. Train Ember Edge to use it."
-      : `${CORES[id].description} Deal damage to fill the core. R releases it; every descent starts empty.`;
+  if (scroll) $("skill-stage").scrollIntoView({ behavior: "smooth", block: "center" });
+  const t = techniqueId(id);
+  const info = t ? TECHNIQUES[t] : isSpell(id) ? SPELLS[id] : CORES[coreId(id)!];
+  $("skill-preview-name").textContent = info.name;
+  $("skill-preview-description").textContent = info.description;
 }
+async function changeSkill(action: () => Promise<Champion>, success: string) {
+  if (busy) return;
+  busy = true; renderForge(); notice("");
+  try { champion = await action(); refreshChampion(); notice(champion.chain?.pending ? "Confirming your skill. Coin and access update after confirmation." : success); }
+  catch(e) { notice((e as Error).message); }
+  finally { busy = false; renderForge(); }
+}
+const skillTree = new SkillTree($("forge-cards"), {
+  learn: id => changeSkill(()=>api.train(id), `${SKILLS[id].name} learned.`),
+  spell: id => changeSkill(()=>api.selectSpell(id), `${SPELLS[id].name} equipped on Q.`),
+  core: id => changeSkill(()=>api.attune(id), `${CORES[id].name} equipped on R.`),
+  preview: showSkillPreview,
+});
 function renderForge() {
   if (!champion) return;
   renderGear();
-  const cores = $("core-cards");
-  cores.innerHTML = CORE_IDS.map(
-    (id) =>
-      `<article class="core-card ${champion!.build.core === id ? "attuned" : ""}">${skillIcon(id)}<h3>${CORES[id].name}</h3><p>${CORES[id].description}</p><div><button class="btn ghost" data-preview="${id}">PREVIEW</button><button class="btn" data-core="${id}" ${!champion!.skills.includes(id) || busy || champion!.chain?.pending || champion!.build.core === id ? "disabled" : ""}>${champion!.build.core === id ? "ATTUNED" : champion!.skills.includes(id) ? "ATTUNE" : `LEARN ${SKILLS[id].name.toUpperCase()}`}</button></div></article>`,
-  ).join("");
-  for (const b of cores.querySelectorAll<HTMLButtonElement>("[data-preview]"))
-    b.onclick = () => showSkillPreview(b.dataset.preview as CoreId);
-  for (const b of cores.querySelectorAll<HTMLButtonElement>("[data-core]"))
-    b.onclick = async () => {
-      if (busy) return;
-      busy = true;
-      renderForge();
-      try {
-        champion = await api.attune(b.dataset.core as CoreId);
-        refreshChampion();
-        notice(
-          "Core attuned. Deal damage to charge it; press R to unleash it.",
-        );
-      } catch (e) {
-        notice((e as Error).message);
-      } finally {
-        busy = false;
-        renderForge();
-      }
-    };
-  const grid = $("forge-cards");
-  grid.innerHTML = SKILL_BRANCHES.map(
-    (branch) =>
-      `<section class="skill-branch ${branch.id}"><header><span class="eyebrow">${branch.subtitle}</span><h3>${branch.name}</h3></header><div class="skill-path">${branch.skills
-        .map((id, i) => {
-          const known = champion!.skills.includes(id),
-            ready = canLearn(champion!.skills, id),
-            pre = PREREQUISITES[id];
-          return `<button class="training-card skill-node${known ? " learned" : ""}${!ready && !known ? " locked" : ""}" data-skill="${id}" ${known || !ready || champion!.coins < SKILLS[id].cost || busy || champion!.chain?.pending ? "disabled" : ""}><span class="node-rank">0${i + 1}</span>${skillIcon(id)}<strong>${SKILLS[id].name}</strong><span>${SKILLS[id].description}</span><small>${SKILLS[id].rank}</small><b>${known ? "UNLOCKED · ON YOUR NFT" : !ready && pre ? `REQUIRES ${SKILLS[pre].name.toUpperCase()}` : `${SKILLS[id].cost} COIN · UNLOCK`}</b></button>`;
-        })
-        .join("")}</div></section>`,
-  ).join("");
-  for (const button of grid.querySelectorAll<HTMLButtonElement>("button"))
-    button.addEventListener("click", async () => {
-      if (busy) return;
-      busy = true;
-      renderForge();
-      notice("");
-      try {
-        champion = await api.train(button.dataset.skill as SkillId);
-        refreshChampion();
-      } catch (e) {
-        notice((e as Error).message);
-      } finally {
-        busy = false;
-        renderForge();
-      }
-    });
+  skillTree.render(champion, busy);
 }
 $("train").addEventListener("click", async () => {
   try {
     await loadChampion();
     renderForge();
-    showSkillPreview(champion?.build.core ?? "lance");
+    showSkillPreview(champion?.build.core ?? spellId(champion?.build.spell), undefined, false);
     $("modes").inert = true;
     $("forge").classList.remove("hidden");
     $("forge-close").focus();
@@ -1346,11 +1316,12 @@ $("train").addEventListener("click", async () => {
   }
 });
 $("forge-close").addEventListener("click", () => {
+  skillTree.close();
   $("forge").classList.add("hidden");
   $("modes").inert = false;
   $("train").focus();
 });
-$("preview-lance").onclick = () => showSkillPreview("lance");
+$("preview-lance").onclick = () => showSkillPreview(spellId(champion?.build.spell));
 const embers = $("embers");
 for (let i = 0; i < 36; i++) {
   const e = document.createElement("i");

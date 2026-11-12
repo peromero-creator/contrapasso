@@ -1,5 +1,7 @@
+import { TECHNIQUES, techniqueId, weaponTechniques, type TechniqueId, type Technique } from "./techniques.ts";
 import {
   abilityState,
+  isSpell, availableSpell, abilityDuration, abilityContact, type SpellId,
   CAST_TIME,
   CAST_CONTACT,
   CORE_TIME,
@@ -43,6 +45,7 @@ export interface Input {
   attack: boolean;
   cast?: boolean;
   ultimate?: boolean;
+  technique?: number;
   dash: boolean;
   /** Offered power slot, 1..3. Zero/undefined means no selection. */
   choice?: number;
@@ -176,6 +179,7 @@ export interface World {
   nextId: number;
   offers: SkillId[];
   unlocked: readonly SkillId[];
+  techniques: { id: TechniqueId; side: "player" | "enemy"; ownerId?: number; age: number; pulses: number; aim: number; skills: Skills; level: number; weave: number }[];
   zones: {
     x: number;
     z: number;
@@ -230,6 +234,7 @@ export function createWorld(
     armorLevel: number;
     weaponId?: WeaponId;
     core?: CoreId | null;
+    spell?: SpellId;
   } = { weaponLevel: 0, armorLevel: 0 },
 ): World {
   const skills: Skills = {};
@@ -245,7 +250,7 @@ export function createWorld(
     spawnDelay: 0.9,
     phase: "fight",
     player: {
-      ...abilityState(equipment.core, skills),
+      ...abilityState(equipment.core, skills, equipment.spell),
       x: 0,
       z: ARENA_HZ - 2.5,
       hp: maxHp,
@@ -278,6 +283,7 @@ export function createWorld(
     unlocked: [...trained],
     pickups: [],
     zones: [],
+    techniques: [],
     mode: "solo",
   };
   return w;
@@ -299,7 +305,7 @@ export function createDuelWorld(
     z: 0,
     aim: 0,
     skills: { ...challenger.skills },
-    ...abilityState(challenger.core, challenger.skills),
+    ...abilityState(challenger.core, challenger.skills, challenger.spell),
   });
   w.player.hp = w.player.maxHp =
     100 + 20 * rank(challenger.skills, "iron") + challenger.armorLevel * 3;
@@ -324,7 +330,7 @@ export function createDuelWorld(
     burnT: 0,
     burnCd: 0,
     skills: { ...defender.skills },
-    ability: abilityState(defender.core, defender.skills),
+    ability: abilityState(defender.core, defender.skills, defender.spell),
     weaponLevel: defender.weaponLevel,
     weaponId: weaponId(defender.weaponId),
     armorLevel: defender.armorLevel,
@@ -416,7 +422,7 @@ function hurtPlayer(w: World, dmg: number, dot = false): boolean {
   const rival = w.enemies.find((e) => e.kind === "champion");
   if (
     rival?.ability?.core &&
-    rival.ability.castT <= 0 &&
+    (rival.ability.castT <= 0 || isSpell(rival.ability.castId) || !!techniqueId(rival.ability.castId)) &&
     !w.zones.some((z) => z.side === "enemy")
   )
     rival.ability.charge = Math.min(
@@ -447,7 +453,7 @@ function hurtEnemy(w: World, e: Enemy, raw: number, dot = false) {
     ),
   );
   const p = w.player;
-  if (p.core && p.castT <= 0 && !w.zones.some((z) => z.side === "player"))
+  if (p.core && (p.castT <= 0 || isSpell(p.castId) || !!techniqueId(p.castId)) && !w.zones.some((z) => z.side === "player"))
     p.charge = Math.min(
       100,
       p.charge + Math.max(0, Math.min(e.hp, dmg)) * 0.18,
@@ -505,7 +511,7 @@ function nova(
 
 function offerSkills(w: World) {
   const pool = w.unlocked.filter(
-    (id) => rank(w.player.skills, id) < MAX_SKILL_RANK,
+    (id) => rank(w.player.skills, id) < MAX_SKILL_RANK && (!id.endsWith("-spell") || id === w.player.spell) && (!techniqueId(id) || weaponTechniques(w.player.weaponId).includes(id as TechniqueId)),
   );
   for (let i = 0; i < Math.min(3, pool.length); i++) {
     const j = i + Math.floor(rand(w) * (pool.length - i));
@@ -689,11 +695,13 @@ function beginAbility(
   side: "player" | "enemy",
 ) {
   a.castId = id;
-  a.castT = id === "lance" ? CAST_TIME : CORE_TIME;
+  a.castT = abilityDuration(id);
   a.castAim = aim;
   a.castN++;
   a.castPending = true;
-  if (id !== "lance") a.charge = 0;
+  if (!isSpell(id) && !techniqueId(id)) a.charge = 0;
+  const technique = techniqueId(id);
+  if (technique) a.techniqueCd[Number(technique.slice(-1)) - 1] = TECHNIQUES[technique].cooldown;
   w.events.push({
     type: "ability",
     ability: id,
@@ -713,18 +721,39 @@ function tickAbility(
   side: "player" | "enemy",
 ) {
   a.spellCd = Math.max(0, a.spellCd - DT);
+  for (let i = 0; i < 4; i++) a.techniqueCd[i] = Math.max(0, a.techniqueCd[i] - DT);
   a.wardT = Math.max(0, a.wardT - DT);
   a.weaveT = Math.max(0, a.weaveT - DT);
   if (a.castT <= 0) return;
+  const previousCastT = a.castT;
   a.castT = Math.max(0, a.castT - DT);
   const id = a.castId!;
-  const duration = id === "lance" ? CAST_TIME : CORE_TIME;
-  const contact = id === "lance" ? CAST_CONTACT : CORE_CONTACT;
+  const duration = abilityDuration(id);
+  const contact = abilityContact(id);
+  const technique = techniqueId(id);
+  if (technique && TECHNIQUES[technique].dash && a.castPending) {
+    const fraction = (time: number) => Math.max(0, Math.min(1, (time - contact + .14) / .14));
+    const travel = (fraction(duration - a.castT) - fraction(duration - previousCastT)) * TECHNIQUES[technique].dash!;
+    actor.x += DX[a.castAim] * travel; actor.z += DZ[a.castAim] * travel;
+    clampArena(actor, .55);
+  }
   if (!a.castPending || a.castT > duration - contact) return;
   a.castPending = false;
-  if (id === "lance") {
+  if (technique) {
+    const t = TECHNIQUES[technique];
+    if (t.ward) a.wardT = Math.max(a.wardT, t.ward);
+    w.techniques.push({ id: technique, side, ownerId: side === "enemy" ? (actor as Enemy).id : undefined, age: 0, pulses: 0, aim: a.castAim, skills: { ...skills }, level: side === "player" ? w.player.weaponLevel : ((actor as Enemy).weaponLevel ?? 0), weave: a.weaveT > 0 ? 1.25 : 1 });
+    if (a.weaveT > 0) w.events.push({ type: "combo", x: actor.x, z: actor.z, dir: a.castAim });
+    a.weaveT = 0;
+  } else if (isSpell(id)) {
     a.spellCd = spellCooldown(skills);
     a.weaveT = 2.5;
+    if (id !== "lance") {
+      const spec: Technique = id === "nova-spell"
+        ? { name: "", description: "", pattern: "burst", reach: 4, damage: 26 + 8 * rank(skills, id), cooldown: 0, duration: 0, contact: 0 }
+        : { name: "", description: "", pattern: "line", reach: 7, damage: 28 + 8 * rank(skills, id), heal: 6, cooldown: 0, duration: 0, contact: 0 };
+      abilityHit(w, actor, a.castAim, spec, skills, side, id === "nova-spell");
+    } else {
     const staff = identity === "vesper-reed";
     for (const offset of staff ? [-28, 0, 28] : [0]) {
       const aim = (a.castAim + offset + DIRS) % DIRS;
@@ -744,12 +773,13 @@ function tickAbility(
         heavy: true,
       });
     }
+    }
   } else {
     w.zones.push({
       x: actor.x,
       z: actor.z,
       side,
-      id,
+      id: id as CoreId,
       age: 0,
       pulses: 0,
       skills: { ...skills },
@@ -767,6 +797,56 @@ function tickAbility(
     side,
   });
 }
+// Timed weapon contacts share the same collision rules for the player and Duel rival.
+function abilityHit(w: World, actor: { x: number; z: number; hp?: number; maxHp?: number }, aim: number, t: Technique, skills: Skills, side: "player" | "enemy", ignite = false) {
+  let hits = 0;
+  const targets = side === "player" ? w.enemies : [w.player];
+  for (const target of targets) {
+    if (w.phase !== "fight" || (actor.hp ?? 1) <= 0) break;
+    if (target.hp <= 0 || ("spawn" in target && target.spawn > 0)) continue;
+    const dx = target.x - actor.x, dz = target.z - actor.z, r = "r" in target ? target.r : .5;
+    const forward = dx * DX[aim] + dz * DZ[aim], across = Math.abs(dx * DZ[aim] - dz * DX[aim]);
+    const inRange = t.pattern === "line" ? forward >= -r && forward <= t.reach + r && across <= .65 + r : dx * dx + dz * dz <= (t.reach + r) ** 2 && (t.pattern === "burst" || forward >= -.3);
+    if (!inRange) continue;
+    const damage = t.damage * (t.execute && target.hp < target.maxHp * .35 ? 2 : 1);
+    if (side === "player") hurtEnemy(w, target as Enemy, damage);
+    else if (!hurtPlayer(w, damage)) continue;
+    hits++;
+    if (ignite || rank(skills, "ember")) { target.burnT = 3; target.burnCd = .5; }
+    if (t.pull && target.hp > 0) {
+      target.x -= dx * .35; target.z -= dz * .35;
+      clampArena(target, r);
+    }
+  }
+  if (t.heal && hits && actor.hp && actor.maxHp && w.phase === "fight") {
+    const gain = Math.min(actor.maxHp - actor.hp, hits * t.heal);
+    actor.hp += gain;
+    if (gain > 0) w.events.push({ type: "heal", x: actor.x, z: actor.z, amount: gain });
+  }
+}
+function stepTechniques(w: World) {
+  for (const action of w.techniques) {
+    const actor = action.side === "player" ? w.player : w.enemies.find(e => e.id === action.ownerId);
+    const t = TECHNIQUES[action.id], max = t.pulses ?? 1;
+    if (!actor || actor.hp <= 0 || w.phase !== "fight") { action.pulses = max; continue; }
+    if (action.pulses < max && action.age + .00001 >= action.pulses * .28) {
+      const damage = (t.damage + action.level * 2) * (1 + .15 * Math.max(0, rank(action.skills, action.id) - 1)) * (action.pulses === 0 ? action.weave : 1);
+      if (t.pattern === "fan") {
+        const count = t.spread ?? 1;
+        for (let i = 0; i < count; i++) {
+          const aim = (action.aim + (i - (count - 1) / 2) * 30 + DIRS) % DIRS;
+          const soul = action.id.startsWith("staff");
+          w.shots.push({ id: w.nextId++, x: actor.x + DX[aim] * .7, z: actor.z + DZ[aim] * .7, vx: DX[aim] * 22, vz: DZ[aim] * 22, life: t.reach / 22, dmg: damage, side: action.side, style: soul ? "soul" : "bolt", pierce: t.pierce ?? 1, hitIds: [], skills: { ...action.skills }, heavy: true });
+        }
+      } else abilityHit(w, actor, action.aim, { ...t, damage }, action.skills, action.side);
+      w.events.push({ type: "ability", ability: action.id, stage: "pulse", x: actor.x, z: actor.z, dir: action.aim, side: action.side, amount: t.reach });
+      action.pulses++;
+    }
+    action.age += DT;
+  }
+  w.techniques = w.techniques.filter(a => a.pulses < (TECHNIQUES[a.id].pulses ?? 1));
+}
+
 function stepZones(w: World) {
   for (const z of w.zones) {
     const owner =
@@ -864,8 +944,12 @@ function stepPlayer(w: World, input: Input) {
   ) {
     if (input.ultimate && p.core && p.charge >= 100)
       beginAbility(w, p, p, p.core, input.aim, "player");
-    else if (input.cast && rank(p.skills, "ember") && p.spellCd <= 0)
-      beginAbility(w, p, p, "lance", input.aim, "player");
+    else if (input.cast && availableSpell(p.spell, p.skills) && p.spellCd <= 0)
+      beginAbility(w, p, p, p.spell, input.aim, "player");
+    else if (Number.isInteger(input.technique) && input.technique! >= 1 && input.technique! <= 4) {
+      const slot = input.technique! - 1, id = weaponTechniques(p.weaponId)[slot];
+      if (rank(p.skills, id) && p.techniqueCd[slot] <= 0) beginAbility(w, p, p, id, input.aim, "player");
+    }
   }
   if (p.castT > 0) {
     p.aim = p.castAim;
@@ -1002,9 +1086,9 @@ function stepEnemy(w: World, e: Enemy) {
         const id =
           a.core && a.charge >= 100
             ? a.core
-            : rank(skills, "ember") && a.spellCd <= 0 && d > 3
-              ? "lance"
-              : null;
+            : availableSpell(a.spell, skills) && a.spellCd <= 0 && d > 3
+              ? a.spell
+              : weaponTechniques(weaponId(e.weaponId)).find((id, slot) => rank(skills, id) && a.techniqueCd[slot] <= 0 && d <= TECHNIQUES[id].reach + Math.max(0, TECHNIQUES[id].dash ?? 0)) ?? null;
         if (id) {
           beginAbility(w, e, a, id, dirIndex(ex, ez), "enemy");
           e.cd = 1;
@@ -1305,6 +1389,7 @@ export function step(w: World, input: Input): void {
   }
 
   stepZones(w);
+  stepTechniques(w);
 
   // keep enemies from stacking on each other
   for (let i = 0; i < w.enemies.length; i++) {

@@ -1,3 +1,4 @@
+import { weaponTechniques, TECHNIQUES } from "../sim/techniques.ts";
 import { weapon } from "../sim/weapons.ts";
 // A development-only input source. It follows the same rules as a player.
 import { PORTAL, type Input, type World } from "../sim/world.ts";
@@ -40,8 +41,9 @@ export function bot(w: World): Input {
           : aim,
     aim,
     attack: close,
-    cast: target.d < 10 && p.spellCd <= 0,
+    cast: target.d < (p.spell === "nova-spell" ? 4 : p.spell === "siphon-spell" ? 7 : 10) && p.spellCd <= 0,
     ultimate: target.d < 5 && p.charge >= 100,
+    technique: weaponTechniques(p.weaponId).findIndex((id,i) => (p.skills[id] ?? 0)>0 && p.techniqueCd[i]<=0 && target.d < TECHNIQUES[id].reach + Math.max(0,TECHNIQUES[id].dash ?? 0)) + 1,
     dash: dodge && w.tick % 90 === 0,
   };
 }

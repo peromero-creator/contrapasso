@@ -6,8 +6,8 @@ Deployed and verified on public NEAR testnet on 2026-11-12. No mainnet assets ar
 
 - Contract: [contrapasso-261112-a23809.testnet](https://testnet.nearblocks.io/address/contrapasso-261112-a23809.testnet)
 - Deployment: [5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5](https://testnet.nearblocks.io/txns/5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5)
-- WASM SHA-256: `1a779d74ca677e3658d2b3fd3773295cfa2e94836050145a011a8b52038a23d8`
-- Latest code-only update: [4AGpJTHMu9142iQLZ9111Vpm2H4CfHi7DKn7VNhEdHsd](https://testnet.nearblocks.io/txns/4AGpJTHMu9142iQLZ9111Vpm2H4CfHi7DKn7VNhEdHsd), version 0.9.0. Existing state and 34 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
+- WASM SHA-256: `3e2bf3eb6f9c54d4cf57269a3a0b57577920d2cd4ea3ba5d24690684b5f15752`
+- Latest code-only update: [8zQUgKVwFpoPbbczTAQjrWDfgP63ExvNtzrQQYDKRMFN](https://testnet.nearblocks.io/txns/8zQUgKVwFpoPbbczTAQjrWDfgP63ExvNtzrQQYDKRMFN), version 0.10.0. Existing state and 38 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
 - Published code and referee public key were read back and matched. The local server is connected through a restricted relay key.
 - Live verification passed: two guest champions played verified Solo, a permanent power was bought, defense was enabled, both Duel stakes were locked, and the winning replay paid the pool and updated both NFTs. Repeating a result did not award twice.
 - A separate silent browser run earned 165 coin, then won its Duel and finished with 175 coin and a 1–0 record, confirmed directly from NFT metadata.
@@ -140,3 +140,11 @@ The 27-bit replay codec adds cast and ultimate inputs. Soul Lance requires paid 
 Fresh WASM and an in-place 0.8→0.9 upgrade passed the actual VM suite, including unowned-core rejection, Duel locks and core retention after NFT transfer. The 0.8 deployment record is [archived here](testnet-forge-upgrade-proof.json). Live proof: [soul combat verification](testnet-soul-proof.json). Reproduce only within the authorized testnet scope with `npm run near:soul-smoke -- --execute`; private sessions remain under `.data/`.
 
 The live replay check cast 15 Soul Lances and six core ultimates, reached circle four with 61 kills, and rejected duplicate rewards. A separate silent browser run bought Ember Edge, attuned Furnace Heart, minted and equipped Vesper Reed, and recorded 46 kills on that same staff NFT. It reached circle three; the daily cap correctly credited no extra coin. Core choice survived both results. Transaction IDs and direct NFT read-back are in the proof above.
+
+## Weapon skill atlas (0.10)
+
+The `weapon_skills` feature adds 28 paid weapon techniques and two additional Q spells without new NFT collections or a serialized contract-root change. `train` enforces the same earned-coin ledger, with two-parent prerequisites for weapon capstones. `attune` accepts `slot: "spell"` only for a learned spell, saves `build.spell`, and retains owner/revision and Duel locks. The issued replay loadout carries this selection. Combat input is now 30 bits with a validated 0–4 technique slot. Skill ranks belonging to another weapon do not inflate Duel matchmaking power.
+
+Fresh VM and in-place 0.9→0.10 verification cover coin deductions, rejected duplicate training, both capstone prerequisites, unlearned spell rejection and selected-spell retention after champion transfer. The code-only deployment preserved all 38 existing NFTs and the complete raw state hash. Previous proof: [0.9 deployment](testnet-soul-upgrade-proof.json). Live progression and combat proof: [weapon skills](testnet-weapon-skills-proof.json). Reproduce only within authorized testnet scope with `npm run near:weapon-skills-smoke -- --execute`.
+
+The live API replay used all four blade techniques (25 technique activations), 11 Q casts and three ultimates, with duplicate rewards rejected. Browser QA earned 123 coin first, cancelled a short hold without spending, learned the first technique by pointer hold and the second by keyboard hold, then learned and equipped Cinder Circle. A subsequent silent browser replay recorded 46 kills and 165 additional earned coin. The same profile then completed both blade branches and the capstone and equipped Sanguine Covenant. Direct chain read-back confirmed all six learned skills, both selected slots, 43 remaining coin and an unchanged supply of 38 NFTs.

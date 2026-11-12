@@ -1,7 +1,7 @@
 import type { Input } from "./world.ts";
 
-export const SIM_VERSION = "0.8.0";
-export const MAX_PACKED_INPUT = 0x7ffffff;
+export const SIM_VERSION = "0.9.0";
+export const MAX_PACKED_INPUT = 0x3fffffff;
 
 export function packInput(i: Input): number {
   return (
@@ -11,7 +11,8 @@ export function packInput(i: Input): number {
     (+i.dash << 22) |
     ((i.choice ?? 0) << 23) |
     (+!!i.cast << 25) |
-    (+!!i.ultimate << 26)
+    (+!!i.ultimate << 26) |
+    ((i.technique ?? 0) << 27)
   );
 }
 
@@ -20,7 +21,8 @@ export function unpackInput(n: number): Input {
     !Number.isInteger(n) ||
     n < 0 ||
     n > MAX_PACKED_INPUT ||
-    (n & 2047) > 1024
+    (n & 2047) > 1024 ||
+    (n >>> 27) > 4
   )
     throw new Error("Invalid packed input");
   return {
@@ -31,5 +33,6 @@ export function unpackInput(n: number): Input {
     choice: (n >>> 23) & 3,
     cast: !!(n & (1 << 25)),
     ultimate: !!(n & (1 << 26)),
+    technique: (n >>> 27) & 7,
   };
 }

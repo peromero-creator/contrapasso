@@ -1,12 +1,12 @@
 {
   "network": "testnet",
   "contractId": "contrapasso-261112-a23809.testnet",
-  "transaction": "4AGpJTHMu9142iQLZ9111Vpm2H4CfHi7DKn7VNhEdHsd",
-  "oldWasmSha256": "d53cfdd765587876b31063ebaca5029da0fccb777a5c4f7b89d9601d96a3ebe2",
-  "wasmSha256": "1a779d74ca677e3658d2b3fd3773295cfa2e94836050145a011a8b52038a23d8",
-  "stateHash": "98f3d299aac4d1a3db35b79c40f545f22fcda3c0499fff657ea3113cfc480473",
+  "transaction": "8zQUgKVwFpoPbbczTAQjrWDfgP63ExvNtzrQQYDKRMFN",
+  "oldWasmSha256": "1a779d74ca677e3658d2b3fd3773295cfa2e94836050145a011a8b52038a23d8",
+  "wasmSha256": "3e2bf3eb6f9c54d4cf57269a3a0b57577920d2cd4ea3ba5d24690684b5f15752",
+  "stateHash": "294f52790394aa65239d1a1f92e67f07da9975c153ccf8ca12cdbae3c84d217d",
   "statePreserved": true,
-  "nftSupply": "34",
+  "nftSupply": "38",
   "features": [
     "upgrade",
     "claim",
@@ -19,8 +19,9 @@
     "exchange",
     "expanded_arsenal",
     "repeat_mint",
-    "soul_core"
+    "soul_core",
+    "weapon_skills"
   ],
-  "version": "0.9.0",
-  "verifiedAt": "2026-11-12T20:56:53.687Z"
+  "version": "0.10.0",
+  "verifiedAt": "2026-11-12T21:36:32.652Z"
 }
