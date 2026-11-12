@@ -87,3 +87,16 @@ const palms=other.getWorldPosition(new THREE.Vector3()).sub(palm.getWorldPositio
 assert.ok(shaft.dot(palms)>.999,'a heavy weapon shaft crosses both palms');
 aiming.dispose();body.geometry.dispose();body.material.dispose();
 console.log('Ranged hand posing: PASS (rotated actor, forward muzzle, unchanged limb lengths, clean recovery)');
+
+const { abilityDuration, abilityContact } = await import('../src/sim/abilities.ts');
+const { combatLift } = await import('../src/render/combat-motion.ts');
+assert.ok(combatLift({weapon:'tollkeeper',ability:'hammer-4',elapsed:.32,combo:1})>.7);
+assert.ok(combatLift({weapon:'tollkeeper',ability:'hammer-4',elapsed:.65,combo:1})<1e-8);
+assert.equal(combatLift(),0);
+for(const id of ['hammer-4','sword-4','staff-4','ember'] as const) {
+  const duration=abilityDuration(id),contact=abilityContact(id),clip=abilityClip(id,'tollkeeper');
+  let last=-1;
+  for(let i=0;i<=100;i++) {const now=motionClock({weapon:'tollkeeper',ability:id,elapsed:duration*i/100,combo:1},clip);assert.ok(now>=last && now<=1);last=now;}
+  assert.equal(motionClock({weapon:'tollkeeper',ability:id,elapsed:contact,combo:1},clip),clipContact(clip));
+}
+console.log('Signature motion: PASS (airborne reset, grounded contact, monotonic windup/impact/recovery)');

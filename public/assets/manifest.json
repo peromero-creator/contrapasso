@@ -2,7 +2,7 @@
   "version": 1,
   "models": {
     "hero": {
-      "file": "/assets/models/hero-deefc387edf9.glb",
+      "file": "/assets/models/hero-0ef500e7d1ea.glb",
       "height": 2.2,
       "rotationY": 90,
       "clips": [
@@ -20,9 +20,11 @@
         "attack-spear",
         "cast",
         "ultimate",
-        "ultimate-iron"
+        "ultimate-iron",
+        "attack-vault",
+        "ultimate-slam"
       ],
-      "bytes": 1387172,
+      "bytes": 1496404,
       "windows": {
         "attack": [
           0.35,
@@ -71,6 +73,14 @@
         "ultimate-iron": [
           0.7,
           1.7
+        ],
+        "attack-vault": [
+          1.5,
+          3.6
+        ],
+        "ultimate-slam": [
+          1.05,
+          2.8
         ]
       },
       "credit": {

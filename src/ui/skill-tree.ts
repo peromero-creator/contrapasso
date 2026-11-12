@@ -56,6 +56,9 @@ export class SkillTree {
     this.navigation();
     this.previewNode(nodes.find(n=>nodeKey(n)===this.selected)!);
   }
+  focusWeapon(identity: WeaponId) {
+    this.page = familyOf(identity); this.selected = null; this.resetCamera = true; this.initialized = true;
+  }
   close() { this.cancelHold(); }
   private previewNode(n: Node) {
     if(n.ability) this.actions.preview(n.ability,FAMILIES.includes(n.page as Family)?(familyOf(this.champion.build.weaponId ?? "starter")===n.page?this.champion.build.weaponId ?? "starter":FAMILY_WEAPON[n.page as Family]):undefined);

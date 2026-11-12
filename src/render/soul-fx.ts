@@ -1,3 +1,6 @@
+import { ModelLibrary, type AnimatedModel } from "./assets";
+import { mountGrip, starterWeapon } from "./weapon-pose";
+import { dragonSoul, brokenCathedral } from "./signatures";
 import { previewVolley } from "./combat-motion";
 import { weapon, type WeaponId } from "../sim/weapons";
 import { TECHNIQUES, techniqueId } from "../sim/techniques";
@@ -7,6 +10,7 @@ import type { SimEvent, World } from "../sim/world";
 
 // Matte, layered silhouettes: no additive bloom, full-screen flashes or strobing.
 // Geometry is shared; at most 32 transient motifs and 4 trails per tick survive.
+const guardModels = new ModelLibrary();
 const colors = {
   lance: 0x9dc2c5,
   ember: CORES.ember.color,
@@ -53,9 +57,27 @@ interface Motif {
   contract?: boolean;
   sweep?: number;
   extend?: boolean;
+  animate?: (t: number) => void;
 }
 export class SoulFx {
   private motifs: Motif[] = [];
+  private guards: {actor: AnimatedModel; life: number; angle: number; enemy: boolean}[] = [];
+  private guardLoad?: Promise<void>;
+  private prepareGuards() {
+    this.guardLoad ??= Promise.all(Array.from({length:4},()=>guardModels.create('hero',1.9))).then(actors=>{
+      for(const actor of actors) if(actor) {
+        const grip=new T.Group(), hand=actor.bone('RightHand');
+        if(hand){mountGrip(hand,grip);grip.add(starterWeapon());}
+        actor.root.traverse(n=>{if(n instanceof T.Mesh) {
+          for(const material of (Array.isArray(n.material)?n.material:[n.material])) {
+            if(material.side===T.BackSide){n.visible=false;continue;}
+            if(material instanceof T.MeshStandardMaterial){material.map=null;material.color.setHex(0x9aada4);material.emissive.setHex(0x263830);material.emissiveIntensity=.3;material.transparent=true;material.depthWrite=false;material.opacity=.24;material.needsUpdate=true;}
+          }
+        }});
+        actor.root.visible=false;this.root.add(actor.root);this.guards.push({actor,life:0,angle:0,enemy:false});
+      }
+    });
+  }
   private root = new T.Group();
   private time = 0;
   private ward = new T.Group();
@@ -180,6 +202,9 @@ export class SoulFx {
     if (e.ability && e.stage !== 'charge' && e.stage !== 'release' && previewVolley(e.ability, identity)) { this.volley(e, identity); return; }
     if (e.ability === 'lance' && e.stage === 'release') { this.volley(e, identity); return; }
     if (e.ability === "siphon-spell") { this.thread(e); return; }
+    if(e.ability==='ash') this.prepareGuards();
+    if(e.ability==='ash' && e.stage==='pulse') this.procession(e);
+    if((e.ability==='hammer-4'||e.ability==='ember') && e.stage==='pulse') this.cathedral(e);
     const visualAbility = e.ability === "nova-spell" ? "ember" : e.ability;
     const technique = techniqueId(e.ability);
     if (technique) { this.technique(e, technique); return; }
@@ -237,7 +262,7 @@ export class SoulFx {
         root,
         new T.PlaneGeometry(2, 2),
         color,
-        charge ? 0.45 : 0.25,
+        charge ? 0.35 : kind === "ash" ? .06 : 0.2,
       );
       (glyph.material as T.MeshBasicMaterial).map = this.seal;
       glyph.rotation.x = -Math.PI / 2;
@@ -247,7 +272,7 @@ export class SoulFx {
             root,
             kind === "ash" ? orbitBlade : shard,
             kind === "ember" ? 0xffffff : color,
-            kind === "ember" ? 0.52 : 0.38,
+            kind === "ember" ? 0.42 : 0.23,
           );
         m.position.set(Math.cos(a) * 0.8, 0.15, Math.sin(a) * 0.8);
         if (kind === "ash") {
@@ -260,7 +285,7 @@ export class SoulFx {
           m.position.y = 0.7;
         }
       }
-      const rim = this.part(root, ring, color, kind === "ember" ? 0.13 : 0.24);
+      const rim = this.part(root, ring, color, kind === "ember" ? 0.1 : kind === "ash" ? .07 : .2);
       rim.rotation.x = -Math.PI / 2;
       rim.position.y = 0.02;
     }
@@ -275,6 +300,21 @@ export class SoulFx {
       travel: lance && !charge,
     });
     while (this.motifs.length > 32) this.dispose(this.motifs.shift()!);
+  }
+  private procession(e: SimEvent) {
+    for(let i=0;i<2;i++) {
+      const guard=this.guards.find(g=>g.life<=0);if(!guard)break;
+      const a=this.time*1.7+i*Math.PI;
+      guard.life=.62;guard.angle=a;guard.enemy=e.side==='enemy';
+      guard.actor.root.position.set(e.x+Math.cos(a)*2.6,-.18,e.z+Math.sin(a)*2.6);
+      guard.actor.root.rotation.y=-a-Math.PI/2;guard.actor.root.visible=true;
+      guard.actor.play('attack',.62,true);
+    }
+  }
+  private cathedral(e: SimEvent) {
+    const sig=brokenCathedral(e.amount??4.5,e.side==='enemy'?0xb15b64:0xb99769);
+    sig.root.position.set(e.x,.03,e.z);this.root.add(sig.root);
+    this.motifs.push({root:sig.root,life:.7,max:.7,radius:1,kind:'combo',inward:false,animate:sig.animate});
   }
   private thread(e: SimEvent) {
     const root = new T.Group(), charge = e.stage === "charge";
@@ -320,6 +360,7 @@ export class SoulFx {
       const dart = new T.Group(), angle = (i - (volley.count - 1) / 2) * volley.step;
       dart.rotation.y = -angle; dart.position.set(Math.cos(angle)*.7, 1.3, Math.sin(angle)*.7);
       if(staff) {
+        if(e.ability==='staff-4') dragonSoul(dart,color);
         const plume=this.part(dart,new T.PlaneGeometry(1.7,.65),color,.68);
         (plume.material as T.MeshBasicMaterial).map=this.wisp;
         plume.rotation.x=-Math.PI/2;plume.position.x=-.25;
@@ -356,7 +397,23 @@ export class SoulFx {
         cut.position.set(spec.reach*.5,.18+i*.18,(i-1)*.1);
         cut.scale.set(spec.reach*.54,1,.18); cut.rotation.y=Math.PI;
       }
-    } else if (staff || hammer) {
+    } else if (hammer) {
+      // Broken ground follows the force of the blow; avoid stacked luminous circles.
+      for(let i=0;i<8;i++) {
+        const a=i*Math.PI/4, points:number[]=[], idx:number[]=[];
+        for(let j=0;j<5;j++) {
+          const d=.25+j*radius*.21, bend=(j%2?1:-1)*.12;
+          const x=Math.cos(a)*d-Math.sin(a)*bend,z=Math.sin(a)*d+Math.cos(a)*bend,w=.055*(1-j/5);
+          points.push(x-Math.sin(a)*w,.015,z+Math.cos(a)*w,x+Math.sin(a)*w,.015,z-Math.cos(a)*w);
+          if(j<4){const n=j*2;idx.push(n,n+1,n+2,n+1,n+3,n+2);}
+        }
+        const fracture=new T.BufferGeometry();fracture.setAttribute('position',new T.Float32BufferAttribute(points,3));fracture.setIndex(idx);
+        this.part(root,fracture,color,.34);
+      }
+      for(let i=0;i<3;i++) {
+        const dust=this.part(root,orbitBlade,0x8d8068,.14);dust.rotation.y=i*2.1;dust.scale.setScalar(radius*(.5+i*.15));
+      }
+    } else if (staff) {
       for (let i=0;i<2;i++) {
         const circle=this.part(root,ring,color,.26-i*.08);
         circle.rotation.x=-Math.PI/2; circle.scale.setScalar(radius*(1-i*.12)); circle.position.y=.02+i*.05;
@@ -401,9 +458,20 @@ export class SoulFx {
   clear() {
     for (const m of this.motifs) this.dispose(m);
     this.motifs = [];
+    for(const guard of this.guards){guard.life=0;guard.actor.root.visible=false;}
   }
   sync(w: World, dt: number) {
     this.time += dt;
+    for(const guard of this.guards) {
+      if(guard.life<=0)continue;
+      guard.life-=dt;const t=1-Math.max(0,guard.life)/.62;
+      guard.actor.root.visible=guard.life>0;
+      guard.actor.root.position.y=-.18+.22*Math.sin(t*Math.PI);
+      guard.actor.update(dt,{weapon:'starter',elapsed:t*.2,combo:1});
+      guard.actor.root.traverse(n=>{if(n instanceof T.Mesh) for(const material of (Array.isArray(n.material)?n.material:[n.material])) {
+        if(material instanceof T.MeshStandardMaterial){material.opacity=.25*Math.sin(Math.PI*Math.min(1,t*1.5))**.6;material.color.setHex(guard.enemy?0xb98087:0x9aada4);}
+      }});
+    }
     const p = w.player;
     this.core.visible = !!p.core && w.phase !== "dead";
     this.core.position.set(p.x, 1.25, p.z + 0.15);
@@ -416,6 +484,7 @@ export class SoulFx {
     for (const m of this.motifs) {
       m.life -= dt;
       const t = 1 - Math.max(0, m.life) / m.max;
+      m.animate?.(t);
       if (m.sweep) m.root.rotation.y += m.sweep * dt;
       if (m.contract) m.root.scale.set(1-.85*t,1,1-.85*t);
       if (m.extend) m.root.scale.x = .55 + .45 * (1 - (1 - t) ** 3);

@@ -10,7 +10,7 @@ const smooth = (v: number) => { const t = clamp(v); return t * t * (3 - 2 * t); 
 export const clipContact = (clip?: string) => ({
   'attack': .5, 'attack-dagger': .3, 'attack-spear': .3, 'attack-hammer': .58,
   'attack-crossbow': .5, 'attack-staff': .55, 'cast': .55,
-  'ultimate': .6, 'ultimate-iron': .65, 'attack-axe-heavy': .52,
+  'attack-vault': .44, 'ultimate-slam': .35, 'ultimate': .6, 'ultimate-iron': .65, 'attack-axe-heavy': .52,
 }[clip ?? ''] ?? .58);
 export function motionClock(m: CombatMotion, clip?: string) {
   const spec = weapon(m.weapon), duration = m.ability ? abilityDuration(m.ability) : spec.swing;
@@ -18,7 +18,13 @@ export function motionClock(m: CombatMotion, clip?: string) {
   const t = clamp(m.elapsed / duration);
   if (!contact) return t;
   const c = contact / duration, strike = clipContact(clip);
-  return t <= c ? strike * smooth(t / c) : strike + (1 - strike) * smooth((t - c) / (1 - c));
+  if(t <= c) {
+    const q=t/c;
+    // Settle into a readable silhouette, then accelerate through the final swing.
+    return strike * (.62*smooth(q/.72) + .38*Math.pow(clamp((q-.72)/.28),2));
+  }
+  const hold=Math.min(.045, (duration-contact)*.16);
+  return strike+(1-strike)*smooth((m.elapsed-contact-hold)/(duration-contact-hold));
 }
 /** Small additive accents on the existing rig: no detached hand or scaled anatomy. */
 export function combatPose(m: CombatMotion): JointPose {
@@ -37,6 +43,7 @@ export function combatPose(m: CombatMotion): JointPose {
     case 'axe': twist = side * (.18 * wind - .22 * release); bow = .12 * release; break;
     case 'spear': twist = -.12 * wind + .14 * release; bow = .1 * release; break;
   }
+  if (m.ability === 'sword-4') { bow=-.12*wind+.24*release; arm=-.85*wind+.16*release; wrist=-.3*wind; }
   if (m.ability === 'ember') { bow = -.14 * wind + .16 * release; arm = -.22 * envelope; }
   if (m.ability === 'ash') twist = .28 * envelope;
   if (m.ability === 'iron') { bow = .2 * release; arm = -.16 * wind; }
@@ -47,4 +54,11 @@ export function previewVolley(id: AbilityId, identity: WeaponId) {
   if (t && TECHNIQUES[t].pattern === 'fan') return { count: TECHNIQUES[t].spread ?? 1, step: 30 * Math.PI * 2 / 1024, speed: 22, reach: TECHNIQUES[t].reach };
   if (id === 'lance') return { count: identity === 'vesper-reed' ? 3 : 1, step: 28 * Math.PI * 2 / 1024, speed: 14, reach: 11.2 };
   return null;
+}
+
+/** Cosmetic elevation only: collision, targeting and vulnerability stay on the ground. */
+export function combatLift(m?: CombatMotion) {
+  if(m?.ability!=='hammer-4')return 0;
+  const t=clamp(m.elapsed/abilityContact(m.ability));
+  return .75*Math.sin(Math.PI*t)**2;
 }

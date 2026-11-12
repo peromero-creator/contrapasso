@@ -151,3 +151,11 @@ The hero's existing rig now layers distinct weapon accents and ranged hand align
 1. Record the final demo and review the delivery checklist in `docs/SUBMISSION.md`.
 2. Choose hosting and publish the repository when the owner is ready.
 3. For production: wallet authentication/recovery, stronger randomness, independent contract review, oracle decentralization and additional bot controls. Mainnet is outside the current demo scope.
+
+## Preparation and motion presentation
+
+Solo begins with an owned-weapon preparation screen. Selecting a card previews the actual held weapon and its four techniques without changing ownership or unlocking skills. Starting equips that same NFT through the existing authenticated operation, waits for confirmation, then requests the authoritative run loadout. Listed weapons and gear bound to another champion are unavailable. Level and kill history are displayed from inventory metadata. Failed or pending equipment operations keep the player in preparation and retain the existing retry intent. Selection is locked during confirmation.
+
+The skill-tree link from preparation opens the selected weapon family; closing it returns to the same preparation screen. The threshold groups skill training, inventory, minting and resale in a single navigation row. Unlearned skill slots remain hidden during combat. Preview slow motion affects presentation only.
+
+Final Absolution has an aerial descent, Cathedral Fall a raised ground strike, Astral Funeral horned soul projectiles, and Reaping Orbit animated spectral guards. Their ranges, pulses, charge costs, cooldowns and damage are unchanged. Airborne presentation grants no invulnerability. The guards illustrate existing orbit pulses and do not acquire targets or add attacks. A third-circle blacksmith is deferred.

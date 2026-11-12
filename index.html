@@ -238,7 +238,7 @@
               id="skill-stage"
               aria-label="Silent skill animation preview"
             ></canvas
-            ><span id="skill-preview-label">SILENT PREVIEW</span><button id="skill-preview-expand" class="preview-expand" aria-label="Expand animation preview" aria-pressed="false">⛶</button>
+            ><button id="skill-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="skill-preview-label">SILENT PREVIEW</span><button id="skill-preview-expand" class="preview-expand" aria-label="Expand animation preview" aria-pressed="false">⛶</button>
           </div>
           <article>
             <span class="eyebrow">YOUR BODY IS THE WEAPON</span>
@@ -415,7 +415,7 @@
       <div class="mode-inner">
         <div class="mode-heading">
           <span class="wordmark">CONTRAPASSO<span> / </span></span
-          ><span class="eyebrow">NO TWO DESCENTS ALIKE</span>
+          ><span class="eyebrow">THE THRESHOLD / PREPARE YOUR DESCENT</span>
         </div>
         <div class="champion-panel">
           <div class="champion-sigil">V</div>
@@ -440,15 +440,12 @@
           >
         </div>
         <p id="champion-gear" class="gear-summary">Cinder blade · Ash armor</p>
-        <button id="nft-open" class="btn ghost nft-open">
-          WHAT YOU OWN <span>↗</span>
-        </button>
-        <button id="exchange-open" class="btn ghost">
-          PLAYER LISTINGS <span>↗</span>
-        </button>
-        <button id="market-open" class="btn ghost nft-open">
-          THE RELIQUARY <span>↗</span>
-        </button>
+        <nav class="camp-links" aria-label="Champion and relics">
+          <button id="train" class="btn ghost">SKILL TREE <span>↗</span></button>
+          <button id="nft-open" class="btn ghost">INVENTORY <span>↗</span></button>
+          <button id="market-open" class="btn ghost">MINT RELICS <span>↗</span></button>
+          <button id="exchange-open" class="btn ghost">MARKETPLACE <span>↗</span></button>
+        </nav>
         <div class="section-label">
           <span>CHOOSE YOUR DESCENT</span><i></i><span>01 — 02</span>
         </div>
@@ -457,14 +454,14 @@
             <span class="card-k">01 / THE FIVE CIRCLES</span
             ><span class="card-t">SOLO</span
             ><span class="card-d"
-              >Earn coin. Take a vow.<br />Build the champion hell
+              >Earn coin. Take a vow.<br /> Build the champion hell
               deserves.</span
-            ><span class="card-action">BEGIN DESCENT <b>↗</b></span></button
+            ><span class="card-action">CHOOSE YOUR WEAPON <b>↗</b></span></button
           ><button class="card locked" id="mode-duel" disabled>
             <span class="card-k">02 / ANOTHER SINNER</span
             ><span class="card-t">DUEL</span
             ><span class="card-d"
-              >Their champion. Your punishment.<br />Risk 10 coin. Claim the
+              >Their champion. Your punishment.<br /> Risk 10 coin. Claim the
               pool.</span
             ><span id="duel-card-action" class="card-action"
               >CONNECTING CHAMPION <b>×</b></span
@@ -478,10 +475,19 @@
               No vows taken. Your story starts below.
             </div>
           </div>
-          <button id="train" class="btn ghost">
-            TRAIN CHAMPION <span>↗</span>
-          </button>
+          <span class="camp-hint">Choose a weapon. Shape its skills. Take the descent.</span>
         </div>
+      </div>
+    </section>
+
+    <section id="preparation" class="hidden" role="dialog" aria-modal="true" aria-labelledby="preparation-title">
+      <div class="preparation-inner">
+        <header class="preparation-heading"><div><span class="eyebrow">BEFORE THE FIRST CIRCLE</span><h2 id="preparation-title">CHOOSE YOUR WEAPON</h2></div><button id="preparation-close" class="btn ghost">BACK ↵</button></header>
+        <div class="preparation-grid">
+          <div class="preparation-theatre"><canvas id="loadout-stage" aria-label="Selected weapon held by your champion"></canvas><button id="loadout-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="loadout-preview-label" class="eyebrow">YOUR CHAMPION · YOUR WEAPON</span></div>
+          <div class="preparation-build"><span class="eyebrow">FROM YOUR INVENTORY</span><div id="loadout-weapons" role="group" aria-label="Owned weapons"></div><h3 id="loadout-name"></h3><p id="loadout-description"></p><div id="loadout-stats"></div><span class="eyebrow">WEAPON TECHNIQUES · PREVIEW</span><div id="loadout-techniques"></div><button id="loadout-train" class="btn ghost">EXPLORE THIS SKILL TREE ↗</button></div>
+        </div>
+        <footer class="preparation-footer"><div><p id="loadout-status" role="status" aria-live="polite">Your equipped weapon determines your active techniques.</p><small>WASD move · Mouse aim / attack · Space dash · 1–4 techniques · Q spell · R ultimate</small></div><button id="loadout-start" class="btn big">TAKE THE DESCENT ↘</button></footer>
       </div>
     </section>
 

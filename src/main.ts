@@ -1,3 +1,4 @@
+import { loadoutWeapons } from "./ui/loadout";
 import { SkillTree } from "./ui/skill-tree";
 import { TECHNIQUES, techniqueId, weaponTechniques } from "./sim/techniques";
 import {
@@ -532,7 +533,7 @@ function enterRun(next: RunChallenge) {
   mode = "run";
   sound.setPaused(false);
   sound.unlock();
-  for (const id of ["end", "pause", "reward", "forge", "duel-lobby"])
+  for (const id of ["end", "pause", "reward", "forge", "duel-lobby", "preparation"])
     $(id).classList.add("hidden");
   $("landing").classList.add("up");
   $("landing").inert = true;
@@ -919,9 +920,10 @@ async function doMarket(
   operation: MarketOperation,
   data: Record<string, unknown>,
   nft = false,
+  outputId?: string,
 ) {
   if (busy || !champion) return;
-  const out = $(nft ? "nft-action-result" : "market-result");
+  const out = $(outputId ?? (nft ? "nft-action-result" : "market-result"));
   if (pendingMarket && pendingMarket.championId !== champion.id)
     pendingMarket = null;
   if (!pendingMarket)
@@ -1281,7 +1283,85 @@ function renderGear() {
       }
     });
 }
+let loadoutStage: RelicStage | null = null;
+let loadoutOptions: ReturnType<typeof loadoutWeapons> = [];
+let loadoutToken: string | null = null;
+let forgeFromPreparation = false;
+let preparingRun = false;
+function selectedLoadout() { return loadoutOptions.find(t=>t.tokenId===loadoutToken); }
+function renderPreparation() {
+  if (!champion) return;
+  const preparationBusy=busy||preparingRun;
+  $<HTMLButtonElement>('preparation-close').disabled=preparationBusy;
+  $<HTMLButtonElement>('loadout-train').disabled=preparationBusy;
+  const selected = selectedLoadout(), identity=selected?.identity ?? champion.build.weaponId ?? 'starter', spec=weapon(identity);
+  $('loadout-weapons').innerHTML = loadoutOptions.map(t=>`<button data-loadout="${escapeHtml(t.tokenId)}" aria-pressed="${t.tokenId===loadoutToken}" ${preparationBusy||t.blocked?'disabled':''}><strong>${weapon(t.identity).name} <em>+${t.level}</em></strong><small>${t.blocked?'Unavailable · listed or equipped elsewhere':t.tokenId===champion!.equipped?.weapon?'IN HAND':weapon(t.identity).className}</small></button>`).join('') || '<p>Your starting blade is ready.</p>';
+  $('loadout-name').textContent=spec.name;
+  $('loadout-description').textContent=spec.description;
+  $('loadout-stats').innerHTML=`<span><b>${spec.damage+(selected?.level??champion.build.weaponLevel)*2}</b> damage</span><span><b>${spec.reach}m</b> reach</span><span><b>${selected?.kills??0}</b> kills</span>`;
+  $('loadout-techniques').innerHTML=weaponTechniques(identity).map((id,i)=>`<button data-loadout-preview="${id}" title="Preview ${TECHNIQUES[id].name}"><kbd>${i+1}</kbd><span>${TECHNIQUES[id].name}<small>${champion!.skills.includes(id)?'LEARNED':'PREVIEW · LEARN IN SKILL TREE'}</small></span></button>`).join('');
+  loadoutStage ??= new RelicStage($<HTMLCanvasElement>('loadout-stage'),$('loadout-preview-label'));
+  void loadoutStage.select(identity); loadoutStage.preview(null);
+  $<HTMLButtonElement>('loadout-start').disabled=preparationBusy||!!champion.chain?.pending||!!selected?.blocked;
+  $('loadout-start').textContent=preparationBusy?'PREPARING…':pendingMarket?'CHECK PENDING ACTION ↻':'TAKE THE DESCENT ↘';
+}
+async function openPreparation() {
+  if(busy||verifying)return;
+  notice('');
+  try {
+    await loadChampion(); const inventory=await api.nft();
+    loadoutOptions=loadoutWeapons(inventory.tokens,champion!.id);
+    loadoutToken=champion!.equipped?.weapon ?? loadoutOptions.find(t=>!t.blocked)?.tokenId ?? null;
+    $('modes').inert=true; $('preparation').classList.remove('hidden');
+    $('loadout-status').textContent='Choose your weapon and preview its techniques. Locked skills must be learned before use.';
+    renderPreparation(); $('preparation-close').focus();
+  } catch(e){notice((e as Error).message);}
+}
+function closePreparation() {
+  if(busy||preparingRun)return;
+  $('preparation').classList.add('hidden'); $('modes').inert=false; $('mode-solo').focus();
+}
+$('preparation-close').onclick=closePreparation;
+$('loadout-weapons').onclick=e=>{
+  const button=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-loadout]');
+  if(!button||button.disabled||busy||preparingRun)return;
+  loadoutToken=button.dataset.loadout!; renderPreparation();
+};
+$('loadout-techniques').onclick=e=>{
+  const button=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-loadout-preview]');
+  if(button)loadoutStage?.preview(button.dataset.loadoutPreview as AbilityId);
+};
+$('loadout-start').onclick=async()=>{
+  if(busy||preparingRun||!champion)return;
+  const selected=selectedLoadout(); if(selected?.blocked)return;
+  preparingRun=true;renderPreparation();
+  try {
+    if(pendingMarket || selected && selected.tokenId!==champion.equipped?.weapon) {
+      await doMarket('equip_gear',{slot:'weapon',gearId:selected?.tokenId},false,'loadout-status');
+      if(pendingMarket || champion.chain?.pending || selected && champion.equipped?.weapon!==selected.tokenId)return;
+    }
+    await startRun();
+  } finally {
+    preparingRun=false;
+    if(mode==='menu')renderPreparation();
+  }
+};
+$('loadout-train').onclick=()=>{
+  if(!champion||busy||preparingRun)return;
+  forgeFromPreparation=true;
+  skillTree.focusWeapon(selectedLoadout()?.identity ?? champion.build.weaponId ?? 'starter');
+  renderForge(); $('preparation').classList.add('hidden'); $('forge').classList.remove('hidden'); $('forge-close').focus();
+};
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!$('preparation').classList.contains('hidden')){e.preventDefault();closePreparation();}
+});
+
 let skillStage: RelicStage | null = null;
+for(const id of ['loadout-slow','skill-slow']) $(id).onclick=()=>{
+  const button=$(id), slow=button.getAttribute('aria-pressed')!=='true';
+  button.setAttribute('aria-pressed',String(slow));button.textContent=slow?'0.35× · NORMAL SPEED':'SLOW MOTION';
+  (id==='loadout-slow'?loadoutStage:skillStage)?.setSpeed(slow?.35:1);
+};
 function showSkillPreview(id: AbilityId, identity?: WeaponId) {
   skillStage ??= new RelicStage($<HTMLCanvasElement>("skill-stage"),$("skill-preview-label"));
   void skillStage.select(identity ?? champion?.build.weaponId ?? "starter");
@@ -1311,6 +1391,7 @@ function renderForge() {
   skillTree.render(champion, busy);
 }
 $("train").addEventListener("click", async () => {
+  forgeFromPreparation=false;
   try {
     await loadChampion();
     renderForge();
@@ -1324,8 +1405,8 @@ $("train").addEventListener("click", async () => {
 $("forge-close").addEventListener("click", () => {
   skillTree.close();
   $("forge").classList.add("hidden");
-  $("modes").inert = false;
-  $("train").focus();
+  if(forgeFromPreparation) { $('preparation').classList.remove('hidden'); renderPreparation(); $('loadout-train').focus(); }
+  else { $("modes").inert = false; $("train").focus(); }
 });
 let previewInert: [HTMLElement, boolean][] = [];
 $("skill-preview-expand").onclick = () => {
@@ -1361,7 +1442,7 @@ $("play").addEventListener("click", () => {
   $("mode-solo").focus();
   void loadChampion().catch((e) => notice(e.message));
 });
-$("mode-solo").addEventListener("click", () => void startRun());
+$("mode-solo").addEventListener("click", () => void openPreparation());
 $("again").addEventListener("click", () => {
   if (world.mode === "duel") {
     toMenu();

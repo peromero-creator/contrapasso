@@ -157,6 +157,7 @@ export class RelicStage {
   private combo = 0;
   private playing = false;
   private last = 0;
+  private speed = 1;
   private ready: Promise<void>;
   constructor(
     private canvas: HTMLCanvasElement,
@@ -184,6 +185,7 @@ export class RelicStage {
     this.tick = this.tick.bind(this);
     requestAnimationFrame(this.tick);
   }
+  setSpeed(speed: number) { this.speed = speed === .35 ? .35 : 1; }
   preview(ability: AbilityId | null) {
     this.ability = ability;
     this.timer = 0;
@@ -227,7 +229,7 @@ export class RelicStage {
   }
   private tick(time: number) {
     requestAnimationFrame(this.tick);
-    const dt = Math.min(0.05, (time - this.last) / 1000 || 0);
+    const dt = Math.min(0.05, (time - this.last) / 1000 || 0) * this.speed;
     this.last = time;
     if (!this.canvas.checkVisibility() || document.hidden) return;
     const width = this.canvas.clientWidth,
@@ -241,11 +243,15 @@ export class RelicStage {
     ) {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
-      const expanded = width > 600;
+      const expanded = width > 850;
       this.camera.position.set(...(expanded ? [7,6,11] : [3.4,2.8,5.3]) as [number,number,number]);
       this.camera.lookAt(expanded ? 1 : .35, 1, 0);
       this.camera.updateProjectionMatrix();
     }
+    const wide = width > 850;
+    const airborne = this.ability==='sword-4' || this.ability==='hammer-4';
+    this.camera.position.set(...(wide ? [7,6,11] : airborne ? [5.8,4.5,8] : [3.4,2.8,5.3]) as [number,number,number]);
+    this.camera.lookAt(wide ? 1 : .35, airborne ? 1.4 : 1, 0);
     this.previewWorld.player.core = coreId(this.ability);
     this.previewWorld.player.wardT = this.ability === "iron" && this.elapsed > CORE_CONTACT && this.elapsed < 4 ? 1 : 0;
     this.fx.sync(this.previewWorld, dt);
@@ -293,9 +299,6 @@ export class RelicStage {
         this.hero.play("idle");
         this.playing = false;
       }
-      if (this.playing && !this.emitted && weapon(this.identity).swing - this.timer >= (weapon(this.identity).impactDelay ?? 0)) {
-      this.fx.event({type:weapon(this.identity).ranged?'ranged':'swing',x:0,z:0,dir:0,amount:this.combo%3===0?2:1},this.identity); this.emitted=1;
-    }
     this.hero.update(dt, this.playing ? { weapon: this.identity, ability: this.ability, elapsed: this.elapsed, combo: Number(this.ability.split('-')[1]) || 1 } : undefined);
       this.renderer.render(this.scene, this.camera);
       return;

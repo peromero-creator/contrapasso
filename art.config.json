@@ -66,6 +66,14 @@
         "ultimate-iron": {
           "file": "art/source/hero-soul-actions.glb",
           "clip": "Sword_Judgment"
+        },
+        "attack-vault": {
+          "file": "art/source/hero-descent-actions.glb",
+          "clip": "Basic_Jump"
+        },
+        "ultimate-slam": {
+          "file": "art/source/hero-descent-actions.glb",
+          "clip": "Charged_Ground_Slam"
         }
       },
       "requiredClips": [
@@ -83,7 +91,9 @@
         "attack-spear",
         "cast",
         "ultimate",
-        "ultimate-iron"
+        "ultimate-iron",
+        "attack-vault",
+        "ultimate-slam"
       ],
       "windows": {
         "attack": [
@@ -133,6 +143,14 @@
         "ultimate-iron": [
           0.7,
           1.7
+        ],
+        "attack-vault": [
+          1.5,
+          3.6
+        ],
+        "ultimate-slam": [
+          1.05,
+          2.8
         ]
       },
       "credit": {

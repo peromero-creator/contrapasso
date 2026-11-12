@@ -3,6 +3,7 @@ import { weapon, type WeaponId } from "../sim/weapons.ts";
 
 /** Shared by the player, Duel rival and animation workshop. */
 export function attackClip(id: WeaponId = "starter", combo = 1) {
+  if ((id === "starter" || id === "cinder-requiem") && combo % 3 === 2) return "attack-spear";
   if (id === "guillotine-hymn")
     return combo % 3 === 0 ? "attack-axe-heavy" : "attack-axe";
   return (
@@ -34,16 +35,16 @@ export function orientWeapon(
 /** Reuse the existing rig, keeping contacts synchronized to each technique. */
 export function abilityClip(id: import('../sim/abilities').AbilityId, identity: WeaponId) {
   const clips: Record<string, string> = {
-    'sword-1': 'attack', 'sword-2': 'attack-spear', 'sword-3': 'attack-axe-heavy', 'sword-4': 'ultimate-iron',
-    'hammer-1': 'attack-hammer', 'hammer-2': 'attack-hammer', 'hammer-3': 'ultimate-iron', 'hammer-4': 'attack-hammer',
+    'sword-1': 'attack', 'sword-2': 'attack-spear', 'sword-3': 'attack-axe-heavy', 'sword-4': 'attack-vault',
+    'hammer-1': 'attack-hammer', 'hammer-2': 'attack-hammer', 'hammer-3': 'ultimate-iron', 'hammer-4': 'ultimate-slam',
     'dagger-1': 'attack-dagger', 'dagger-2': 'attack-crossbow', 'dagger-3': 'attack', 'dagger-4': 'attack-axe-heavy',
-    'staff-1': 'cast', 'staff-2': 'ultimate', 'staff-3': 'cast', 'staff-4': 'ultimate',
+    'staff-1': 'cast', 'staff-2': 'ultimate-slam', 'staff-3': 'cast', 'staff-4': 'ultimate',
     'axe-1': 'attack-axe', 'axe-2': 'attack', 'axe-3': 'attack-axe-heavy', 'axe-4': 'attack-axe',
     'spear-1': 'attack-spear', 'spear-2': 'attack-spear', 'spear-3': 'attack', 'spear-4': 'attack-spear',
   };
   if (clips[id]) return clips[id];
   if (id.startsWith('crossbow-')) return 'attack-crossbow';
-  return id === 'iron' ? 'ultimate-iron' : id === 'ember' || id === 'ash' || id === 'nova-spell' ? 'ultimate' : 'cast';
+  return id === 'ember' ? 'ultimate-slam' : id === 'iron' ? 'ultimate-iron' : id === 'ash' || id === 'nova-spell' ? 'ultimate' : 'cast';
 }
 
 export function mountGrip(hand: THREE.Object3D, grip: THREE.Group) {

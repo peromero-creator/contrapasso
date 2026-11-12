@@ -3,7 +3,8 @@ import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
-import { combatPose, motionClock, type CombatMotion } from "./combat-motion.ts";
+import { abilityContact, abilityDuration } from "../sim/abilities.ts";
+import { combatLift, combatPose, motionClock, type CombatMotion } from "./combat-motion.ts";
 
 interface ModelSpec {
   file: string;
@@ -47,6 +48,7 @@ interface Manifest {
 }
 
 export class AnimatedModel {
+  private presentation = new THREE.Group();
   readonly root = new THREE.Group();
   private mixer: THREE.AnimationMixer;
   private actions = new Map<string, THREE.AnimationAction>();
@@ -99,7 +101,8 @@ export class AnimatedModel {
     box.setFromObject(fit, true);
     const center = box.getCenter(new THREE.Vector3());
     fit.position.set(-center.x, -box.min.y, -center.z);
-    this.root.add(fit);
+    this.presentation.add(fit);
+    this.root.add(this.presentation);
     this.addOutline(box.getSize(new THREE.Vector3()).length());
     this.mixer = new THREE.AnimationMixer(this.content);
     for (const clip of clips)
@@ -182,6 +185,7 @@ export class AnimatedModel {
     // Restore before sampling: additive accents never accumulate on idle or a new clip.
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
     this.posed.clear();
+    this.presentation.position.y = combatLift(motion);
     this.mixer.update(dt);
     if (!motion || !this.active) return;
     this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;
@@ -192,8 +196,23 @@ export class AnimatedModel {
       this.posed.set(joint, joint.quaternion.clone());
       joint.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles)));
     }
+    this.aimVaultBlade(motion);
     this.aimHeldWeapon(motion);
     this.alignHeavyGrip(motion);
+  }
+  private aimVaultBlade(motion: CombatMotion) {
+    if(motion.ability!=='sword-4')return;
+    const hand=this.bone('RightHand');if(!hand?.parent)return;
+    const contact=abilityContact(motion.ability), t=motion.elapsed/contact;
+    const turn=Math.max(0,Math.min(1,(t-.65)/.35));
+    const weight=Math.min(1,motion.elapsed/.12)*Math.min(1,(abilityDuration(motion.ability)-motion.elapsed)/.12);
+    this.root.updateWorldMatrix(true,true);
+    const target=new THREE.Vector3(.65,1-turn*1.85,0).normalize().transformDirection(this.root.matrixWorld);
+    const world=hand.getWorldQuaternion(new THREE.Quaternion());
+    const axis=new THREE.Vector3(0,0,1).applyQuaternion(world);
+    const local=hand.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(new THREE.Quaternion().setFromUnitVectors(axis,target).multiply(world));
+    if(!this.posed.has(hand))this.posed.set(hand,hand.quaternion.clone());
+    hand.quaternion.slerp(local,weight);hand.updateWorldMatrix(false,true);
   }
   /** Heavy two-hand clips carry one shaft through both palms, rather than a dangling prop. */
   private alignHeavyGrip(motion: CombatMotion) {
