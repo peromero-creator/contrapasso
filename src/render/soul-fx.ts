@@ -1,11 +1,11 @@
 import { ModelLibrary, type AnimatedModel } from "./assets";
 import { mountGrip, starterWeapon } from "./weapon-pose";
-import { dragonSoul, brokenCathedral } from "./signatures";
+import { dragonSoul, brokenCathedral, ritualPulse, ritualCharge, covenantWard, bloodThread } from "./signatures";
 import { previewVolley } from "./combat-motion";
 import { weapon, type WeaponId } from "../sim/weapons";
 import { TECHNIQUES, techniqueId } from "../sim/techniques";
 import * as T from "three";
-import { CORES, CAST_TIME, CORE_TIME, type AbilityId } from "../sim/abilities";
+import { CORES, CAST_TIME, CORE_TIME, abilityContact, type AbilityId } from "../sim/abilities";
 import type { SimEvent, World } from "../sim/world";
 
 // Matte, layered silhouettes: no additive bloom, full-screen flashes or strobing.
@@ -80,7 +80,7 @@ export class SoulFx {
   }
   private root = new T.Group();
   private time = 0;
-  private ward = new T.Group();
+  private ward = covenantWard();
   private core = new T.Mesh(
     new T.OctahedronGeometry(0.11),
     new T.MeshBasicMaterial({ color: 0xcba670 }),
@@ -159,22 +159,7 @@ export class SoulFx {
     this.flame.colorSpace = T.SRGBColorSpace;
     this.seal = new T.CanvasTexture(c);
     this.seal.colorSpace = T.SRGBColorSpace;
-    for (let i = 0; i < 6; i++) {
-      const m = new T.Mesh(
-        new T.PlaneGeometry(0.48, 1.5),
-        new T.MeshBasicMaterial({
-          color: 0xa96d80,
-          transparent: true,
-          opacity: 0.14,
-          side: T.DoubleSide,
-          depthWrite: false,
-        }),
-      );
-      const a = (i * Math.PI) / 3;
-      m.position.set(Math.cos(a) * 0.75, 0.9, Math.sin(a) * 0.75);
-      m.rotation.y = -a + Math.PI / 2;
-      this.ward.add(m);
-    }
+
   }
   private part(
     root: T.Group,
@@ -202,9 +187,30 @@ export class SoulFx {
     if (e.ability && e.stage !== 'charge' && e.stage !== 'release' && previewVolley(e.ability, identity)) { this.volley(e, identity); return; }
     if (e.ability === 'lance' && e.stage === 'release') { this.volley(e, identity); return; }
     if (e.ability === "siphon-spell") { this.thread(e); return; }
-    if(e.ability==='ash') this.prepareGuards();
-    if(e.ability==='ash' && e.stage==='pulse') this.procession(e);
-    if((e.ability==='hammer-4'||e.ability==='ember') && e.stage==='pulse') this.cathedral(e);
+    if(e.ability==='lance'&&e.stage==='charge') {
+      const sig=ritualCharge(e.side==='enemy'?0xb15b64:0x91b7b8),life=abilityContact('lance');
+      sig.root.position.set(e.x,.04,e.z);this.root.add(sig.root);
+      this.motifs.push({root:sig.root,life,max:life,radius:1,kind:'combo',inward:false,animate:sig.animate});
+      while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
+      return;
+    }
+    if(e.type==='ability' && e.ability && ['ember','iron','ash','nova-spell','staff-2','staff-3'].includes(e.ability)) {
+      if(e.ability==='ash') this.prepareGuards();
+      if(e.stage==='release' && e.ability!=='nova-spell')return; // Cores/techniques hit on pulse; spells hit on release.
+      const charge=e.stage==='charge', id=e.ability;
+      const kind=id==='iron'?'covenant':id==='ash'?'orbit':id==='staff-3'?'harvest':'furnace';
+      const color=e.side==='enemy'?0xb15b64:kind==='furnace'?0xb4794d:kind==='covenant'?0xb27e8c:0x8eaaa8;
+      const radius=e.amount ?? (id==='iron'?5:id==='ash'||id==='staff-3'?4.5:id==='ember'?3.5:4);
+      const sig=charge?ritualCharge(color):ritualPulse(kind,radius,color,this.flame);
+      const life=charge?abilityContact(id):kind==='orbit'?.48:kind==='furnace'?.62:.7;
+      sig.root.position.set(e.x,.04,e.z);this.root.add(sig.root);
+      this.motifs.push({root:sig.root,life,max:life,radius:1,kind:'combo',inward:false,animate:sig.animate});
+      if(!charge&&id==='ash')this.procession(e);
+      if(!charge&&id==='ember')this.cathedral(e);
+      while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
+      return;
+    }
+    if(e.ability==='hammer-4' && e.stage==='pulse') this.cathedral(e);
     const visualAbility = e.ability === "nova-spell" ? "ember" : e.ability;
     const technique = techniqueId(e.ability);
     if (technique) { this.technique(e, technique); return; }
@@ -317,15 +323,11 @@ export class SoulFx {
     this.motifs.push({root:sig.root,life:.7,max:.7,radius:1,kind:'combo',inward:false,animate:sig.animate});
   }
   private thread(e: SimEvent) {
-    const root = new T.Group(), charge = e.stage === "charge";
-    root.position.set(e.x,.1,e.z); root.rotation.y=-(e.dir??0)*Math.PI*2/1024;
-    for(let i=0;i<5;i++) {
-      const ribbon=this.part(root,trailGeo,e.side === "enemy" ? 0xa95766 : 0xbc7b88,charge?.15:.55-i*.05);
-      ribbon.position.set(3.5,.45+i*.1,(i-2)*.18);
-      ribbon.scale.set(7/1.5,1,.7);
-    }
-    this.root.add(root);
-    this.motifs.push({root,life:charge?CAST_TIME:.65,max:charge?CAST_TIME:.65,radius:1,kind:"combo",inward:true,extend:!charge});
+    const charge=e.stage==='charge',color=e.side==='enemy'?0xa95766:0xbc7b88;
+    const sig=charge?ritualCharge(color):bloodThread(color),life=charge?abilityContact('siphon-spell'):.65;
+    sig.root.position.set(e.x,.1,e.z);sig.root.rotation.y=-(e.dir??0)*Math.PI*2/1024;
+    this.root.add(sig.root);
+    this.motifs.push({root:sig.root,life,max:life,radius:1,kind:'combo',inward:false,animate:sig.animate});
     while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
   }
   private strike(e: SimEvent, identity: WeaponId) {
@@ -383,6 +385,13 @@ export class SoulFx {
     root.rotation.y = -(e.dir ?? 0) * Math.PI * 2 / 1024;
     const color = e.side === 'enemy' ? 0xb15b64 : staff ? id === 'staff-2' ? 0xb77d53 : 0x8db2b3 : id.startsWith('dagger') ? 0x9eae8f : id.startsWith('axe') ? 0xb66e59 : 0xc4ad88;
     const radius = charge ? 1.05 : spec.reach;
+    if (charge && staff) {
+      const sig=ritualCharge(color),life=spec.contact;
+      sig.root.position.copy(root.position);sig.root.rotation.copy(root.rotation);this.root.add(sig.root);
+      this.motifs.push({root:sig.root,life,max:life,radius:1,kind:'combo',inward:false,animate:sig.animate});
+      while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
+      return;
+    }
     if (charge) {
       // A quiet preparation silhouette, not a premature full-range hit.
       const seal = this.part(root, new T.PlaneGeometry(2,2), color, .22);
@@ -467,9 +476,11 @@ export class SoulFx {
       guard.life-=dt;const t=1-Math.max(0,guard.life)/.62;
       guard.actor.root.visible=guard.life>0;
       guard.actor.root.position.y=-.18+.22*Math.sin(t*Math.PI);
+      guard.actor.root.position.x-=Math.sin(guard.angle)*dt*1.1;
+      guard.actor.root.position.z+=Math.cos(guard.angle)*dt*1.1;
       guard.actor.update(dt,{weapon:'starter',elapsed:t*.2,combo:1});
       guard.actor.root.traverse(n=>{if(n instanceof T.Mesh) for(const material of (Array.isArray(n.material)?n.material:[n.material])) {
-        if(material instanceof T.MeshStandardMaterial){material.opacity=.25*Math.sin(Math.PI*Math.min(1,t*1.5))**.6;material.color.setHex(guard.enemy?0xb98087:0x9aada4);}
+        if(material instanceof T.MeshStandardMaterial){material.opacity=.29*Math.sin(Math.PI*t)**.6;material.color.setHex(guard.enemy?0xb98087:0x9aada4);}
       }});
     }
     const p = w.player;
@@ -502,7 +513,7 @@ export class SoulFx {
       }
       m.root.traverse((n) => {
         if (n instanceof T.Mesh) {
-          n.material.opacity = n.userData.alpha * (1 - t) ** 0.7;
+          n.material.opacity = n.userData.alpha * (n.userData.fade ?? (1 - t) ** 0.7);
           if (n.geometry === shard)
             n.position.y =
               0.6 + Math.sin(t * Math.PI) * (m.kind === "ember" ? 0.5 : 0.3);

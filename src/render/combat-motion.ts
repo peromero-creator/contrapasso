@@ -47,6 +47,12 @@ export function combatPose(m: CombatMotion): JointPose {
   if (m.ability === 'ember') { bow = -.14 * wind + .16 * release; arm = -.22 * envelope; }
   if (m.ability === 'ash') twist = .28 * envelope;
   if (m.ability === 'iron') { bow = .2 * release; arm = -.16 * wind; }
+  if (f === 'staff' && m.ability) {
+    const harvest = m.ability === 'staff-3' || m.ability === 'iron';
+    const ground = m.ability === 'staff-2' || m.ability === 'ember' || m.ability === 'nova-spell';
+    twist = harvest ? -.24 * wind + .3 * release : ground ? -.18 * wind : -.22 * wind + .18 * release;
+    bow = harvest ? .12 * wind - .12 * release : ground ? -.2 * wind + .28 * release : -.1 * wind + .16 * release;
+  }
   return { Spine: [bow, twist * finisher, 0], RightArm: [0, 0, arm * finisher], RightForeArm: [0, wrist, 0] };
 }
 export function previewVolley(id: AbilityId, identity: WeaponId) {
@@ -61,4 +67,25 @@ export function combatLift(m?: CombatMotion) {
   if(m?.ability!=='hammer-4')return 0;
   const t=clamp(m.elapsed/abilityContact(m.ability));
   return .75*Math.sin(Math.PI*t)**2;
+}
+
+/** Staff choreography in actor-local space (+X is the committed aim). */
+export function staffGesture(m: CombatMotion) {
+  const duration=m.ability?abilityDuration(m.ability):weapon(m.weapon).swing;
+  const contact=m.ability?abilityContact(m.ability):duration*.35;
+  const q=clamp(m.elapsed/contact), snap=smooth((q-.65)/.35);
+  const recovery=smooth((m.elapsed-contact)/(duration-contact));
+  const weight=smooth(m.elapsed/.09)*(1-smooth((m.elapsed-duration+.12)/.12));
+  const ground=['staff-2','ember','nova-spell'].includes(m.ability??'');
+  const harvest=['staff-3','iron'].includes(m.ability??'');
+  const orbit=m.ability==='ash';
+  const direction: [number,number,number]=ground?[.38+.32*snap, .92-1.63*snap, 0]
+    :harvest?[.18-.3*snap,1,.12*Math.sin(q*Math.PI)]
+    :orbit?[.3,.94,.2*Math.sin(q*Math.PI)]
+    :[.35+.65*snap,.94*(1-snap)+.04*snap,0];
+  const target: [number,number,number]=ground?[.5,1.6-.25*snap,.12]
+    :harvest?[.45-.22*snap,1.25+.23*snap,.18]
+    :orbit?[.35,1.55,.15]
+    :[.25+.4*snap-.1*recovery,1.32,.12];
+  return {direction,target,weight,support:!harvest&&!orbit};
 }

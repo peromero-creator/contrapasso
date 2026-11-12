@@ -85,6 +85,20 @@ const palm=aiming.bone('RightHand')!,other=aiming.bone('LeftHand')!;
 const shaft=new THREE.Vector3(0,0,1).applyQuaternion(palm.getWorldQuaternion(new THREE.Quaternion()));
 const palms=other.getWorldPosition(new THREE.Vector3()).sub(palm.getWorldPosition(new THREE.Vector3())).normalize();
 assert.ok(shaft.dot(palms)>.999,'a heavy weapon shaft crosses both palms');
+// The same aimed actor must plant, gather and release without losing its weapon axis.
+for(const id of ['staff-1','staff-2','staff-3','staff-4','ember','ash','iron'] as const) {
+  const { abilityContact }=await import('../src/sim/abilities.ts');
+  const { staffGesture }=await import('../src/render/combat-motion.ts');
+  const elapsed=abilityContact(id),motion={weapon:'vesper-reed' as const,ability:id,elapsed,combo:1};
+  aiming.play('cast',1,true);aiming.update(.1,motion);
+  const direction=new THREE.Vector3(...staffGesture(motion).direction).normalize().transformDirection(aiming.root.matrixWorld);
+  const shaft=new THREE.Vector3(0,0,1).applyQuaternion(aiming.bone('RightHand')!.getWorldQuaternion(new THREE.Quaternion()));
+  assert.ok(shaft.dot(direction)>.999,`${id}: shaft follows its release gesture on a rotated actor`);
+  const focus=aiming.root.getObjectByName('staff-charge')!;
+  const tip=aiming.bone('RightHand')!.getWorldPosition(new THREE.Vector3()).addScaledVector(shaft,1.65);
+  assert.ok(focus.getWorldPosition(new THREE.Vector3()).distanceTo(tip)<1e-6,`${id}: focus stays at the real staff crown`);
+  aiming.update(0);assert.equal(focus.visible,false,'no lingering charge after interruption or weapon switch');
+}
 aiming.dispose();body.geometry.dispose();body.material.dispose();
 console.log('Ranged hand posing: PASS (rotated actor, forward muzzle, unchanged limb lengths, clean recovery)');
 
@@ -100,3 +114,16 @@ for(const id of ['hammer-4','sword-4','staff-4','ember'] as const) {
   assert.equal(motionClock({weapon:'tollkeeper',ability:id,elapsed:contact,combo:1},clip),clipContact(clip));
 }
 console.log('Signature motion: PASS (airborne reset, grounded contact, monotonic windup/impact/recovery)');
+
+const { ritualPulse, ritualCharge, bloodThread }=await import('../src/render/signatures.ts');
+for(const signature of [ritualCharge(0x88aaaa),bloodThread(0xaa6677),...(['furnace','harvest','orbit','covenant'] as const).map(kind=>ritualPulse(kind,4.5,0x889999))]) {
+  for(let i=0;i<=100;i++) {
+    signature.animate(i/100);signature.root.updateMatrixWorld(true);
+    signature.root.traverse(n=>{
+      assert.ok(n.matrixWorld.elements.every(Number.isFinite),'effect remains finite through its full lifetime');
+      if(n instanceof THREE.Mesh){assert.equal(n.material.blending,THREE.NormalBlending);assert.ok(n.userData.fade>=0&&n.userData.fade<=1);}
+    });
+  }
+  signature.root.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();n.material.dispose();}});
+}
+console.log('Spell presentation: PASS (staff release directions, attached focus, interruption reset, finite bounded fades, normal blending)');

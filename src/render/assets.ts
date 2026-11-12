@@ -4,7 +4,7 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 import { abilityContact, abilityDuration } from "../sim/abilities.ts";
-import { combatLift, combatPose, motionClock, type CombatMotion } from "./combat-motion.ts";
+import { combatLift, combatPose, motionClock, staffGesture, type CombatMotion } from "./combat-motion.ts";
 
 interface ModelSpec {
   file: string;
@@ -49,6 +49,7 @@ interface Manifest {
 
 export class AnimatedModel {
   private presentation = new THREE.Group();
+  private staffFocus: THREE.Group | null = null;
   readonly root = new THREE.Group();
   private mixer: THREE.AnimationMixer;
   private actions = new Map<string, THREE.AnimationAction>();
@@ -185,6 +186,7 @@ export class AnimatedModel {
     // Restore before sampling: additive accents never accumulate on idle or a new clip.
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
     this.posed.clear();
+    if(this.staffFocus)this.staffFocus.visible=false;
     this.presentation.position.y = combatLift(motion);
     this.mixer.update(dt);
     if (!motion || !this.active) return;
@@ -199,6 +201,39 @@ export class AnimatedModel {
     this.aimVaultBlade(motion);
     this.aimHeldWeapon(motion);
     this.alignHeavyGrip(motion);
+    this.updateStaffFocus(motion);
+  }
+  /** Gathering pigment is attached to the actual staff crown, never the actor origin. */
+  private updateStaffFocus(motion: CombatMotion) {
+    if(motion.weapon!=='vesper-reed'||!motion.ability)return;
+    const contact=abilityContact(motion.ability),time=motion.elapsed;
+    if(time>contact+.16)return;
+    const hand=this.bone('RightHand');if(!hand)return;
+    if(!this.staffFocus) {
+      this.staffFocus=new THREE.Group();this.staffFocus.name="staff-charge";this.root.add(this.staffFocus);
+      for(let i=0;i<3;i++) {
+        const mat=new THREE.MeshBasicMaterial({color:i===1?0xb8aa80:0x86a9a4,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide});
+        this.allMaterials.add(mat);
+        const arc=new THREE.Mesh(new THREE.TorusGeometry(.16+i*.045,.012,3,24,Math.PI*1.3),mat);
+        arc.rotation.z=i*Math.PI*2/3;this.staffFocus.add(arc);
+      }
+    }
+    this.root.updateWorldMatrix(true,true);
+    const axis=new THREE.Vector3(0,0,1).applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
+    const tip=hand.getWorldPosition(new THREE.Vector3()).addScaledVector(axis,1.65);
+    this.staffFocus.position.copy(this.root.worldToLocal(tip));
+    const localAxis=axis.transformDirection(this.root.matrixWorld.clone().invert());
+    this.staffFocus.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),localAxis);
+    const before=Math.min(1,time/contact),after=Math.max(0,(time-contact)/.16);
+    this.staffFocus.visible=true;this.staffFocus.scale.setScalar(.75+.25*before+after*.8);
+    this.staffFocus.children.forEach((node,i)=>{
+      const arc=node as THREE.Mesh<THREE.TorusGeometry,THREE.MeshBasicMaterial>;
+      arc.rotation.z=i*Math.PI*2/3-time*2;
+      const warm=['staff-2','ember','nova-spell'].includes(motion.ability!);
+      const blood=motion.ability==='iron'||motion.ability==='siphon-spell';
+      arc.material.color.setHex(i===1?0xb8aa80:warm?0xb77d53:blood?0xac7482:0x86a9a4);
+      arc.material.opacity=.38*Math.sin(Math.PI*.5*before)*(1-after);
+    });
   }
   private aimVaultBlade(motion: CombatMotion) {
     if(motion.ability!=='sword-4')return;
@@ -217,7 +252,7 @@ export class AnimatedModel {
   /** Heavy two-hand clips carry one shaft through both palms, rather than a dangling prop. */
   private alignHeavyGrip(motion: CombatMotion) {
     const state=this.active?.getClip().name;
-    if(!['attack-hammer','attack-axe','ultimate-iron'].includes(state ?? ''))return;
+    if(!['attack-hammer','attack-axe','ultimate-iron','ultimate-slam'].includes(state ?? ''))return;
     if(motion.weapon!=='tollkeeper' && motion.weapon!=='guillotine-hymn')return;
     const right=this.bone('RightHand'),left=this.bone('LeftHand');
     if(!right||!left)return;
@@ -233,14 +268,15 @@ export class AnimatedModel {
   /** Keep ranged releases in front of the caster while preserving the animated windup. */
   private aimHeldWeapon(motion: CombatMotion) {
     const ranged = motion.weapon === 'vesper-reed' || motion.weapon === 'gravewhisper';
-    const directed = !motion.ability || motion.ability === 'lance' || motion.ability === 'staff-1' || motion.ability === 'staff-4' || motion.ability.startsWith('crossbow-');
+    const directed = motion.weapon === 'vesper-reed' || !motion.ability || motion.ability === 'lance' || motion.ability === 'staff-1' || motion.ability === 'staff-4' || motion.ability.startsWith('crossbow-');
     if (!ranged || !directed) return;
     const hand=this.bone('RightHand'), upper=this.bone('RightArm'), fore=this.bone('RightForeArm');
     if(!hand||!upper||!fore)return;
     const phase=motionClock(motion,this.active?.getClip().name);
-    const weight=Math.min(1,phase/.4)*Math.min(1,(1-phase)/.22);
+    const gesture=motion.weapon==='vesper-reed'?staffGesture(motion):null;
+    const weight=gesture?.weight ?? Math.min(1,phase/.4)*Math.min(1,(1-phase)/.22);
     if(weight<=0)return;
-    const localTarget=new THREE.Vector3(.65,1.3,.12);
+    const localTarget=gesture?new THREE.Vector3(...gesture.target):new THREE.Vector3(.65,1.3,.12);
     this.root.updateWorldMatrix(true,true);
     const target=this.root.localToWorld(localTarget);
     const rotateWorld=(joint:THREE.Object3D,delta:THREE.Quaternion,blend:number)=>{
@@ -257,11 +293,25 @@ export class AnimatedModel {
       const to=target.clone().sub(origin).normalize();
       rotateWorld(joint,new THREE.Quaternion().setFromUnitVectors(from,to),weight);
     }
-    const forward=new THREE.Vector3(1,.04,0).normalize().transformDirection(this.root.matrixWorld);
+    const forward=(gesture?new THREE.Vector3(...gesture.direction):new THREE.Vector3(1,.04,0)).normalize().transformDirection(this.root.matrixWorld);
     const heldAxis=(motion.weapon === 'gravewhisper' ? new THREE.Vector3(-1,0,0) : new THREE.Vector3(0,0,1)).applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
     rotateWorld(hand,new THREE.Quaternion().setFromUnitVectors(heldAxis,forward),weight);
+    // The supporting palm follows the real shaft. Rotate joints only; never stretch bones.
+    if(gesture?.support) {
+      const left=this.bone('LeftHand'), lower=this.bone('LeftForeArm'), shoulder=this.bone('LeftArm');
+      if(left&&lower&&shoulder) {
+        const grip=hand.getWorldPosition(new THREE.Vector3()).addScaledVector(forward,.32);
+        for(let pass=0;pass<3;pass++)for(const joint of [lower,shoulder]) {
+          const origin=joint.getWorldPosition(new THREE.Vector3());
+          const from=left.getWorldPosition(new THREE.Vector3()).sub(origin).normalize();
+          const to=grip.clone().sub(origin).normalize();
+          rotateWorld(joint,new THREE.Quaternion().setFromUnitVectors(from,to),weight*.8);
+        }
+      }
+    }
   }
   dispose() {
+    this.staffFocus?.traverse(n=>{if(n instanceof THREE.Mesh)n.geometry.dispose();});
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.content);
     for (const material of this.allMaterials) material.dispose();

@@ -118,3 +118,9 @@ The hero now includes two more same-rig Meshy presets from `hero-descent-actions
 Astral Funeral has original curved horned soul heads on its existing three-projectile fan. Reaping Orbit briefly raises two animated, translucent copies of the hero with held blades per pulse, using a bounded pool of four actors per effect renderer. These are visual strokes of the existing attack, not autonomous companions. Hammer pulses leave tapered ground cracks and small falling stone fragments. Normal alpha blending, restrained opacity and no bloom remain the rule.
 
 Motion reference: the practice-area attacks in [Nilmoyism’s weapon showcase](https://www.youtube.com/watch?v=-4KwXB9tm_4) and [Legend Stuff’s alternate moveset showcase](https://www.youtube.com/watch?v=nntoW5uSme4). References informed pose separation and effect timing; no footage, game assets or textures were imported. Preparation and skill previews share the gameplay models, grip corrections and contact clock, with an optional 0.35× preview speed.
+
+### Staff and core choreography
+
+Staff casts now use a shared gesture layer: a lifted preparation, two-hand forward release, downward planting for Cinder Halo/Furnace Heart, and upright gathering for Soul Harvest/Sanguine Covenant. Joint rotations preserve limb lengths and reset on interruption. A restrained charge accent follows the held staff crown. Gameplay and the preview theatre use the same posing.
+
+Core and staff area effects use distinct outward flame waves, inward tapered soul/blood strokes and tangential spectral cuts. Painted flames have soft edges; the covenant ward uses open curved ribs. Core release events no longer draw a second impact on top of the authoritative pulse. Spectral guards lunge through their existing swing and fade over their complete lifetime. All effects use normal alpha blending; damage, ranges and cooldowns are unchanged.

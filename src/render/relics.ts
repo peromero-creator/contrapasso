@@ -250,7 +250,8 @@ export class RelicStage {
     }
     const wide = width > 850;
     const airborne = this.ability==='sword-4' || this.ability==='hammer-4';
-    this.camera.position.set(...(wide ? [7,6,11] : airborne ? [5.8,4.5,8] : [3.4,2.8,5.3]) as [number,number,number]);
+    const expansive = airborne || !!this.ability && ['staff-2','staff-3','ember','ash','iron','nova-spell'].includes(this.ability);
+    this.camera.position.set(...(wide ? [7,6,11] : expansive ? [5.8,4.5,8] : [3.4,2.8,5.3]) as [number,number,number]);
     this.camera.lookAt(wide ? 1 : .35, airborne ? 1.4 : 1, 0);
     this.previewWorld.player.core = coreId(this.ability);
     this.previewWorld.player.wardT = this.ability === "iron" && this.elapsed > CORE_CONTACT && this.elapsed < 4 ? 1 : 0;
@@ -288,7 +289,7 @@ export class RelicStage {
         this.fx.event({
           type: "ability",
           ability: this.ability,
-          stage: "pulse",
+          stage: isSpell(this.ability) ? "release" : "pulse",
           x: 0,
           z: 0,
           amount: this.ability === "ember" ? 3.5 + this.emitted : undefined,
