@@ -74,5 +74,17 @@ try {
   const won = referee.submit(owner, final.id, finish.inputs);
   assert.equal(won.receipt.result.outcome, "won");
   assert.equal(won.champion.victories, 1);
-  console.log("Referee: PASS (replay, ownership, signatures, tampering, idempotency, persistence, training, daily cap, expiry)");
+  // "+" upgrade: a forced good roll, then a forced bad one at a risky level
+  const rolls = [0, 99];
+  const forge = new Referee({ now: () => now, roll: () => rolls.shift()! });
+  const smith = forge.createSession().owner;
+  const account = (forge as unknown as { state: { accounts: Record<string, { coins: number; build: { weaponLevel: number } }> } }).state.accounts[smith];
+  account.coins = 100;
+  assert.deepEqual(forge.upgrade(smith, "weapon"), { slot: "weapon", success: true, level: 1, cost: 15 });
+  account.build.weaponLevel = 4;
+  assert.deepEqual(forge.upgrade(smith, "weapon"), { slot: "weapon", success: false, level: 4, cost: 55 });
+  assert.equal(forge.profile(smith).coins, 30);
+  assert.throws(() => forge.upgrade(smith, "weapon"), /coin/);
+  assert.throws(() => forge.upgrade(smith, "ring"), /Unknown gear/);
+  console.log("Referee: PASS (replay, ownership, signatures, tampering, idempotency, persistence, training, gear upgrades, daily cap, expiry)");
 } finally { rmSync(directory, { recursive: true, force: true }); }

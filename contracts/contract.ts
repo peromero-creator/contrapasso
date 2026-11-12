@@ -16,6 +16,16 @@ import {
   NftMint,
 } from "near-contract-standards/lib/index.js";
 import { applyAction, readChampion } from "./engine.js";
+import {
+  economy,
+  prize,
+  pendingNative,
+  marketAction,
+  marketView,
+  openRound,
+  resolveNative,
+} from "./market.js";
+import { SPONSOR_YOCTO } from "../src/shared/market.ts";
 declare const env: {
   ed25519_verify(
     signature: Uint8Array,
@@ -84,8 +94,47 @@ class Contrapasso {
       used: this.used,
       owner: (id: string) => this.tokens.owner_by_id.get(`champion:${id}`),
       pendingTransfer: (id: string) =>
-        this.pending.get(`champion:${id}`) === true,
+        this.pending.get(`champion:${id}`) === true ||
+        !!pendingNative(this.marketStorage(), id),
+      prize: (id: string) => prize(this.marketStorage(), id),
+      marketAction: (c: any, ctx: any, action: any) =>
+        marketAction(this.marketStorage(), ctx, c, action),
       mint: (champion: any, owner: string) => this.mint(champion, owner),
+      transfer: (c: any, receiver: string) => {
+        const id = `champion:${c.id}`;
+        const previous = this.tokens.owner_by_id.get(id)!;
+        this.tokens.internal_transfer_unguarded(id, previous, receiver);
+        this.tokens.approvals_by_id?.remove(id);
+        NonFungibleToken.emit_transfer(
+          previous,
+          receiver,
+          id,
+          undefined,
+          "Claimed to wallet",
+        );
+        for (const gearId of Object.values(c.equipped) as string[]) {
+          if (!gearId) continue;
+          const old = this.tokens.owner_by_id.get(gearId)!;
+          this.tokens.internal_transfer_unguarded(gearId, old, receiver);
+          this.tokens.approvals_by_id?.remove(gearId);
+          NonFungibleToken.emit_transfer(
+            old,
+            receiver,
+            gearId,
+            undefined,
+            "Equipped to champion",
+          );
+          const gear = this.gear.get(gearId);
+          gear.pastOwners = [...gear.pastOwners, previous].slice(-10);
+          this.gear.set(gearId, gear);
+        }
+      },
+      upgradeGear: (c: any, slot: string, level: number) => {
+        const id = c.equipped[slot];
+        const gear = this.gear.get(id);
+        gear.level = level;
+        this.gear.set(id, gear);
+      },
       recordKills: (c: any, kills: number) => {
         for (const id of Object.values(c.equipped) as string[])
           if (id) {
@@ -95,6 +144,78 @@ class Contrapasso {
           }
       },
     };
+  }
+  // New prefixes are independent of the serialized 0.3/0.4 root, so code upgrades need no re-init.
+  private marketStorage() {
+    return {
+      market: new LookupMap<any>("q"),
+      reservations: new LookupMap<any>("r"),
+      rounds: new LookupMap<any>("R"),
+      champions: this.champions,
+      used: this.used,
+      mintGear: (c: any, id: string, owner: string) => {
+        const metadata = new TokenMetadata(
+          "Cinder Requiem / " + id.split(":").slice(1).join(" #"),
+          "Limited Contrapasso testnet blade. Coin-funded upgrades determine power. All mint revenue enters the raffle pool.",
+          null,
+          null,
+          1n,
+          String(Number(near.blockTimestamp() / 1000000n)),
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+        );
+        this.tokens.internal_mint_with_refund(id, owner, metadata);
+        this.gear.set(id, {
+          kind: "weapon",
+          championId: c.id,
+          equippedTo: null,
+          level: 0,
+          bound: false,
+          kills: 0,
+          pastOwners: [],
+          collection: "cinder-requiem",
+        });
+        new NftMint(owner, [id]).emit();
+      },
+      equipGear: (c: any, data: any, owner: string, remove: boolean) =>
+        this.changeEquipment(c, data, owner, remove),
+    };
+  }
+  private changeEquipment(c: any, data: any, owner: string, remove: boolean) {
+    assert(
+      data.slot === "weapon" || data.slot === "armor",
+      "Invalid gear slot",
+    );
+    const gear = remove ? null : this.gear.get(data.gearId);
+    if (!remove)
+      assert(
+        gear &&
+          gear.kind === data.slot &&
+          this.tokens.owner_by_id.get(data.gearId) === owner &&
+          !this.pending.get(data.gearId) &&
+          (!gear.bound || gear.championId === c.id) &&
+          (!gear.equippedTo || gear.equippedTo === c.id),
+        "Gear unavailable or already equipped",
+      );
+    const previous = c.equipped[data.slot];
+    if (previous) {
+      const old = this.gear.get(previous);
+      old.equippedTo = null;
+      this.gear.set(previous, old);
+    }
+    c.equipped[data.slot] = remove ? null : data.gearId;
+    c.build[data.slot === "weapon" ? "weaponLevel" : "armorLevel"] = remove
+      ? 0
+      : gear.level;
+    c.defending = false;
+    if (gear) {
+      gear.equippedTo = c.id;
+      this.gear.set(data.gearId, gear);
+    }
   }
   private mint(c: any, owner: string) {
     const ids = [`champion:${c.id}`, c.equipped.weapon, c.equipped.armor];
@@ -124,6 +245,7 @@ class Contrapasso {
         this.gear.set(id, {
           kind: i === 1 ? "weapon" : "armor",
           championId: c.id,
+          equippedTo: c.id,
           level: 0,
           bound: true,
           kills: 0,
@@ -132,7 +254,7 @@ class Contrapasso {
     }
     new NftMint(owner, ids).emit();
   }
-  @call({})
+  @call({ payableFunction: true })
   apply_receipt({
     payload,
     signature,
@@ -152,19 +274,122 @@ class Contrapasso {
       "Invalid referee signature",
     );
     const action = JSON.parse(payload);
+    if (action.operation === "fund_guest" && !this.used.get(action.id)) {
+      const liability = BigInt(economy(this.marketStorage()).liabilityYocto);
+      assert(
+        near.accountBalance() -
+          near.storageUsage() * near.storageByteCost() -
+          liability >=
+          BigInt(SPONSOR_YOCTO) + 500000000000000000000000n,
+        "Demo fund reserve is exhausted",
+      );
+    }
     const result = applyAction(
       this.storage(),
       {
         contractId: near.currentAccountId(),
         nowMs: Number(near.blockTimestamp() / 1000000n),
         validAccount: validateAccountId,
+        predecessor: near.predecessorAccountId(),
+        depositYocto: near.attachedDeposit().toString(),
+        entropy: Array.from(near.randomSeed()),
+        blockHeight: Number(near.blockHeight()),
       },
       action,
     );
     near.log(
       `EVENT_JSON:${json({ standard: "contrapasso", version: "1.0.0", event: "receipt_applied", data: [result] })}`,
     );
+    if (
+      !result.duplicate &&
+      (action.operation === "fund_guest" ||
+        action.operation === "withdraw_prize")
+    ) {
+      const pending = pendingNative(this.marketStorage(), action.championId);
+      NearPromise.new(pending.receiver)
+        .transfer(BigInt(pending.amountYocto))
+        .then(
+          NearPromise.new(near.currentAccountId()).functionCall(
+            "resolve_native",
+            json({ champion_id: action.championId }),
+            0n,
+            50000000000000n,
+          ),
+        )
+        .build();
+    }
     return result;
+  }
+  @call({ payableFunction: true })
+  withdraw_prize({ champion_id }: { champion_id: string }) {
+    assert(near.attachedDeposit() === 1n, "Attach exactly one yoctoNEAR");
+    this.guardTransfer(`champion:${champion_id}`);
+    const owner = near.predecessorAccountId();
+    assert(
+      this.tokens.owner_by_id.get(`champion:${champion_id}`) === owner,
+      "Owner only",
+    );
+    const c = this.champions.get(champion_id),
+      store = this.marketStorage();
+    const id = `wallet-withdraw:${champion_id}:${c.revision}`;
+    marketAction(store, {}, c, {
+      id,
+      operation: "withdraw_prize",
+      ownerId: owner,
+      data: {},
+    });
+    c.revision++;
+    this.champions.set(c.id, c);
+    const result = {
+      id,
+      championId: c.id,
+      revision: c.revision,
+      operation: "withdraw_prize",
+    };
+    this.used.set(id, result);
+    const pending = pendingNative(store, c.id);
+    NearPromise.new(pending.receiver)
+      .transfer(BigInt(pending.amountYocto))
+      .then(
+        NearPromise.new(near.currentAccountId()).functionCall(
+          "resolve_native",
+          json({ champion_id: c.id }),
+          0n,
+          50000000000000n,
+        ),
+      )
+      .build();
+    return result;
+  }
+  @call({ privateFunction: true })
+  resolve_native({ champion_id }: { champion_id: string }) {
+    assert(near.promiseResultsCount() === 1n, "Expected one transfer result");
+    let success = true;
+    try {
+      near.promiseResult(0);
+    } catch {
+      success = false;
+    }
+    return resolveNative(this.marketStorage(), champion_id, success);
+  }
+  @call({})
+  open_round({
+    id,
+    duration_seconds = 120,
+  }: {
+    id: string;
+    duration_seconds?: number;
+  }) {
+    assert(near.predecessorAccountId() === this.ownerId, "Owner only");
+    return openRound(
+      this.marketStorage(),
+      { nowMs: Number(near.blockTimestamp() / 1000000n) },
+      { id, durationSeconds: duration_seconds },
+    );
+  }
+  @view({})
+  market_view({ champion_id }: { champion_id: string }) {
+    return marketView(this.marketStorage(), champion_id);
   }
   @view({})
   get_champion({ champion_id }: { champion_id: string }) {
@@ -186,6 +411,8 @@ class Contrapasso {
   game_config() {
     return {
       network: "testnet",
+      version: "0.5.0",
+      features: ["upgrade", "claim", "market", "royalties"],
       referee_public_key: this.refereeKey,
       coin_daily_cap: 300,
       duel_stake: 10,
@@ -223,13 +450,25 @@ class Contrapasso {
     if (id.startsWith("champion:")) {
       const c = this.champions.get(id.slice(9));
       assert(c && !c.lockedBy, "Champion is in a duel");
+      assert(
+        !pendingNative(this.marketStorage(), c.id),
+        "A native payout is pending",
+      );
     } else {
       const g = this.gear.get(id);
       assert(g && !g.bound, "Starter gear travels with its champion");
+      assert(!g.equippedTo, "Unequip gear before transferring it");
     }
   }
   private syncEquipment(id: string, history?: string) {
-    if (!id.startsWith("champion:")) return;
+    if (!id.startsWith("champion:")) {
+      if (history) {
+        const g = this.gear.get(id);
+        g.pastOwners = [...g.pastOwners, history].slice(-10);
+        this.gear.set(id, g);
+      }
+      return;
+    }
     const c = this.champions.get(id.slice(9));
     const owner = this.tokens.owner_by_id.get(id)!;
     for (const gearId of Object.values(c.equipped) as string[]) {
@@ -352,8 +591,7 @@ class Contrapasso {
       "Owner only",
     );
     const c = this.champions.get(champion_id);
-    c.equipped[slot] = null;
-    c.build[slot === "weapon" ? "weaponLevel" : "armorLevel"] = 0;
+    this.changeEquipment(c, { slot }, near.predecessorAccountId(), true);
     c.revision++;
     this.champions.set(c.id, c);
   }
@@ -374,19 +612,75 @@ class Contrapasso {
     const id = `champion:${champion_id}`;
     this.guardTransfer(id);
     const owner = near.predecessorAccountId();
-    const gear = this.gear.get(gear_id);
-    assert(
-      this.tokens.owner_by_id.get(id) === owner &&
-        this.tokens.owner_by_id.get(gear_id) === owner &&
-        gear?.kind === slot &&
-        gear.championId === champion_id,
-      "Gear unavailable",
-    );
+    assert(this.tokens.owner_by_id.get(id) === owner, "Owner only");
     const c = this.champions.get(champion_id);
-    c.equipped[slot] = gear_id;
-    c.build[slot === "weapon" ? "weaponLevel" : "armorLevel"] = gear.level;
+    this.changeEquipment(c, { slot, gearId: gear_id }, owner, false);
     c.revision++;
     this.champions.set(c.id, c);
+  }
+  @view({})
+  nft_payout({
+    token_id,
+    balance,
+    max_len_payout,
+  }: {
+    token_id: string;
+    balance: string;
+    max_len_payout: number;
+  }) {
+    const owner = this.tokens.owner_by_id.get(token_id);
+    assert(
+      owner && typeof balance === "string" && /^[0-9]{1,39}$/.test(balance),
+      "Invalid payout",
+    );
+    const total = BigInt(balance);
+    assert(total < 1n << 128n, "Balance exceeds u128");
+    const royalty = total / 10n,
+      payout: Record<string, string> = {};
+    payout[owner] = (total - royalty).toString();
+    payout[near.currentAccountId()] = (
+      BigInt(payout[near.currentAccountId()] ?? "0") + royalty
+    ).toString();
+    assert(
+      Number.isSafeInteger(max_len_payout) &&
+        Object.keys(payout).length <= max_len_payout,
+      "Payout recipient limit",
+    );
+    return { payout };
+  }
+  @call({ payableFunction: true })
+  nft_transfer_payout(args: {
+    receiver_id: string;
+    token_id: string;
+    approval_id?: bigint;
+    memo?: string;
+    balance: string;
+    max_len_payout: number;
+  }) {
+    const result = this.nft_payout(args);
+    this.nft_transfer(args);
+    return result;
+  }
+  // A marketplace must actually pay this method to credit royalties to the recorded pool.
+  @call({ payableFunction: true })
+  collect_royalty() {
+    const amount = near.attachedDeposit();
+    assert(amount > 0n, "Attach the royalty payment");
+    const store = this.marketStorage(),
+      config = economy(store);
+    const round = config.currentRound
+      ? store.rounds.get(config.currentRound)
+      : null;
+    if (
+      round &&
+      !round.drawn &&
+      Number(near.blockTimestamp() / 1000000n) < round.endsAt
+    ) {
+      round.poolYocto = (BigInt(round.poolYocto) + amount).toString();
+      store.rounds.set(round.id, round);
+    } else config.carryYocto = (BigInt(config.carryYocto) + amount).toString();
+    config.liabilityYocto = (BigInt(config.liabilityYocto) + amount).toString();
+    store.market.set("config", config);
   }
   @view({}) nft_token({ token_id }: { token_id: string }) {
     return this.token(token_id);

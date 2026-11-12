@@ -1,7 +1,15 @@
 // Shared contract rules. No network, filesystem, clock or randomness.
 import { SKILLS, SKILL_IDS } from "../src/sim/skills.ts";
-import { fairMatch, copyBuild, DUEL_STAKE } from "../src/sim/build.ts";
+import {
+  fairMatch,
+  copyBuild,
+  DUEL_STAKE,
+  MAX_GEAR_LEVEL,
+  upgradeCost,
+  upgradeChance,
+} from "../src/sim/build.ts";
 
+import { MARKET_OPERATIONS } from "../src/shared/market.ts";
 export const CHAIN_DOMAIN = "contrapasso:testnet:v1";
 export const CAP = 300;
 const requireThat = (condition, message) => {
@@ -40,6 +48,7 @@ export function readChampion(store, id, nowMs) {
   if (!c) return null;
   const result = clone(c);
   result.ownerId = store.owner(id);
+  if (store.prize) result.prizeYocto = store.prize(id);
   if (result.day !== Math.floor(nowMs / 86400000)) result.earnedToday = 0;
   return result;
 }
@@ -76,7 +85,19 @@ export function applyAction(store, context, action) {
     "Invalid champion id",
   );
   const old = store.used.get(action.id);
-  if (old) return { ...old, duplicate: true };
+  if (old) {
+    requireThat(
+      !context.depositYocto || context.depositYocto === "0",
+      "Duplicate receipt cannot accept payment",
+    );
+    return { ...old, duplicate: true };
+  }
+  requireThat(
+    action.operation === "mint" ||
+      !context.depositYocto ||
+      context.depositYocto === "0",
+    "Unexpected native payment",
+  );
   requireThat(
     number(action.expiresAt, Number.MAX_SAFE_INTEGER) &&
       action.expiresAt >= context.nowMs &&
@@ -180,7 +201,10 @@ export function applyAction(store, context, action) {
   } else {
     c = owned(store, action.championId, action.ownerId, action.revision);
     unlocked(c);
-    if (action.operation === "solo") {
+    if (MARKET_OPERATIONS.includes(action.operation)) {
+      requireThat(store.marketAction, "Market is unavailable");
+      store.marketAction(c, context, action);
+    } else if (action.operation === "solo") {
       requireThat(
         number(data.earnedCoins, 100000) &&
           number(data.floor, 5) &&
@@ -216,6 +240,39 @@ export function applyAction(store, context, action) {
       c.coins -= cost;
       c.skills.push(data.skill);
       c.build.skills[data.skill] = Math.max(c.build.skills[data.skill] ?? 0, 1);
+    } else if (action.operation === "upgrade") {
+      // "+" on equipped gear. The referee draws the roll and signs it into the
+      // receipt; cost, odds and the level cap are enforced here.
+      requireThat(
+        data.slot === "weapon" || data.slot === "armor",
+        "Invalid gear slot",
+      );
+      requireThat(number(data.roll, 99), "Invalid roll");
+      requireThat(c.equipped?.[data.slot], "Nothing equipped in that slot");
+      const key = data.slot === "weapon" ? "weaponLevel" : "armorLevel";
+      const level = c.build[key];
+      requireThat(level < MAX_GEAR_LEVEL, "Gear is already at its limit");
+      requireThat(
+        data.fromLevel === level && data.gearId === c.equipped[data.slot],
+        "Equipped gear changed; refresh",
+      );
+      const cost = upgradeCost(level);
+      requireThat(c.coins >= cost, "Not enough coin");
+      c.coins -= cost;
+      if (data.roll < upgradeChance(level)) {
+        c.build[key] = level + 1;
+        store.upgradeGear(c, data.slot, level + 1);
+      }
+    } else if (action.operation === "claim") {
+      // Hand the champion, its equipped gear and its vault to a wallet the player names.
+      requireThat(
+        typeof data.receiver === "string" &&
+          context.validAccount(data.receiver) &&
+          data.receiver !== action.ownerId,
+        "Invalid receiver",
+      );
+      c.defending = false;
+      store.transfer(c, data.receiver);
     } else if (action.operation === "defense") {
       requireThat(typeof data.enabled === "boolean", "Invalid defense setting");
       if (data.enabled)

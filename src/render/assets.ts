@@ -7,6 +7,36 @@ interface ModelSpec {
   file: string;
   height: number;
   rotationY: number;
+  /** Seconds of a clip to keep, per state: { attack: [0.35, 0.85] }. */
+  windows?: Record<string, [number, number]>;
+}
+
+/** Keep animated characters on their simulation position and trim clips to the part that reads at game speed. */
+function prepareClips(
+  clips: THREE.AnimationClip[],
+  windows: Record<string, [number, number]> = {},
+): THREE.AnimationClip[] {
+  return clips.map((source) => {
+    let clip = source.clone();
+    for (const track of clip.tracks) {
+      if (!/^(hips|pelvis|root)\.position$/i.test(track.name)) continue;
+      const v = track.values;
+      for (let i = 3; i < v.length; i += 3) {
+        v[i] = v[0];
+        v[i + 2] = v[2];
+      }
+    }
+    const window = windows[clip.name.toLowerCase()];
+    if (window)
+      clip = THREE.AnimationUtils.subclip(
+        clip,
+        clip.name,
+        Math.round(window[0] * 30),
+        Math.round(window[1] * 30),
+        30,
+      );
+    return clip;
+  });
 }
 interface Manifest {
   version: number;
@@ -26,17 +56,28 @@ export class AnimatedModel {
   private allMaterials = new Set<THREE.Material>();
   private content: THREE.Object3D;
 
-  constructor(template: GLTF, height: number, rotationY: number) {
+  constructor(
+    template: GLTF,
+    height: number,
+    rotationY: number,
+    clips: THREE.AnimationClip[] = template.animations,
+  ) {
     this.content = clone(template.scene);
     this.content.traverse((node) => {
       if (!(node instanceof THREE.Mesh)) return;
       node.castShadow = true;
       node.receiveShadow = true;
+      // Skinned bounds are only valid for the bind pose; a handful of actors is cheap to always draw.
+      if (node instanceof THREE.SkinnedMesh) node.frustumCulled = false;
       const copy = (material: THREE.Material) => {
         const m = material.clone();
         this.allMaterials.add(m);
-        if (m instanceof THREE.MeshStandardMaterial)
+        if (m instanceof THREE.MeshStandardMaterial) {
+          // matte: no environment map exists, so metal would render black
+          m.metalness = 0;
+          m.roughness = 1;
           this.materials.push({ material: m, base: m.emissive.clone() });
+        }
         return m;
       };
       node.material = Array.isArray(node.material)
@@ -46,19 +87,57 @@ export class AnimatedModel {
     const fit = new THREE.Group();
     fit.add(this.content);
     fit.rotation.y = (rotationY * Math.PI) / 180;
-    const box = new THREE.Box3().setFromObject(fit);
+    // Bones must have world matrices before a skinned mesh can be measured.
+    fit.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(fit, true);
     const scale = height / Math.max(0.01, box.getSize(new THREE.Vector3()).y);
     fit.scale.setScalar(scale);
     fit.updateMatrixWorld(true);
-    box.setFromObject(fit);
+    box.setFromObject(fit, true);
     const center = box.getCenter(new THREE.Vector3());
     fit.position.set(-center.x, -box.min.y, -center.z);
     this.root.add(fit);
+    this.addOutline(box.getSize(new THREE.Vector3()).length());
     this.mixer = new THREE.AnimationMixer(this.content);
-    for (const clip of template.animations)
+    for (const clip of clips)
       this.actions.set(clip.name.toLowerCase(), this.mixer.clipAction(clip));
   }
-  play(state: string) {
+  /** Dark ink line around a skinned figure (inverted hull), for the illustrated 2.5D look. */
+  private addOutline(worldDiagonal: number) {
+    const skinned: THREE.SkinnedMesh[] = [];
+    this.content.traverse((node) => {
+      if (node instanceof THREE.SkinnedMesh) skinned.push(node);
+    });
+    for (const mesh of skinned) {
+      mesh.geometry.computeBoundingBox();
+      const local = mesh.geometry.boundingBox!.getSize(new THREE.Vector3()).length();
+      const width = (0.035 * local) / Math.max(0.001, worldDiagonal);
+      const ink = new THREE.MeshBasicMaterial({ color: 0x120a0a, side: THREE.BackSide });
+      ink.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader.replace(
+          "#include <begin_vertex>",
+          `#include <begin_vertex>\n  transformed += normalize(objectNormal) * ${width.toFixed(6)};`,
+        );
+      };
+      this.allMaterials.add(ink);
+      const hull = new THREE.SkinnedMesh(mesh.geometry, ink);
+      hull.bind(mesh.skeleton, mesh.bindMatrix);
+      hull.position.copy(mesh.position);
+      hull.quaternion.copy(mesh.quaternion);
+      hull.scale.copy(mesh.scale);
+      hull.frustumCulled = false;
+      mesh.parent?.add(hull);
+    }
+  }
+  /** A skeleton bone by name, for attaching held items. */
+  bone(name: string): THREE.Object3D | null {
+    let found: THREE.Object3D | null = null;
+    this.content.traverse((node) => {
+      if (!found && node.name === name) found = node;
+    });
+    return found;
+  }
+  play(state: string, seconds?: number) {
     const next =
       this.actions.get(state) ??
       this.actions.get("idle") ??
@@ -71,7 +150,8 @@ export class AnimatedModel {
       this.actions.get(state) === next;
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
     next.clampWhenFinished = once;
-    const duration = state === "attack" ? 0.2 : state === "dash" ? 0.16 : 0;
+    const duration =
+      seconds ?? (state === "attack" ? 0.2 : state === "dash" ? 0.16 : 0);
     next.setEffectiveTimeScale(
       duration && once ? next.getClip().duration / duration : 1,
     );
@@ -107,6 +187,7 @@ export class ModelLibrary {
   private loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   private models = new Map<string, Promise<GLTF | null>>();
   private floors = new Map<string, Promise<THREE.Texture | null>>();
+  private clips = new Map<string, THREE.AnimationClip[]>();
   private manifest: Promise<Manifest> = fetch("/assets/manifest.json")
     .then(async (r) => {
       if (!r.ok) throw new Error("No asset manifest");
@@ -131,10 +212,16 @@ export class ModelLibrary {
       );
     const template = await this.models.get(spec.file)!;
     if (!template) return null;
+    if (!this.clips.has(spec.file))
+      this.clips.set(
+        spec.file,
+        prepareClips(template.animations, spec.windows),
+      );
     const model = new AnimatedModel(
       template,
       height ?? spec.height,
       spec.rotationY ?? 90,
+      this.clips.get(spec.file),
     );
     if (kind === "warden") model.tint(0x9c719e);
     if (kind === "champion") model.tint(0xbd6970);

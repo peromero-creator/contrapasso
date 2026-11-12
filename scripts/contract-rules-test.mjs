@@ -12,6 +12,7 @@ const maps = {
   duels: new Map(),
   used: new Map(),
   owners: new Map(),
+  gearLevels: new Map(),
 };
 const store = {
   champions: {
@@ -30,6 +31,9 @@ const store = {
   pendingTransfer: () => false,
   mint: (c, owner) => maps.owners.set(c.id, owner),
   recordKills: () => {},
+  transfer: (c, receiver) => maps.owners.set(c.id, receiver),
+  upgradeGear: (c, slot, level) =>
+    maps.gearLevels.set(`${slot}:${c.id}`, level),
 };
 let now = Date.UTC(2026, 10, 12, 12),
   seq = 0;
@@ -187,6 +191,79 @@ apply(
 assert.ok(maps.champions.get("alice").skills.includes("reach"));
 now += 86400000;
 assert.equal(readChampion(store, "alice", now).earnedToday, 0);
+// "+" upgrades: cost, odds, cap, and a failure that burns only the coin
+{
+  const buyer = { ownerId: "buyer.testnet" };
+  const champion = () => maps.champions.get("alice");
+  const up = (roll, slot = "weapon") =>
+    apply(
+      action(
+        "alice",
+        "upgrade",
+        {
+          slot,
+          roll,
+          fromLevel:
+            champion().build[slot === "weapon" ? "weaponLevel" : "armorLevel"],
+          gearId: champion().equipped[slot],
+        },
+        buyer,
+      ),
+    );
+  Object.assign(champion(), { coins: 500, lockedBy: null });
+  champion().build.weaponLevel = 0;
+  up(99);
+  assert.equal(champion().build.weaponLevel, 1, "+1 to +3 always succeed");
+  assert.equal(champion().coins, 485);
+  assert.equal(maps.gearLevels.get("weapon:alice"), 1);
+  champion().build.weaponLevel = 3;
+  up(85);
+  assert.equal(
+    champion().build.weaponLevel,
+    3,
+    "a failed roll keeps the level",
+  );
+  assert.equal(champion().coins, 440, "a failed roll still burns the coin");
+  up(84);
+  assert.equal(champion().build.weaponLevel, 4);
+  champion().build.weaponLevel = 6;
+  up(70);
+  assert.equal(champion().build.weaponLevel, 6);
+  up(69, "weapon");
+  assert.equal(champion().build.weaponLevel, 7);
+  up(0, "armor");
+  assert.equal(champion().build.armorLevel, 1);
+  assert.throws(() => up(100), /roll/);
+  assert.throws(() => up(0, "ring"), /slot/);
+  champion().build.weaponLevel = 9;
+  assert.throws(() => up(0), /limit/);
+  champion().build.weaponLevel = 2;
+  champion().coins = 10;
+  assert.throws(() => up(0), /coin/);
+  assert.equal(champion().coins, 10);
+}
+// claim to a wallet: the champion and its vault leave the guest account
+{
+  const buyer = { ownerId: "buyer.testnet" };
+  const coins = maps.champions.get("alice").coins;
+  assert.throws(
+    () =>
+      apply(action("alice", "claim", { receiver: "not-an-account" }, buyer)),
+    /receiver/,
+  );
+  assert.throws(
+    () => apply(action("alice", "claim", { receiver: "buyer.testnet" }, buyer)),
+    /receiver/,
+  );
+  apply(action("alice", "claim", { receiver: "wallet.testnet" }, buyer));
+  assert.equal(maps.owners.get("alice"), "wallet.testnet");
+  assert.equal(maps.champions.get("alice").coins, coins, "the vault travels");
+  assert.equal(maps.champions.get("alice").defending, false);
+  assert.throws(
+    () => apply(action("alice", "train", { skill: "ash" }, buyer)),
+    /ownership/,
+  );
+}
 console.log(
-  "Contract rules: PASS (Ed25519, nonce/domain/expiry/revision, daily cap, training, escrow, timeout, NFT ownership and vault)",
+  "Contract rules: PASS (Ed25519, nonce/domain/expiry/revision, daily cap, training, gear upgrades, wallet claim, escrow, timeout, NFT ownership and vault)",
 );

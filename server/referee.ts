@@ -1,8 +1,14 @@
 import {
+  MARKET_OPERATIONS,
+  type MarketIntent,
+  type MarketOperation,
+} from "../src/shared/market.ts";
+import {
   createHash,
   createPublicKey,
   generateKeyPairSync,
   randomBytes,
+  randomInt,
   randomUUID,
   sign,
   type KeyObject,
@@ -12,7 +18,14 @@ import { join } from "node:path";
 import { createWorld, createDuelWorld, step } from "../src/sim/world.ts";
 import { SIM_VERSION, unpackInput } from "../src/sim/input.ts";
 import { SKILL_IDS, SKILLS, type SkillId } from "../src/sim/skills.ts";
-import { copyBuild, fairMatch, DUEL_STAKE } from "../src/sim/build.ts";
+import {
+  copyBuild,
+  fairMatch,
+  DUEL_STAKE,
+  MAX_GEAR_LEVEL,
+  upgradeCost,
+  upgradeChance,
+} from "../src/sim/build.ts";
 import type {
   Champion,
   Receipt,
@@ -21,6 +34,7 @@ import type {
   ChainOperation,
   ChainStatus,
   DuelOpponent,
+  UpgradeOutcome,
 } from "../src/shared/protocol.ts";
 
 export const DAILY_CAP = 300;
@@ -28,6 +42,9 @@ export const MAX_TICKS = 60 * 60 * 20;
 type Account = Omit<Champion, "dailyCap"> & {
   day: string;
   chainProvisioned?: boolean;
+  /** Set once the champion NFT was handed to the player's own wallet. */
+  claimedBy?: string;
+  claimedSession?: string;
 };
 type Run = RunChallenge & {
   owner: string;
@@ -44,6 +61,7 @@ interface State {
   accounts: Record<string, Account>;
   runs: Record<string, Run>;
   outbox: ChainOperation[];
+  marketIntents?: Record<string, MarketIntent & { owner: string }>;
 }
 export class RefereeError extends Error {
   status: number;
@@ -64,6 +82,8 @@ export class Referee {
   private file: string | null;
   private now: () => number;
   private nextSeed: () => number;
+  /** 0..99, drawn for each "+" attempt and signed into its receipt. */
+  private roll: () => number;
   private persisted = "";
 
   constructor(
@@ -72,10 +92,12 @@ export class Referee {
       now?: () => number;
       key?: KeyObject;
       seed?: () => number;
+      roll?: () => number;
     } = {},
   ) {
     this.now = options.now ?? Date.now;
     this.nextSeed = options.seed ?? (() => randomBytes(4).readUInt32LE());
+    this.roll = options.roll ?? (() => randomInt(100));
     this.file = options.directory
       ? join(options.directory, "state.json")
       : null;
@@ -101,6 +123,7 @@ export class Referee {
       }
     }
     for (const a of Object.values(this.state.accounts)) {
+      a.equipped ??= { weapon: `weapon:${a.id}`, armor: `armor:${a.id}` };
       a.build ??= { skills: {}, weaponLevel: 0, armorLevel: 0 };
       if (!a.bestFloor && a.runs) {
         const best = Object.values(this.state.runs)
@@ -164,10 +187,21 @@ export class Referee {
       },
     });
   }
-  private account(owner: string): Account {
+  private account(owner: string, playable = false): Account {
     this.expireDuels();
     const a = this.state.accounts[owner];
     demand(a, "Session expired. Reload and try again.", 401);
+    if (playable)
+      demand(
+        !this.state.outbox.some(
+          (e) =>
+            e.championId === a.id &&
+            (e.operation === "claim" ||
+              MARKET_OPERATIONS.includes(e.operation as MarketOperation)),
+        ),
+        "Your champion has a pending transfer or market action. Confirm it first.",
+        409,
+      );
     const day = new Date(this.now()).toISOString().slice(0, 10);
     if (a.day !== day) {
       a.day = day;
@@ -216,6 +250,13 @@ export class Referee {
     );
     const token = randomBytes(32).toString("base64url");
     const owner = createHash("sha256").update(token).digest("hex");
+    const a = this.freshAccount();
+    this.state.accounts[owner] = a;
+    this.register(a);
+    this.save();
+    return { token, owner };
+  }
+  private freshAccount(): Account {
     const a: Account = {
       id: randomUUID(),
       coins: 0,
@@ -231,19 +272,20 @@ export class Referee {
       defending: false,
       lockedBy: null,
     };
-    this.state.accounts[owner] = a;
-    this.register(a);
-    this.save();
-    return { token, owner };
+    a.equipped = { weapon: `weapon:${a.id}`, armor: `armor:${a.id}` };
+    return a;
   }
   profile(owner: string): Champion {
     const {
       day: _day,
       chainProvisioned: _provisioned,
+      claimedBy: _claimed,
+      claimedSession: _session,
       ...profile
     } = this.account(owner);
     return {
       ...profile,
+      pendingClaim: this.pendingClaim(profile.id),
       skills: [...profile.skills],
       build: copyBuild(profile.build),
       dailyCap: DAILY_CAP,
@@ -258,7 +300,7 @@ export class Referee {
     };
   }
   begin(owner: string, retry?: unknown, abandon?: unknown): RunChallenge {
-    const a = this.account(owner);
+    const a = this.account(owner, true);
     demand(!a.lockedBy, "Finish your Duel first.");
     const now = this.now();
     if (typeof abandon === "string") {
@@ -339,7 +381,7 @@ export class Referee {
     });
   }
   train(owner: string, id: unknown): Champion {
-    const a = this.account(owner);
+    const a = this.account(owner, true);
     demand(!a.lockedBy, "Finish your Duel first.");
     demand(
       typeof id === "string" && SKILL_IDS.includes(id as SkillId),
@@ -360,8 +402,100 @@ export class Referee {
     this.save();
     return this.profile(owner);
   }
-  defense(owner: string, enabled: unknown): Champion {
+  /**
+   * Hand the champion NFT (with equipped gear and vault) to the player's own wallet.
+   * The guest session cannot play a champion it no longer owns, so it starts a new one.
+   */
+  pendingClaim(id: string) {
+    const event = this.state.outbox.find(
+      (e) => e.championId === id && e.operation === "claim",
+    );
+    return event
+      ? { receiver: String(event.data.receiver), operationId: event.id }
+      : undefined;
+  }
+  claim(
+    owner: string,
+    receiver: unknown,
+    championId: unknown,
+  ): { championId: string; receiver: string; pending: boolean } {
+    demand(typeof championId === "string", "Choose the champion to transfer.");
+    const completed = this.state.accounts[`claimed:${championId}`];
+    if (completed) {
+      demand(
+        completed.claimedSession === owner && completed.claimedBy === receiver,
+        "That champion has already moved.",
+        409,
+      );
+      return { championId, receiver: String(receiver), pending: false };
+    }
     const a = this.account(owner);
+    demand(
+      a.id === championId,
+      "Your champion changed. Review the NFT page again.",
+      409,
+    );
+    demand(!a.lockedBy, "Finish your Duel first.");
+    demand(
+      typeof receiver === "string" &&
+        receiver.length <= 64 &&
+        (/^(?:[a-z0-9]+(?:[-_][a-z0-9]+)*\.)+testnet$/.test(receiver) ||
+          /^[a-f0-9]{64}$/.test(receiver)),
+      "Enter a NEAR testnet account, like yourname.testnet.",
+    );
+    demand(a.chainProvisioned, "Your champion is not on testnet yet.", 409);
+    demand(
+      receiver !== a.chain?.accountId,
+      "This champion already belongs to that account.",
+    );
+    const pending = this.pendingClaim(a.id);
+    if (pending)
+      demand(
+        pending.receiver === receiver,
+        "Another wallet transfer is pending.",
+        409,
+      );
+    else {
+      this.enqueue({
+        id: `claim:${randomUUID()}`,
+        operation: "claim",
+        championId: a.id,
+        data: { receiver },
+      });
+      this.save();
+    }
+    return { championId: a.id, receiver, pending: true };
+  }
+  /** Transaction that carried a claimed champion out, once the chain confirmed it. */
+  claimTransaction(championId: string): string | undefined {
+    return this.state.accounts[`claimed:${championId}`]?.chain?.lastTransaction;
+  }
+  /** One "+" attempt on equipped gear: burns coin, may raise the level. */
+  upgrade(owner: string, slot: unknown): UpgradeOutcome {
+    const a = this.account(owner, true);
+    demand(!a.lockedBy, "Finish your Duel first.");
+    demand(slot === "weapon" || slot === "armor", "Unknown gear.");
+    const key = slot === "weapon" ? "weaponLevel" : "armorLevel";
+    const level = a.build[key];
+    demand(level < MAX_GEAR_LEVEL, "This gear is already +9.", 409);
+    demand(a.equipped?.[slot], "Nothing is equipped in that slot.");
+    const cost = upgradeCost(level);
+    demand(a.coins >= cost, "Earn more coin in Solo first.");
+    const roll = this.roll();
+    const success = roll < upgradeChance(level);
+    a.coins -= cost;
+    if (success) a.build[key] = level + 1;
+    this.enqueue({
+      id: `upgrade:${randomUUID()}`,
+      operation: "upgrade",
+      championId: a.id,
+      data: { slot, roll, fromLevel: level, gearId: a.equipped![slot] },
+    });
+    this.save();
+    return { slot, success, level: a.build[key], cost };
+  }
+  defense(owner: string, enabled: unknown): Champion {
+    const a = this.account(owner, true);
     demand(typeof enabled === "boolean", "Invalid defense setting.");
     demand(!a.lockedBy, "Finish your Duel first.");
     if (enabled)
@@ -400,7 +534,7 @@ export class Referee {
       }));
   }
   beginDuel(owner: string, opponentId: unknown): RunChallenge {
-    const a = this.account(owner);
+    const a = this.account(owner, true);
     if (a.lockedBy) {
       const active = this.state.runs[a.lockedBy];
       if (
@@ -692,6 +826,108 @@ export class Referee {
     this.save();
     return this.profile(owner);
   }
+  marketIntent(owner: string, id: unknown): MarketIntent | null {
+    if (typeof id !== "string") return null;
+    const saved = this.state.marketIntents?.[id];
+    if (!saved) return null;
+    demand(
+      saved.owner === owner,
+      "This action belongs to another session.",
+      403,
+    );
+    const { owner: _owner, ...publicIntent } = saved;
+    return structuredClone(publicIntent);
+  }
+  queueMarket(
+    owner: string,
+    id: unknown,
+    operation: unknown,
+    raw: unknown,
+  ): MarketIntent {
+    demand(
+      typeof id === "string" && /^[a-f0-9-]{36}$/.test(id),
+      "Invalid action id.",
+    );
+    demand(
+      typeof operation === "string" &&
+        MARKET_OPERATIONS.includes(operation as MarketOperation),
+      "Unknown market action.",
+    );
+    demand(
+      raw && typeof raw === "object" && !Array.isArray(raw),
+      "Invalid market data.",
+    );
+    const body = raw as Record<string, unknown>,
+      data: Record<string, unknown> = {};
+    if (
+      ["reserve_mint", "cancel_mint", "mint", "tickets", "draw_round"].includes(
+        operation,
+      )
+    ) {
+      demand(
+        typeof body.roundId === "string" &&
+          /^[a-z0-9-]{1,40}$/.test(body.roundId),
+        "Choose a mint round.",
+      );
+      data.roundId = body.roundId;
+    }
+    if (operation === "tickets") {
+      demand(
+        Number.isSafeInteger(body.count) &&
+          Number(body.count) > 0 &&
+          Number(body.count) <= 10,
+        "Choose 1 to 10 tickets.",
+      );
+      data.count = body.count;
+    }
+    if (operation === "equip_gear" || operation === "unequip_gear") {
+      demand(
+        body.slot === "weapon" || body.slot === "armor",
+        "Invalid gear slot.",
+      );
+      data.slot = body.slot;
+      if (operation === "equip_gear") {
+        demand(
+          typeof body.gearId === "string" && body.gearId.length <= 160,
+          "Choose a gear NFT.",
+        );
+        data.gearId = body.gearId;
+      }
+    }
+    const existing = this.marketIntent(owner, id);
+    if (existing) {
+      demand(
+        existing.operation === operation &&
+          JSON.stringify(existing.data) === JSON.stringify(data),
+        "Action id was used for different choices.",
+        409,
+      );
+      return existing;
+    }
+    const a = this.account(owner, true);
+    demand(
+      a.chainProvisioned && !a.lockedBy,
+      "Save your testnet champion and finish the Duel first.",
+      409,
+    );
+    const intent = {
+      id,
+      owner,
+      championId: a.id,
+      operation: operation as MarketOperation,
+      data,
+      complete: false,
+    };
+    (this.state.marketIntents ??= {})[id] = intent;
+    this.enqueue({
+      id: `market:${id}`,
+      operation: intent.operation,
+      championId: a.id,
+      data,
+    });
+    this.save();
+    return this.marketIntent(owner, id)!;
+  }
   pendingChainOperations(): ChainOperation[] {
     this.expireDuels();
     return structuredClone(this.state.outbox);
@@ -705,7 +941,18 @@ export class Referee {
     );
     return entry ? this.profile(entry[0]) : null;
   }
-  acknowledgeChain(id: string, statuses: Record<string, ChainStatus>) {
+  noteChainTransaction(id: string, transactionHash: string) {
+    const event = this.state.outbox.find((e) => e.id === id);
+    if (event) {
+      event.transactionHash = transactionHash;
+      this.save();
+    }
+  }
+  acknowledgeChain(
+    id: string,
+    statuses: Record<string, ChainStatus>,
+    states: Record<string, any> = {},
+  ) {
     const event = this.state.outbox.find((e) => e.id === id);
     if (!event) return;
     for (const a of Object.values(this.state.accounts))
@@ -714,7 +961,32 @@ export class Referee {
         if (event.operation === "register" && event.championId === a.id)
           a.chainProvisioned = true;
       }
+    if (event.operation === "claim") {
+      const entry = Object.entries(this.state.accounts).find(
+        ([owner, a]) =>
+          !owner.startsWith("claimed:") && a.id === event.championId,
+      );
+      if (entry) {
+        const [owner, a] = entry;
+        a.defending = false;
+        a.claimedBy = String(event.data.receiver);
+        a.claimedSession = owner;
+        this.state.accounts[`claimed:${a.id}`] = a;
+        for (const run of Object.values(this.state.runs))
+          if (run.owner === owner && !run.receipt) run.cancelled = true;
+        const fresh = this.freshAccount();
+        this.state.accounts[owner] = fresh;
+        this.register(fresh);
+      }
+    }
     this.state.outbox = this.state.outbox.filter((e) => e.id !== id);
+    const intent = this.state.marketIntents?.[id.replace(/^market:/, "")];
+    if (intent) {
+      intent.complete = true;
+      intent.transaction = event.transactionHash;
+      for (const [championId, state] of Object.entries(states))
+        this.applyChainState(championId, state);
+    }
     this.save();
   }
   /** Only called after chain views prove the operation cannot apply. No uncertain transaction is rolled back. */
@@ -725,6 +997,12 @@ export class Referee {
   ) {
     const event = this.state.outbox.find((e) => e.id === id);
     if (!event) return;
+    const intent = this.state.marketIntents?.[id.replace(/^market:/, "")];
+    if (intent) {
+      intent.complete = true;
+      intent.error = reason;
+      intent.transaction = event.transactionHash;
+    }
     const runId =
       event.operation === "duel_open" ? event.data.duelId : undefined;
     this.state.outbox = this.state.outbox.filter(
@@ -769,6 +1047,8 @@ export class Referee {
       "defending",
       "lockedBy",
       "build",
+      "equipped",
+      "prizeYocto",
     ] as const)
       (a as any)[key] = structuredClone(state[key]);
     a.earnedToday = state.earnedToday;

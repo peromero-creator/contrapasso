@@ -1,3 +1,10 @@
+import { NotEnoughBalanceError } from "near-api-js/rpc-errors";
+import {
+  MARKET_OPERATIONS,
+  type MarketOperation,
+  type MarketView,
+  MINT_PRICE_YOCTO,
+} from "../src/shared/market.ts";
 import {
   Account,
   type Provider,
@@ -14,6 +21,8 @@ import type {
   Champion,
   ChainOperation,
   ChainStatus,
+  NftView,
+  NftToken,
 } from "../src/shared/protocol.ts";
 import { testnetProvider, TESTNET_RPC_URLS } from "./rpc.ts";
 import { sameBuild } from "../src/sim/build.ts";
@@ -25,6 +34,8 @@ export interface NearConfig {
   contractId: string;
   secretKey: KeyPairString;
   deploymentTransaction?: string;
+  /** Receipt operations the deployed contract understands beyond the first release. */
+  features?: string[];
 }
 export function loadNearConfig(directory: string): NearConfig | null {
   try {
@@ -50,6 +61,7 @@ export class NearBridge {
   private provider: Provider | null = null;
   private account: Account | null = null;
   private checked = false;
+  private features: string[] = [];
   private guests: Record<
     string,
     { accountId: string; secretKey: KeyPairString }
@@ -99,6 +111,9 @@ export class NearBridge {
     const config = await this.view("game_config", {});
     if (config.referee_public_key !== this.referee.publicKeyHex)
       throw new Error("Referee key does not match the testnet contract");
+    this.features = Array.isArray(config.features)
+      ? config.features.filter((f: unknown) => typeof f === "string")
+      : [];
     this.checked = true;
   }
   private async view(
@@ -111,6 +126,136 @@ export class NearBridge {
       args,
     });
   }
+  supports(feature: string) {
+    return this.features.includes(feature);
+  }
+  /** Whether a NEAR account exists on testnet (so a claim cannot go to a typo). */
+  async accountExists(accountId: string): Promise<boolean> {
+    if (!this.config) return false;
+    await this.ready();
+    try {
+      await this.provider!.viewAccount({ accountId });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  /** The champion and gear NFTs exactly as the contract reports them. */
+  async tokens(profile: Champion): Promise<NftView> {
+    const ids = [
+      `champion:${profile.id}`,
+      `weapon:${profile.id}`,
+      `armor:${profile.id}`,
+    ];
+    if (!this.config)
+      return {
+        onChain: false,
+        tokens: [
+          {
+            tokenId: ids[0],
+            ownerId: "local preview",
+            title: `The Unforgiven / ${profile.id.slice(0, 8)}`,
+            extra: {
+              kind: "champion",
+              coins: profile.coins,
+              skills: profile.skills,
+              runs: profile.runs,
+              victories: profile.victories,
+              duelWins: profile.duelWins,
+              duelLosses: profile.duelLosses,
+              bestFloor: profile.bestFloor,
+            },
+          },
+          {
+            tokenId: ids[1],
+            ownerId: "local preview",
+            title: "Cinder / Starter Blade",
+            extra: {
+              kind: "weapon",
+              level: profile.build.weaponLevel,
+              bound: true,
+            },
+          },
+          {
+            tokenId: ids[2],
+            ownerId: "local preview",
+            title: "Ash / Starter Armor",
+            extra: {
+              kind: "armor",
+              level: profile.build.armorLevel,
+              bound: true,
+            },
+          },
+        ],
+      };
+    await this.ready();
+    const tokens: NftToken[] = [];
+    const inventory: any[] = [];
+    for (let offset = 0; offset < 1000; offset += 50) {
+      const page = await this.view("nft_tokens_for_owner", {
+        account_id: this.guest(profile.id).accountId,
+        from_index: String(offset),
+        limit: 50,
+      });
+      inventory.push(...page);
+      if (page.length < 50) break;
+    }
+    for (const token of inventory) {
+      const id = token.token_id;
+      if (!token) continue;
+      let extra: Record<string, unknown> = {};
+      try {
+        extra = JSON.parse(token.metadata?.extra ?? "{}");
+      } catch {
+        /* show the token without its details */
+      }
+      tokens.push({
+        tokenId: token.token_id,
+        ownerId: token.owner_id,
+        title: token.metadata?.title ?? id,
+        extra,
+      });
+    }
+    return {
+      onChain: true,
+      contractId: this.config.contractId,
+      features: [...this.features],
+      tokens,
+    };
+  }
+  async market(profile: Champion): Promise<MarketView> {
+    if (!this.config)
+      return {
+        onChain: false,
+        round: null,
+        reservation: null,
+        prizeYocto: "0",
+        sponsored: false,
+        fundingAvailable: false,
+        pendingNative: false,
+        history: [],
+      };
+    await this.ready();
+    if (!this.supports("market"))
+      throw new RefereeError(
+        "The Reliquary opens after its testnet update.",
+        503,
+      );
+    const market = await this.view("market_view", { champion_id: profile.id });
+    let nativeBalanceYocto: string | undefined;
+    try {
+      nativeBalanceYocto = String(
+        (
+          await this.provider!.viewAccount({
+            accountId: this.guest(profile.id).accountId,
+          })
+        ).amount,
+      );
+    } catch {
+      /* An unfunded implicit guest account has no native balance yet. */
+    }
+    return { ...market, onChain: true, nativeBalanceYocto };
+  }
   status(profile: Champion): Champion {
     if (!this.config) return profile;
     const guest = this.guest(profile.id);
@@ -121,6 +266,7 @@ export class NearBridge {
         contractId: this.config.contractId,
         accountId: guest.accountId,
         tokenId: `champion:${profile.id}`,
+        features: [...this.features],
         revision: profile.chain?.revision ?? 0,
         lastTransaction: profile.chain?.lastTransaction,
         pending: !profile.chain || profile.chain.pending,
@@ -132,13 +278,18 @@ export class NearBridge {
     await this.ready();
     let failure: unknown;
     const blocked = new Set<string>();
-    for (const event of this.referee.pendingChainOperations()) {
-      if (
-        !this.referee.pendingChainOperations().some((e) => e.id === event.id) ||
-        blocked.has(event.championId) ||
-        (event.opponentId && blocked.has(event.opponentId))
-      )
-        continue;
+    const attempted = new Set<string>();
+    for (let count = 0; count < 2000; count++) {
+      const event = this.referee
+        .pendingChainOperations()
+        .find(
+          (e) =>
+            !attempted.has(e.id) &&
+            !blocked.has(e.championId) &&
+            (!e.opponentId || !blocked.has(e.opponentId)),
+        );
+      if (!event) break;
+      attempted.add(event.id);
       try {
         await this.apply(event);
       } catch (e) {
@@ -152,7 +303,7 @@ export class NearBridge {
   private async apply(event: ChainOperation) {
     const accountId = this.guest(event.championId).accountId;
     let applied = await this.view("receipt_applied", { receipt_id: event.id });
-    let transaction: string | undefined;
+    let transaction = event.transactionHash;
     if (!applied) {
       const current = await this.view("get_champion", {
         champion_id: event.championId,
@@ -177,6 +328,45 @@ export class NearBridge {
           "This champion has moved to another owner. Its vault stays with the NFT.",
           409,
         );
+      }
+      if (
+        event.operation === "upgrade" &&
+        (current.equipped?.[String(event.data.slot)] !== event.data.gearId ||
+          current.build[
+            String(event.data.slot) === "weapon" ? "weaponLevel" : "armorLevel"
+          ] !== event.data.fromLevel)
+      ) {
+        this.referee.rejectChainOperation(
+          event.id,
+          { [event.championId]: current },
+          "Equipped gear changed.",
+        );
+        throw new RefereeError(
+          "Equipped gear changed; the upgrade was not charged. Refresh your forge.",
+          409,
+        );
+      }
+      if (event.operation === "mint") {
+        let balance = 0n;
+        try {
+          balance = BigInt(
+            (await this.provider!.viewAccount({ accountId })).amount,
+          );
+        } catch (error) {
+          if (
+            !["UnknownAccountError", "AccountDoesNotExistError"].includes(
+              (error as Error).name,
+            )
+          ) throw error;
+        }
+        if (balance < 150000000000000000000000n) {
+          this.referee.rejectChainOperation(
+            event.id,
+            { [event.championId]: current },
+            "Get demo test NEAR before minting. Your coin reservation is safe.",
+          );
+          return;
+        }
       }
       const data = { ...event.data };
       if (event.operation === "duel_open") {
@@ -221,36 +411,103 @@ export class NearBridge {
         data,
       });
       const signature = this.referee.signChainPayload(payload);
-      const outcome = await this.account!.callFunctionRaw({
-        contractId: this.config!.contractId,
-        methodName: "apply_receipt",
-        args: { payload, signature },
-        gas: 300000000000000n,
-        deposit: 0n,
-        waitUntil: "FINAL",
-      });
-      transaction = outcome.transaction.hash;
+      const paid = event.operation === "mint";
+      const signer = paid
+        ? new Account(
+            accountId,
+            this.provider!,
+            KeyPairSigner.fromSecretKey(this.guest(event.championId).secretKey),
+          )
+        : this.account!;
+      try {
+        const outcome = await signer.callFunctionRaw({
+          contractId: this.config!.contractId,
+          methodName: "apply_receipt",
+          args: { payload, signature },
+          gas: paid ? 120000000000000n : 300000000000000n,
+          deposit: paid ? BigInt(MINT_PRICE_YOCTO) : 0n,
+          waitUntil: "FINAL",
+        });
+        transaction = outcome.transaction.hash;
+        this.referee.noteChainTransaction(event.id, transaction);
+      } catch (error) {
+        // Reject only a final, known failed transaction with no applied receipt.
+        // Transport timeouts remain in the outbox and retry with the same receipt id.
+        const failure = error as {
+          txHash?: string;
+          transactionResult?: any;
+          message?: string;
+        };
+        if (failure.txHash)
+          this.referee.noteChainTransaction(event.id, failure.txHash);
+        if (
+          MARKET_OPERATIONS.includes(event.operation as MarketOperation) &&
+          (failure.transactionResult?.status?.Failure ||
+            (error instanceof NotEnoughBalanceError && !failure.txHash)) &&
+          !(await this.view("receipt_applied", { receipt_id: event.id }))
+        ) {
+          const state = await this.view("get_champion", {
+            champion_id: event.championId,
+          });
+          const known = [
+            "Not enough coin",
+            "This mint round is closed",
+            "All editions are reserved",
+            "The draw is not ready",
+            "Demo fund reserve is exhausted",
+            "Ticket limit reached",
+          ].find((message) => failure.message?.includes(message));
+          this.referee.rejectChainOperation(
+            event.id,
+            { [event.championId]: state },
+            known
+              ? `${known}. Refresh the Reliquary.`
+              : error instanceof NotEnoughBalanceError
+                ? "Not enough test NEAR for mint gas. Your reservation is safe."
+                : "The testnet action failed. No coin or mint payment was kept. Refresh and try again.",
+          );
+        }
+        throw error;
+      }
       applied = await this.view("receipt_applied", { receipt_id: event.id });
       if (!applied) throw new Error("Receipt confirmation unavailable");
     }
+    if (
+      (event.operation === "fund_guest" ||
+        event.operation === "withdraw_prize") &&
+      !applied.nativeComplete
+    )
+      throw new RefereeError("The testnet transfer is still confirming.", 409);
+    if (applied.nativeComplete && !applied.nativeSuccess) {
+      const state = await this.view("get_champion", {
+        champion_id: event.championId,
+      });
+      this.referee.rejectChainOperation(
+        event.id,
+        { [event.championId]: state },
+        "The native transfer failed; your prize remains in the champion vault.",
+      );
+      return;
+    }
     const statuses: Record<string, ChainStatus> = {};
+    const states: Record<string, any> = {};
     for (const id of [event.championId, event.opponentId].filter(
       Boolean,
     ) as string[]) {
       const state = await this.view("get_champion", { champion_id: id });
       if (!state) throw new Error("Champion confirmation unavailable");
+      states[id] = state;
       statuses[id] = {
         network: "testnet",
         contractId: this.config!.contractId,
-        accountId: this.guest(id).accountId,
+        accountId: state.ownerId,
         tokenId: `champion:${id}`,
         pending: false,
-        lastTransaction:
-          transaction ?? this.referee.chainProfile(id)?.chain?.lastTransaction,
+        lastTransaction: transaction,
         revision: state.revision,
       };
     }
-    this.referee.acknowledgeChain(event.id, statuses);
+    this.referee.acknowledgeChain(event.id, statuses, states);
   }
   private async rejectOpen(
     event: ChainOperation,

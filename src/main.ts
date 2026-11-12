@@ -1,3 +1,4 @@
+import type { MarketOperation, MarketView } from "./shared/market";
 import * as THREE from "three";
 import { View, CIRCLES } from "./render/view";
 import {
@@ -11,7 +12,14 @@ import {
 } from "./sim/world";
 import { dirIndex, DIRS } from "./sim/dirs";
 import { packInput, unpackInput, SIM_VERSION } from "./sim/input";
-import { buildPower, DUEL_TICKS } from "./sim/build";
+import {
+  buildPower,
+  DUEL_TICKS,
+  MAX_GEAR_LEVEL,
+  upgradeCost,
+  upgradeChance,
+  type GearSlot,
+} from "./sim/build";
 import { SKILLS, SKILL_IDS, rank, type SkillId } from "./sim/skills";
 import { Sound } from "./audio/sound";
 import { api } from "./api";
@@ -102,7 +110,7 @@ function refreshChampion() {
   if (chain)
     link.href = `https://testnet.nearblocks.io/address/${chain.accountId}`;
   $("champion-gear").textContent =
-    `Cinder blade +${champion.build.weaponLevel} · Ash armor +${champion.build.armorLevel} · Deepest circle ${champion.bestFloor} / 5`;
+    `${champion.equipped?.weapon?.startsWith("relic:") ? "Cinder Requiem" : "Cinder blade"} +${champion.build.weaponLevel} · Ash armor +${champion.build.armorLevel} · Deepest circle ${champion.bestFloor} / 5`;
   const duel = $<HTMLButtonElement>("mode-duel");
   duel.disabled = !chain || chain.pending;
   duel.classList.toggle("locked", duel.disabled);
@@ -412,6 +420,7 @@ function enterRun(next: RunChallenge) {
   if (next.version !== SIM_VERSION)
     throw new Error("The game has updated. Reload to continue.");
   challenge = next;
+  view.useRelic(!!champion?.equipped?.weapon?.startsWith("relic:"));
   world =
     next.mode === "duel"
       ? createDuelWorld(next.seed, next.challengerBuild!, next.opponent!.build)
@@ -602,8 +611,450 @@ function checkpointDuel() {
       checkpointPromise = null;
     });
 }
+const EXPLORER = "https://testnet.nearblocks.io";
+const escapeHtml = (text: unknown) =>
+  String(text).replace(
+    /[&<>"']/g,
+    (ch) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        ch
+      ]!,
+  );
+const shortAccount = (id: string) =>
+  id.length > 28 ? `${id.slice(0, 10)}…${id.slice(-8)}` : id;
+const nearAmount = (yocto: string) => {
+  const amount = BigInt(yocto),
+    whole = amount / 10n ** 24n;
+  const fraction = (amount % 10n ** 24n)
+    .toString()
+    .padStart(24, "0")
+    .slice(0, 5)
+    .replace(/0+$/, "");
+  return `${whole}${fraction ? "." + fraction : ""}`;
+};
+let marketState: MarketView | null = null;
+let renderedMarketOpen = false;
+let pendingMarket: {
+  championId: string;
+  id: string;
+  operation: MarketOperation;
+  data: Record<string, unknown>;
+} | null = null;
+try {
+  pendingMarket = JSON.parse(
+    sessionStorage.getItem("contrapasso-market") ?? "null",
+  );
+} catch {
+  /* Optional session storage. */
+}
+const marketButton = (op: MarketOperation, text: string, disabled = false) =>
+  `<button class="btn" data-market="${op}" ${disabled || busy || !!pendingMarket ? "disabled" : ""}>${text}</button>`;
+function renderMarket() {
+  if (!marketState || !champion) return;
+  const { round, reservation, prizeYocto } = marketState;
+  const open = !!round && !round.drawn && round.endsAt > Date.now();
+  renderedMarketOpen = open;
+  const metrics = (items: [string, string][]) =>
+    `<div class="market-metrics">${items.map(([n, v]) => `<div><b ${n === "Closes in" ? 'id="market-countdown"' : ""}>${escapeHtml(v)}</b><span>${n}</span></div>`).join("")}</div>`;
+  $("market-stats").innerHTML = metrics([
+    ["Minted / edition", `${round?.minted ?? 0} / ${round?.cap ?? 12}`],
+    ["Reserved", String(round?.reserved ?? 0)],
+    [
+      "Mint price",
+      `${nearAmount(round?.priceYocto ?? "10000000000000000000000")} test NEAR`,
+    ],
+    ["Your coin", String(champion.coins)],
+  ]);
+  let actions = "";
+  if (!round) actions = "The next edition has not opened yet.";
+  else if (reservation?.status === "minted")
+    actions = "Your relic is minted. Equip it from What You Own.";
+  else if (reservation?.status === "reserved") {
+    actions =
+      marketButton(
+        "mint",
+        "MINT RESERVED BLADE ↗",
+        !open ||
+          BigInt(marketState.nativeBalanceYocto ?? "0") <
+            150000000000000000000000n,
+      ) + marketButton("cancel_mint", "CANCEL · REFUND 10 COIN");
+  } else if (open)
+    actions = marketButton(
+      "reserve_mint",
+      "RESERVE · 10 COIN",
+      champion.runs < 1 ||
+        champion.coins < 10 ||
+        round.minted + round.reserved >= round.cap,
+    );
+  else actions = "This edition is closed. The next round will appear here.";
+  if (
+    open &&
+    !marketState.sponsored &&
+    BigInt(marketState.nativeBalanceYocto ?? "0") < 150000000000000000000000n
+  )
+    actions += marketButton(
+      "fund_guest",
+      marketState.fundingAvailable
+        ? "GET DEMO TEST NEAR"
+        : "DEMO FUNDING IS FULL",
+      !marketState.fundingAvailable || champion.runs < 1,
+    );
+  if (champion.runs < 1)
+    actions +=
+      "<p>Finish a Solo descent to earn mint access and demo funds.</p>";
+  $("market-actions").innerHTML = actions;
+  const held = round?.tickets[champion.id] ?? 0,
+    total = Object.values(round?.tickets ?? {}).reduce(
+      (n, count) => n + count,
+      0,
+    );
+  const remaining = round
+    ? Math.max(0, Math.ceil((round.endsAt - Date.now()) / 1000))
+    : 0;
+  $("raffle-stats").innerHTML = metrics([
+    ["Prize pool", `${nearAmount(round?.poolYocto ?? "0")} test NEAR`],
+    ["Your tickets / total", `${held} / ${total}`],
+    ["Round", round?.id ?? "Awaiting edition"],
+    [
+      round?.drawn ? "Draw" : "Closes in",
+      round?.drawn
+        ? `Block ${round.drawBlock}`
+        : `${Math.floor(remaining / 60)}m ${remaining % 60}s`,
+    ],
+  ]);
+  $("raffle-actions").innerHTML = open
+    ? `<label for="ticket-count">Tickets</label><select id="ticket-count" ${busy || pendingMarket ? "disabled" : ""}>${[
+        1, 2, 3, 5, 10,
+      ]
+        .filter((n) => held + n <= 10)
+        .map((n) => `<option value="${n}">${n} · ${n * 5} coin</option>`)
+        .join("")}</select>` +
+      marketButton(
+        "tickets",
+        "TAKE TICKETS",
+        held >= 10 || champion.coins < 5 || champion.runs < 1,
+      )
+    : round && !round.drawn
+      ? marketButton("draw_round", "DRAW & REFUND UNPAID SPOTS ↗")
+      : "";
+  $("raffle-winners").innerHTML = round?.drawn
+    ? (round.winners.length
+        ? round.winners
+            .map(
+              (w) =>
+                `${escapeHtml(w.championId === champion!.id ? "Your champion" : shortAccount(w.championId))} · ${nearAmount(w.amountYocto)} test NEAR`,
+            )
+            .join("<br>")
+        : "No tickets this round. The full pool carries into the next edition.") +
+      `<details><summary>Published draw seed</summary><code>${escapeHtml(round.entropy ?? "")}</code></details>`
+    : "";
+  $("prize-vault").innerHTML =
+    `<span class="eyebrow">YOUR CHAMPION’S PRIZE VAULT</span><h3>${nearAmount(prizeYocto)} TEST NEAR</h3><p>Withdraw to the current NFT owner. Taking the champion to your wallet takes this vault with it.</p>${marketButton("withdraw_prize", "WITHDRAW PRIZE ↗", BigInt(prizeYocto) === 0n)}`;
+  if (pendingMarket)
+    $("market-actions").insertAdjacentHTML(
+      "beforeend",
+      '<button class="btn ghost" data-market-retry="1">CHECK PENDING ACTION ↻</button>',
+    );
+}
+async function doMarket(
+  operation: MarketOperation,
+  data: Record<string, unknown>,
+  nft = false,
+) {
+  if (busy || !champion) return;
+  const out = $(nft ? "nft-action-result" : "market-result");
+  if (pendingMarket && pendingMarket.championId !== champion.id)
+    pendingMarket = null;
+  if (!pendingMarket)
+    pendingMarket = {
+      championId: champion.id,
+      id: crypto.randomUUID(),
+      operation,
+      data,
+    };
+  try {
+    sessionStorage.setItem("contrapasso-market", JSON.stringify(pendingMarket));
+  } catch {
+    /* Durable server intent still retries. */
+  }
+  busy = true;
+  renderMarket();
+  out.textContent = "Confirming on NEAR testnet…";
+  try {
+    const response = await api.marketAction(
+      pendingMarket.id,
+      pendingMarket.operation,
+      pendingMarket.data,
+    );
+    champion = response.champion;
+    marketState = response.market;
+    refreshChampion();
+    if (response.intent.complete) {
+      pendingMarket = null;
+      try {
+        sessionStorage.removeItem("contrapasso-market");
+      } catch {
+        /* Optional storage. */
+      }
+      out.innerHTML = response.intent.error
+        ? escapeHtml(response.intent.error)
+        : `Confirmed on testnet.${response.intent.transaction ? ` <a href="${EXPLORER}/txns/${encodeURIComponent(response.intent.transaction)}" target="_blank" rel="noopener noreferrer">View transaction ↗</a>` : ""}`;
+      if (nft) await renderNft();
+    } else
+      out.textContent =
+        "Still confirming. Check the same pending action to continue; it will not charge twice.";
+  } catch (e) {
+    out.textContent = `${(e as Error).message} Check the pending action to retry safely.`;
+  } finally {
+    busy = false;
+    renderMarket();
+  }
+}
+async function openMarket() {
+  try {
+    await loadChampion();
+    marketState = await api.market();
+    if (pendingMarket?.championId !== champion?.id) pendingMarket = null;
+    renderMarket();
+    $("modes").inert = true;
+    $("market").classList.remove("hidden");
+    $("market-close").focus();
+  } catch (e) {
+    notice((e as Error).message);
+  }
+}
+$("market-open").addEventListener("click", () => void openMarket());
+$("market-close").addEventListener("click", () => {
+  $("market").classList.add("hidden");
+  $("modes").inert = false;
+  $("market-open").focus();
+});
+$("market-refresh").addEventListener("click", async () => {
+  if (busy) return;
+  if (pendingMarket)
+    return void doMarket(pendingMarket.operation, pendingMarket.data);
+  try {
+    marketState = await api.market();
+    await loadChampion();
+    renderMarket();
+  } catch (e) {
+    $("market-result").textContent = (e as Error).message;
+  }
+});
+$("market").addEventListener("click", (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>(
+    "button[data-market],button[data-market-retry]",
+  );
+  if (!button || button.disabled) return;
+  if (button.dataset.marketRetry && pendingMarket)
+    return void doMarket(pendingMarket.operation, pendingMarket.data);
+  const operation = button.dataset.market as MarketOperation;
+  const data: Record<string, unknown> = { roundId: marketState?.round?.id };
+  if (operation === "tickets")
+    data.count = Number($<HTMLSelectElement>("ticket-count").value);
+  void doMarket(operation, data);
+});
+$("nft-tokens").addEventListener("click", (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>(
+    "button[data-equip]",
+  );
+  if (!button || button.disabled) return;
+  void doMarket(
+    button.dataset.equip as MarketOperation,
+    { slot: button.dataset.slot, gearId: button.dataset.gear },
+    true,
+  );
+});
+setInterval(() => {
+  if ($("market").classList.contains("hidden") || !marketState?.round) return;
+  const round = marketState.round,
+    remaining = Math.max(0, Math.ceil((round.endsAt - Date.now()) / 1000));
+  const open = !round.drawn && remaining > 0;
+  if (open !== renderedMarketOpen) renderMarket();
+  const clock = document.getElementById("market-countdown");
+  if (clock)
+    clock.textContent = `${Math.floor(remaining / 60)}m ${remaining % 60}s`;
+}, 1000);
+let claimArmed = false;
+let claimSourceId: string | null = null;
+$("claim-account").addEventListener("input", () => {
+  claimArmed = false;
+  $("claim-button").textContent = "CLAIM TO WALLET";
+  $("claim-result").textContent = "";
+});
+async function renderNft() {
+  const view = await api.nft();
+  $("nft-intro").textContent = view.onChain
+    ? "These are NFTs on NEAR testnet. The champion carries its gear, its coin vault and its record; whoever holds it holds all of that."
+    : "Local preview: nothing is minted. With a testnet connection each of these is an NFT, and the champion carries its gear, vault and record with it.";
+  $("nft-tokens").innerHTML = view.tokens
+    .map((token) => {
+      const x = token.extra as Record<string, unknown>;
+      const isChampion = x.kind === "champion";
+      const rows: [string, string][] = isChampion
+        ? [
+            ["Vault", `${x.coins ?? 0} coin`],
+            [
+              "Prize vault",
+              `${nearAmount(String(x.prizeYocto ?? "0"))} test NEAR`,
+            ],
+            ["Solo", `${x.runs ?? 0} descents · ${x.victories ?? 0} victories`],
+            ["Duel", `${x.duelWins ?? 0} won · ${x.duelLosses ?? 0} lost`],
+            [
+              "Powers",
+              Array.isArray(x.skills) && x.skills.length
+                ? (x.skills as SkillId[])
+                    .map((id) => SKILLS[id]?.name ?? id)
+                    .join(", ")
+                : "none yet",
+            ],
+          ]
+        : [
+            ["Level", `+${x.level ?? 0}`],
+            ["Kills", String(x.kills ?? 0)],
+            [
+              "Past owners",
+              Array.isArray(x.pastOwners) && x.pastOwners.length
+                ? String(x.pastOwners.length)
+                : "none",
+            ],
+            ["Bound", x.bound ? "travels with its champion" : "free"],
+          ];
+      const slot = x.kind === "armor" ? "armor" : "weapon";
+      const equipped = champion?.equipped?.[slot] === token.tokenId;
+      const available = !x.bound || x.championId === champion?.id;
+      const gearButton =
+        !isChampion && view.features?.includes("market") && available
+          ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${equipped ? "UNEQUIP" : "EQUIP"}</button>`
+          : "";
+      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${x.collection === "cinder-requiem" ? '<img src="/assets/ui/cinder-requiem.jpg" alt="Cinder Requiem blade"/>' : ""}<strong>${escapeHtml(token.title)}</strong><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl>${gearButton}</article>`;
+    })
+    .join("");
+  if (view.onChain && view.contractId)
+    $("nft-intro").insertAdjacentHTML(
+      "beforeend",
+      ` <a href="${EXPLORER}/address/${encodeURIComponent(view.contractId)}" target="_blank" rel="noopener noreferrer">Contract ↗</a>`,
+    );
+  $("claim-box").classList.toggle(
+    "hidden",
+    !view.onChain || !view.features?.includes("claim"),
+  );
+}
+$("nft-open").addEventListener("click", async () => {
+  try {
+    await loadChampion();
+    await renderNft();
+    claimArmed = false;
+    claimSourceId = champion?.id ?? null;
+    $("claim-button").textContent = "CLAIM TO WALLET";
+    $("claim-result").textContent = "";
+    $("modes").inert = true;
+    $("nft").classList.remove("hidden");
+    $("nft-close").focus();
+  } catch (e) {
+    notice((e as Error).message);
+  }
+});
+$("nft-close").addEventListener("click", () => {
+  $("nft").classList.add("hidden");
+  $("modes").inert = false;
+  $("nft-open").focus();
+});
+$("claim-button").addEventListener("click", async () => {
+  const receiver = $<HTMLInputElement>("claim-account")
+    .value.trim()
+    .toLowerCase();
+  const out = $("claim-result");
+  if (!receiver) {
+    out.textContent = "Enter your NEAR testnet account first.";
+    return;
+  }
+  if (!claimArmed) {
+    claimArmed = true;
+    $("claim-button").textContent = "CONFIRM CLAIM";
+    out.textContent = `This sends the champion, its gear and its vault to ${receiver}. Press again to confirm.`;
+    return;
+  }
+  if (busy) return;
+  busy = true;
+  out.textContent = "Sending to testnet…";
+  try {
+    if (!claimSourceId)
+      throw new Error("Review the champion before transferring it.");
+    const response = await api.claim(receiver, claimSourceId);
+    champion = response.champion;
+    refreshChampion();
+    if (response.claimed.pending) {
+      out.textContent =
+        "Transfer pending on testnet. Your current champion is kept here until confirmation. Retry to check the same transfer.";
+      return;
+    }
+    await renderNft();
+    claimSourceId = champion.id;
+    out.innerHTML = `Claimed. ${escapeHtml(response.claimed.tokenId)} now belongs to ${escapeHtml(response.claimed.receiver)}.${response.claimed.transaction ? ` <a href="${EXPLORER}/txns/${encodeURIComponent(response.claimed.transaction)}" target="_blank" rel="noopener noreferrer">Transaction ↗</a>` : ""} A new guest champion has started here.`;
+  } catch (e) {
+    out.textContent = (e as Error).message;
+  } finally {
+    busy = false;
+    claimArmed = false;
+    $("claim-button").textContent = "CLAIM TO WALLET";
+  }
+});
+const gearName = (slot: GearSlot) =>
+  slot === "weapon" && champion?.equipped?.weapon?.startsWith("relic:")
+    ? "Cinder Requiem"
+    : GEAR[slot].name;
+const GEAR: Record<
+  GearSlot,
+  { name: string; effect: (level: number) => string }
+> = {
+  weapon: { name: "Cinder Blade", effect: (level) => `+${level * 2} damage` },
+  armor: { name: "Ash Armor", effect: (level) => `+${level * 3} life` },
+};
+function renderGear() {
+  if (!champion) return;
+  const grid = $("gear-cards");
+  grid.innerHTML = (["weapon", "armor"] as const)
+    .map((slot) => {
+      const level =
+        champion!.build[slot === "weapon" ? "weaponLevel" : "armorLevel"];
+      const max = level >= MAX_GEAR_LEVEL;
+      const cost = upgradeCost(level);
+      const odds = upgradeChance(level);
+      const available =
+        (!champion!.chain || champion!.chain.features?.includes("upgrade")) &&
+        !!champion!.equipped?.[slot];
+      const blocked = max || champion!.coins < cost || busy || !available;
+      return `<button class="training-card gear-card${max ? " learned" : ""}" data-slot="${slot}" ${blocked ? "disabled" : ""}><span class="gear-level">+${level}</span><strong>${gearName(slot)}</strong><span>${GEAR[slot].effect(level)}${max ? "" : ` → ${GEAR[slot].effect(level + 1)}`}</span><span>${max ? "Nothing left to temper." : odds === 100 ? "Always holds." : `${odds}% to hold. A failure burns only the coin.`}</span><b>${!available ? "NOT AVAILABLE" : max ? "AT ITS LIMIT" : `TEMPER · ${cost} COIN`}</b></button>`;
+    })
+    .join("");
+  for (const button of grid.querySelectorAll<HTMLButtonElement>("button"))
+    button.addEventListener("click", async () => {
+      if (busy) return;
+      busy = true;
+      renderForge();
+      notice("");
+      try {
+        const slot = button.dataset.slot as GearSlot;
+        const response = await api.upgrade(slot);
+        champion = response.champion;
+        refreshChampion();
+        notice(
+          response.upgrade.success
+            ? `The ${gearName(slot)} holds. It is now +${response.upgrade.level}.`
+            : `The coin burns. The ${gearName(slot)} stays +${response.upgrade.level}.`,
+        );
+      } catch (e) {
+        notice((e as Error).message);
+      } finally {
+        busy = false;
+        renderForge();
+      }
+    });
+}
 function renderForge() {
   if (!champion) return;
+  renderGear();
   const grid = $("forge-cards");
   grid.innerHTML = SKILL_IDS.map((id) => {
     const known = champion!.skills.includes(id);
@@ -766,4 +1217,5 @@ if (import.meta.env.DEV)
       return replay;
     },
     FLOORS,
+    view,
   };

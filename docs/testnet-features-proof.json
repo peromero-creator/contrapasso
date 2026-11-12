@@ -1,0 +1,21 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "verifiedAt": "2026-11-12T17:21:29.434Z",
+  "championTokenId": "champion:2d9afa4c-7f62-4681-a10b-8b5c3e7e2866",
+  "receiver": "proof-941c9471.contrapasso-261112-a23809.testnet",
+  "transaction": "4k1unkBDu7avKmGutzYABvB8S36CAH33n1dZDEgjtVJ7",
+  "upgrades": {
+    "coins": 71,
+    "weaponLevel": 1,
+    "armorLevel": 1
+  },
+  "newGuestTokenId": "champion:5221ceac-7b90-442b-91d7-dbd45c656766",
+  "checks": [
+    "Equipped weapon and armor +1",
+    "Coin cost + dynamic NFT metadata",
+    "Confirmed wallet claim carrying gear and vault",
+    "Retry creates no second guest",
+    "Receiver signed NFT approval and revoke with its own key"
+  ]
+}

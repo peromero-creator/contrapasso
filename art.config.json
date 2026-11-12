@@ -1,5 +1,186 @@
 {
   "output": "public/assets",
-  "models": {},
-  "floors": {}
+  "models": {
+    "hero": {
+      "source": "art/source/hero-actions.glb",
+      "height": 2.2,
+      "rotationY": 90,
+      "textureSize": 1024,
+      "clips": {
+        "idle": {
+          "file": "art/source/hero-actions.glb",
+          "clip": "Idle"
+        },
+        "run": {
+          "file": "art/source/hero-actions.glb",
+          "clip": "Run_02"
+        },
+        "attack": {
+          "file": "art/source/hero-actions.glb",
+          "clip": "Right_Hand_Sword_Slash"
+        },
+        "dash": {
+          "file": "art/source/hero-actions.glb",
+          "clip": "Roll_Dodge"
+        },
+        "death": {
+          "file": "art/source/hero-actions.glb",
+          "clip": "Dead"
+        }
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "attack",
+        "dash",
+        "death"
+      ],
+      "windows": {
+        "attack": [
+          0.35,
+          0.85
+        ],
+        "dash": [
+          0.75,
+          1.35
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/hero-a.jpg)"
+      }
+    },
+    "imp": {
+      "source": "art/source/imp-actions.glb",
+      "height": 2.2,
+      "rotationY": 90,
+      "textureSize": 1024,
+      "clips": {
+        "idle": {
+          "file": "art/source/imp-actions.glb",
+          "clip": "Idle"
+        },
+        "run": {
+          "file": "art/source/imp-actions.glb",
+          "clip": "Run_02"
+        },
+        "attack": {
+          "file": "art/source/imp-actions.glb",
+          "clip": "Attack"
+        }
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "attack"
+      ],
+      "windows": {
+        "attack": [
+          0.75,
+          1.2
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/imp.jpg)"
+      }
+    },
+    "archer": {
+      "source": "art/source/archer-actions.glb",
+      "height": 2.2,
+      "rotationY": 90,
+      "textureSize": 1024,
+      "clips": {
+        "idle": {
+          "file": "art/source/archer-actions.glb",
+          "clip": "Idle"
+        },
+        "run": {
+          "file": "art/source/archer-actions.glb",
+          "clip": "Run_02"
+        },
+        "attack": {
+          "file": "art/source/archer-actions.glb",
+          "clip": "mage_soell_cast"
+        }
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "attack"
+      ],
+      "windows": {
+        "attack": [
+          0.2,
+          1.3
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/archer.jpg)"
+      }
+    },
+    "brute": {
+      "source": "art/source/brute-actions.glb",
+      "height": 2.2,
+      "rotationY": 90,
+      "textureSize": 1024,
+      "clips": {
+        "idle": {
+          "file": "art/source/brute-actions.glb",
+          "clip": "Idle"
+        },
+        "run": {
+          "file": "art/source/brute-actions.glb",
+          "clip": "Run_02"
+        },
+        "attack": {
+          "file": "art/source/brute-actions.glb",
+          "clip": "Charged_Ground_Slam"
+        },
+        "dash": {
+          "file": "art/source/brute-actions.glb",
+          "clip": "Male_Head_Down_Charge"
+        }
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "attack",
+        "dash"
+      ],
+      "windows": {
+        "attack": [
+          1.1,
+          1.8
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/brute.jpg)"
+      }
+    },
+    "sword": {
+      "source": "art/source/cinder-requiem.glb",
+      "height": 1.55,
+      "rotationY": 0,
+      "textureSize": 512,
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy image-to-3D from Google Flow concept art/source/cinder-requiem.jpg"
+      }
+    }
+  },
+  "floors": {
+    "LIMBO": "art/source/floors/limbo.jpg",
+    "LUST": "art/source/floors/lust.jpg",
+    "GLUTTONY": "art/source/floors/gluttony.jpg",
+    "GREED": "art/source/floors/greed.jpg",
+    "WRATH": "art/source/floors/wrath.jpg"
+  }
 }

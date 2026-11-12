@@ -55,6 +55,10 @@ export interface Enemy {
   armorLevel?: number;
   retaliationCd?: number;
   attackKind?: "dash" | "swing";
+  /** Shove from a sword hit: a velocity that plays out over knockT seconds. */
+  knockX?: number;
+  knockZ?: number;
+  knockT?: number;
 }
 
 export interface Shot {
@@ -444,6 +448,8 @@ function fireShot(
   w.events.push({ type: "shot", x, z });
 }
 
+const KNOCK_TIME = 0.1;
+
 function melee(w: World) {
   const p = w.player;
   const ax = DX[p.aim];
@@ -470,13 +476,18 @@ function melee(w: World) {
       e.kind === "warden"
         ? 0
         : e.kind === "brute"
-          ? 0.35
-          : heavy
-            ? 1.4 + 0.3 * rank(p.skills, "verdict")
-            : 0.8;
-    if (e.state !== "act") {
-      e.x += ax * kb;
-      e.z += az * kb;
+          ? 0.55
+          : e.kind === "champion"
+            ? heavy
+              ? 1.4 + 0.3 * rank(p.skills, "verdict")
+              : 0.8
+            : heavy
+              ? 2.1 + 0.45 * rank(p.skills, "verdict")
+              : 1.25;
+    if (e.state !== "act" && kb > 0) {
+      e.knockX = (ax * kb) / KNOCK_TIME;
+      e.knockZ = (az * kb) / KNOCK_TIME;
+      e.knockT = KNOCK_TIME;
     }
   }
 }
@@ -543,6 +554,14 @@ function stepEnemy(w: World, e: Enemy) {
   if (e.spawn > 0) {
     e.spawn -= DT;
     return;
+  }
+  if ((e.knockT ?? 0) > 0) {
+    e.knockT! -= DT;
+    e.x += e.knockX! * DT;
+    e.z += e.knockZ! * DT;
+    clampArena(e, e.r);
+    // lesser enemies reel for the length of the shove; the Duel rival keeps acting
+    if (e.kind !== "champion" && e.kind !== "warden") return;
   }
   if (e.cd > 0) e.cd -= DT;
   if ((e.retaliationCd ?? 0) > 0) e.retaliationCd! -= DT;

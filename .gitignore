@@ -18,3 +18,7 @@ coverage/
 playwright-report/
 test-results/
 *.log
+
+# Full-size art downloads; the cropped/packed versions are tracked
+art/source/raw/
+art/source/meshy-tasks.json

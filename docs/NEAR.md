@@ -6,11 +6,12 @@ Deployed and verified on public NEAR testnet on 2026-11-12. No mainnet assets ar
 
 - Contract: [contrapasso-261112-a23809.testnet](https://testnet.nearblocks.io/address/contrapasso-261112-a23809.testnet)
 - Deployment: [5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5](https://testnet.nearblocks.io/txns/5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5)
-- WASM SHA-256: `85578dfcacfe0a772bcf2d8c6c8926b598a4769d07ee9ac4907ab41b24c2dfc1`
+- WASM SHA-256: `29158e6696c1fb9f6f1af782f6a45af3b0c694559c54849da4ef0ad7fffcefe2`
+- Latest code-only update: [B6CAn9Mxg8dEuv5T4fwcdRbCLnp5PLWh42hrPge4FWft](https://testnet.nearblocks.io/txns/B6CAn9Mxg8dEuv5T4fwcdRbCLnp5PLWh42hrPge4FWft), version 0.5.0. Existing state and 24 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
 - Published code and referee public key were read back and matched. The local server is connected through a restricted relay key.
 - Live verification passed: two guest champions played verified Solo, a permanent power was bought, defense was enabled, both Duel stakes were locked, and the winning replay paid the pool and updated both NFTs. Repeating a result did not award twice.
 - A separate silent browser run earned 165 coin, then won its Duel and finished with 175 coin and a 1–0 record, confirmed directly from NFT metadata.
-- Public transaction IDs and read-back evidence: [testnet-proof.json](testnet-proof.json). Total funding was 10 free test NEAR; measured transaction fees were about 0.047 test NEAR and storage reserved about 6.206 test NEAR.
+- Public transaction IDs and read-back evidence: [Solo and Duel](testnet-proof.json), [upgrades and wallet claims](testnet-features-proof.json), [mint and raffle](testnet-market-proof.json). The raffle proof confirms a 0.01-test-NEAR pool split into two 0.005 prizes, both withdrawn, and unpaid reservation refunds. Total funding was 10 free test NEAR; the original Solo/Duel snapshot measured about 0.047 in fees and 6.206 reserved for storage, before subsequent feature tests.
 
 NEAR HACKATHON accepts testnet-only projects in every track (Q-010); public RPC is free (Q-009). No NEAR AI API key is needed for this game. RPC uses FASTNEAR with a dRPC fallback, both pinned to testnet. The legacy public NEAR endpoint returned deprecation/rate-limit errors during live verification and is no longer the default. See the [official provider list](https://docs.near.org/api/rpc/providers). See the [organizer's rules](https://nearhackathon.com/HACKATHON.md).
 
@@ -49,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.3.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.4.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -59,19 +60,37 @@ Duel defenders opt in, must have played Solo, and need 10 coin. Matchmaking allo
 
 All runtime state and secrets are git-ignored under `.data/`; never publish or delete it casually.
 
-| File | Purpose |
-| --- | --- |
-| `state.json` | Local champions, challenges, replays, receipts and ordered outbox |
-| `referee.pem` | Ed25519 oracle signing key |
-| `near-plan.json` | Full-access contract owner key and restricted relay key for this deployment |
-| `near.json` | Testnet connection and the restricted runtime relay key |
-| `near-smoke-sessions.json` | Private, resumable smoke-test guest cookies and issued challenge |
-| `near-guests.json` | Custodial guest keys and implicit NFT owner addresses |
+| File                       | Purpose                                                                     |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `state.json`               | Local champions, challenges, replays, receipts and ordered outbox           |
+| `referee.pem`              | Ed25519 oracle signing key                                                  |
+| `near-plan.json`           | Full-access contract owner key and restricted relay key for this deployment |
+| `near.json`                | Testnet connection and the restricted runtime relay key                     |
+| `near-smoke-sessions.json` | Private, resumable smoke-test guest cookies and issued challenge            |
+| `near-guests.json`         | Custodial guest keys and implicit NFT owner addresses                       |
 
-The runtime key can only call `apply_receipt` on this contract, with a 2 test NEAR gas allowance. It cannot deploy code, transfer NEAR or change the referee key. The full-access owner key remains in the offline deployment plan.
+The runtime key can only call `apply_receipt` on this contract, with a 2 test NEAR gas allowance. It cannot deploy code, issue direct NEAR transfers or change the referee key. Valid signed receipts can trigger the contract's bounded sponsorship and prize transfers. The full-access owner key remains in the offline deployment plan.
 
-This is a **custodial local demo**: guest keys are generated and held by the server, and normal play has no wallet popups. An implicit address can own NFTs before receiving NEAR; guest addresses are not funded or independently usable wallets yet. Wallet import/export, account recovery, claiming a champion in an external wallet, production identity and production hosting are unfinished. NFT ownership and transfer semantics are tested at the contract level, but there is no transfer UI yet.
+This is a **custodial local demo**: guest keys are generated and held by the server, and normal play has no wallet popups. An implicit address can own NFTs before receiving NEAR. After verified Solo, a bounded contract grant can activate/fund a guest for one native testnet mint. The server uses that guest’s own key for the payable mint; it never loads the contract owner key into the web runtime.
 
-The authorized referee is trusted to report valid gameplay and migration balances. Determinism and revision checks stop invented browser scores and replayed receipts; they do not make the oracle trustless or stop bots that actually play. A single contract owner controls upgrades and referee-key rotation. No mainnet value, raffle, mint sale, royalties or real-money economy is enabled.
+The inventory UI can claim a champion to an existing testnet wallet. It waits for final confirmation before rotating the guest and is idempotent by source champion. Equipped gear, coin and native prizes follow the champion. A wallet owner can call payable `withdraw_prize({champion_id})` directly with exactly one yoctoNEAR and sufficient gas, independently of the referee, to withdraw its native prize vault. Guest playback through an external wallet, wallet import/export, recovery, production identity and production hosting remain future work.
+
+The authorized referee is trusted to report valid gameplay and migration balances. Determinism and revision checks stop invented browser scores and replayed receipts; they do not make the oracle trustless or stop bots that actually play. A single contract owner controls upgrades and referee-key rotation. All mint payments, sponsorship and raffle prizes use free test NEAR. No mainnet value or real-money economy is enabled.
 
 Available demo defenders are test champions built by recorded, verified bot Solo runs. Their matches are real replay-verifiable test matches, not evidence of human player activity.
+
+## Reliquary and native prize accounting
+
+Version 0.5 adds separate lookup-map prefixes without changing the serialized champion/NFT root. `near:update` deploys code only, compares the full raw state hash and NFT supply before/after, and never calls `init`. `game_config` advertises actual deployed features; the server does not trust a hand-edited local feature flag.
+
+Owner-controlled `open_round({id, duration_seconds})` opens a unique edition after the previous draw. `npm run near:round -- --id cinder-demo --seconds 180` prepares a public request; add `--execute` only within the operator’s authorized testnet scope. The default duration is one day. The web runtime does not hold the owner key needed to open rounds.
+
+Signed market receipts support reservation/cancellation, mint, tickets, draw, guest funding, withdrawal and gear equip/unequip. A reservation debits 10 earned coin, one per champion per round, with 12 editions. Native mint requires the current NFT owner as predecessor and exactly 0.01 test NEAR. A duplicate paid receipt rejects the whole transaction and its deposit; a zero-deposit receipt lookup/retry is idempotent. The server’s durable intent is saved before sending, uses a client UUID, debits local coin only after confirmation, and retains uncertain transactions for the same-id retry. Only a known final failure or a known pre-broadcast insufficient-balance error releases an unconfirmed intent.
+
+Tickets cost 5 coin, with 10 per champion and 200 per round. After closure, a signed draw uses NEAR block randomness, weighted sampling without replacement, and up to three distinct champions. Equal shares plus an integer remainder exhaust the full pool. Unpaid reservations refund automatically in that draw; with no tickets the pool carries forward. The block and 32-byte entropy are public, and `selectWinners` in `contracts/market.js` reproduces selection. This is not a production VRF: timing and block production assumptions limit adversarial fairness.
+
+The contract tracks native pool/prize liabilities. Prizes belong to champion IDs, so NFT transfer changes their beneficiary. A withdrawal clears the vault and locks the champion while its native promise is pending. A private callback releases liability only on success; on failure it restores the vault. Funding uses the same callback lock. The demo sponsorship is one 0.2-test-NEAR grant after Solo, at most six champions, and cannot consume prize liabilities or the minimum 0.5-test-NEAR free reserve. A receipt replay cannot schedule a second native transfer.
+
+`nft_payout` / `nft_transfer_payout` quote NEP-199 payouts: 90% seller, 10% contract, preserving all units and enforcing the recipient limit. The marketplace is responsible for payment. Only native value actually attached to `collect_royalty` enters recorded raffle accounting; sending a quote or transferring an NFT alone does not create pool revenue.
+
+With approved testnet writes, `npm run near:market-smoke -- --execute` uses private, resumable test sessions to exercise coin access/refund, sponsored native mint, same-id retry, gear metadata/equip, tickets, draw, unpaid reservation refund and both native withdrawals. It writes only public proof to `docs/testnet-market-proof.json`. Private cookies and intent progress remain under `.data/`.

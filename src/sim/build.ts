@@ -6,6 +6,13 @@ export interface CombatBuild {
   armorLevel: number;
 }
 export const DUEL_STAKE = 10;
+export const MAX_GEAR_LEVEL = 9;
+export type GearSlot = "weapon" | "armor";
+/** Coin burned by one "+" attempt on gear that is currently at `level`. */
+export const upgradeCost = (level: number) => 15 + 10 * level;
+/** Percent chance that the attempt succeeds. A failed attempt burns only the coin. */
+export const upgradeChance = (level: number) =>
+  level < 3 ? 100 : level < 6 ? 85 : 70;
 export const DUEL_TICKS = 90 * 60;
 export const copyBuild = (build: CombatBuild): CombatBuild => ({
   skills: { ...build.skills },

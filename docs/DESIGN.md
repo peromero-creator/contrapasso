@@ -1,10 +1,10 @@
 # Contrapasso — game design
 
-Working design. Planned economy features are distinguished from the implemented integration below.
+Working design. The testnet defaults and remaining production work are recorded below.
 
 ## Idea
 
-In Dante's poem a *contrapasso* is a punishment that mirrors the sin. In this game the hero fights down through their own hell, and whatever they build returns as punishment for someone else: a finished champion becomes an opponent that other players must beat.
+In Dante's poem a _contrapasso_ is a punishment that mirrors the sin. In this game the hero fights down through their own hell, and whatever they build returns as punishment for someone else: a finished champion becomes an opponent that other players must beat.
 
 - Genre: isometric-style action roguelike in the browser (2.5D: painted floors, 3D characters, fixed tilted camera).
 - Setting: the first five circles of the Divine Comedy, as the hero's own sins: Limbo, Lust, Gluttony, Greed, Wrath. The other four come later.
@@ -48,16 +48,16 @@ For the hackathon the duel is asynchronous: the player fights another player's c
 
 ## Proposed economy defaults
 
-| Open point | Default |
-|---|---|
-| "+" upgrade odds | +1 to +3 always succeed, +4 to +6 succeed 85% of the time, +7 to +9 70%. A failure burns only the coin. Maximum +9. Keep failure chances low. |
-| Selling a champion | Equipped gear goes with it. Unequip an item first to keep it. Only equipped gear counts toward the champion's power. |
-| Where skills live | On the champion, so a trained champion has value. |
-| New players | No starting wheel. Everyone gets a free, account-bound starter weapon and armor that can be upgraded. |
-| Mint oversubscribed | A coin deposit reserves a spot. If the mint sells out first, the coin is refunded. |
-| Raffle timing | One draw per mint, several winners, drawn with verifiable randomness. |
-| Duel payout | The challenger stakes coin. A win takes the same amount from the defending champion's vault; a loss pays the stake into that vault. No coin is created. |
-| Duel fairness | Match by gear power so bought gear cannot stomp new players. |
+| Open point          | Default                                                                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "+" upgrade odds    | +1 to +3 always succeed, +4 to +6 succeed 85% of the time, +7 to +9 70%. A failure burns only the coin. Maximum +9. Keep failure chances low.                                            |
+| Selling a champion  | Equipped gear goes with it. Unequip an item first to keep it. Only equipped gear counts toward the champion's power.                                                                     |
+| Where skills live   | On the champion, so a trained champion has value.                                                                                                                                        |
+| New players         | No starting wheel. Everyone gets a free, account-bound starter weapon and armor that can be upgraded.                                                                                    |
+| Mint oversubscribed | A coin deposit reserves a spot. If the mint sells out first, the coin is refunded.                                                                                                       |
+| Raffle timing       | One draw per mint, up to three distinct winners. The testnet draw uses NEAR block randomness and publishes its seed for replay; stronger adversarial randomness remains production work. |
+| Duel payout         | The challenger stakes coin. A win takes the same amount from the defending champion's vault; a loss pays the stake into that vault. No coin is created.                                  |
+| Duel fairness       | Match by gear power so bought gear cannot stomp new players.                                                                                                                             |
 
 ## Known gaps
 
@@ -80,4 +80,20 @@ The testnet contract and local relay implement the champion vault, permanent tra
 
 Duel uses a 10-coin stake from each side, locked before combat. Only opted-in defenders with a funded vault are listed. Opponents use their deepest Solo build plus permanent training and equipped gear. A fight ends on death or after 90 simulation seconds; a challenge expires after 10 wall-clock minutes. The champion and its equipped gear cannot transfer during a Duel. The winner takes the 20-coin escrow pool; leaving or abandoning an opened challenge is a challenger loss. Duel creates no coin.
 
-The current guest account is custodial: the local server holds its key and pays testnet gas through a restricted relay key. This is a demo foundation. External wallet claiming, non-starter mints, upgrades and raffle mechanics are still planned.
+The current guest account is custodial: the local server holds its key and pays ordinary gas through a restricted relay key. A confirmed wallet claim moves the champion, equipped gear, coin and native prize vault to an existing testnet wallet. This guest session then receives a fresh champion.
+
+Gear upgrades are implemented with the odds and costs above. Every attempt binds the equipped NFT and its starting level; only confirmed metadata determines the next loadout.
+
+The Reliquary implements a testnet edition of **Cinder Requiem**, a tradable weapon starting at +0 with the same base combat stats as the free blade. Each round has 12 editions, one per champion. Completing Solo unlocks a 10-coin reservation and a native mint price of 0.01 test NEAR. Cancelling an unpaid reservation refunds the coin; the draw refunds all remaining unpaid spots. An edition cannot be oversubscribed. Equipped tradable gear must be unequipped before transferring it separately, and cannot equip to two champions.
+
+Tickets cost 5 coin, up to 10 per champion and 200 per round. After the deadline a player triggers an on-chain draw. Tickets weight selection without replacement; up to three distinct champions split 100% of the recorded pool equally, with any integer remainder going to the first winner. With no tickets, the full pool carries forward. The round publishes its block height and entropy so the selection can be replayed. Block randomness is adequate for a testnet demonstration; this is not a production VRF or a manipulation-proof raffle.
+
+Native prizes belong to the champion NFT, can be withdrawn to its current owner, and return to the vault if a transfer fails. Transfers and gameplay writes lock while a native payout is pending. One bounded demo grant of 0.2 test NEAR is available after Solo, for up to six guest champions. The contract preserves prize liabilities and a minimum free reserve before sponsoring a guest. These are free testnet funds, with no real-money entry or payout.
+
+NEP-199 royalty quotes allocate 10% to the contract and 90% to the seller. Marketplaces must honor the quote and actually pay `collect_royalty` to credit the tracked pool. A quote alone does not move funds.
+
+## Next steps
+
+1. Record the final demo and review the delivery checklist in `docs/SUBMISSION.md`.
+2. Choose hosting and publish the repository when the owner is ready.
+3. For production: wallet authentication/recovery, stronger randomness, independent contract review, oracle decentralization and additional bot controls. Mainnet is outside the current demo scope.

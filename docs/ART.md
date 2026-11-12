@@ -1,6 +1,8 @@
 # Art pipeline
 
-The current build deliberately keeps procedural placeholder actors until approved art exists. This pipeline processes local exports; it does not call Google Flow or Meshy, read API keys, or spend credits.
+Shipped art: a title illustration, five painted floors and concept images from Google Flow, plus animated characters and a blade prop from Meshy (`scripts/meshy.mjs` runs image-to-3D, rigging and preset animations through the Meshy API and needs `MESHY_API_KEY` in `.env`; it spends credits). `npm run assets` only processes local files: it does not call any service or read keys. Placeholder shapes remain as the fallback when a model is missing.
+
+Per model, `art.config.json` may also set `textureSize` (downscale textures; uses macOS `sips`) and `windows` (seconds of a clip to keep per state, for example `{ "attack": [0.35, 0.85] }`). At load time the game removes horizontal root motion from the `Hips` bone so characters stay on their simulation position.
 
 ## Inputs
 
@@ -26,7 +28,11 @@ Keep source files outside the web build, for example under `art/source/`. Config
         "death": "art/source/hero-death.glb"
       },
       "requiredClips": ["idle", "run", "attack", "dash", "death"],
-      "credit": { "author": "Fill with actual author", "license": "Fill with actual license", "source": "Fill with actual provenance" }
+      "credit": {
+        "author": "Fill with actual author",
+        "license": "Fill with actual license",
+        "source": "Fill with actual provenance"
+      }
     }
   },
   "floors": { "LIMBO": "art/source/limbo.webp" }
@@ -52,3 +58,9 @@ The client caches templates, clones skinned actors safely, normalizes height and
 `npm test` verifies merging and compression with a generated test fixture. It does **not** certify a future human rig. Before accepting an actual export, inspect idle/run/attack/dash/death, in-place root motion, facing, scale, the sword attachment and the Warden reuse in the browser. Adjust `rotationY` (degrees) and the export itself where needed. Replacing a model must not change combat distances or simulation state.
 
 Record the actual asset pack, author, source URL and license in the manifest and credits before shipping. Do not copy characters or visual designs from other commercial games.
+
+The title-screen illustration was generated in the same Flow project from the existing penitent character reference: `art/source/cover.jpg`, shipped as `public/assets/ui/cover.jpg`.
+
+The limited blade uses `art/source/cinder-requiem.jpg` (Flow) and `art/source/cinder-requiem.glb` (Meshy image-to-3D, 4,000 target polygons). The shipped `sword` model is compressed and reduced to 512-pixel textures. It is shown when Cinder Requiem is equipped and shares the hero’s right-hand grip with the starter fallback, regardless of which model loads first. The concept is also used in the Reliquary and NFT cards.
+
+Raw duplicate exports and unused generation attempts stay outside Git under `art/source/raw/`. Runtime assets, source inputs needed by `art.config.json`, and provenance stay in the repository.

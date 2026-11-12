@@ -1,0 +1,81 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "verifiedAt": "2026-11-12T17:51:39.249Z",
+  "round": {
+    "id": "proof-cinder-1",
+    "title": "Cinder Requiem",
+    "startsAt": 1794505702370,
+    "endsAt": 1794505882370,
+    "cap": 12,
+    "minted": 1,
+    "reserved": 0,
+    "poolYocto": "10000000000000000000000",
+    "entryCoin": 10,
+    "ticketCoin": 5,
+    "priceYocto": "10000000000000000000000",
+    "tickets": {
+      "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b": 2,
+      "5221ceac-7b90-442b-91d7-dbd45c656766": 1
+    },
+    "reservationIds": [
+      "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+      "5221ceac-7b90-442b-91d7-dbd45c656766",
+      "af515c79-d175-424b-a8c2-1d4b258684d9"
+    ],
+    "drawn": true,
+    "winners": [
+      {
+        "championId": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "amountYocto": "5000000000000000000000"
+      },
+      {
+        "championId": "5221ceac-7b90-442b-91d7-dbd45c656766",
+        "amountYocto": "5000000000000000000000"
+      }
+    ],
+    "entropy": "a3bd857d0c1e7e18d78e9dbb360634bc02eb1ad2bc85c7440a39062ff1ddc58f",
+    "drawBlock": 277396186
+  },
+  "relicTokenId": "relic:proof-cinder-1:1",
+  "champions": [
+    "5221ceac-7b90-442b-91d7-dbd45c656766",
+    "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b"
+  ],
+  "coinBalances": {
+    "before": {
+      "alice": 154,
+      "bob": 104
+    },
+    "after": {
+      "alice": 149,
+      "bob": 84
+    }
+  },
+  "transactions": {
+    "reserve-cancel": "CU6FbgammHcrM1NC6wAg1Awbg43UedLdiDTr62BH9yo8",
+    "cancel": "7uf8VXNiSr9vWJoQ7Ts7jRxtsdsmfuCAccEDsCMrJwgh",
+    "reserve": "2CwKZjUMe9m234aZPuQQzQNwGGfqQQAiQvu4636u61ap",
+    "unpaid-reserve": "9hw3VGnyxjNAb3waunFWoAymhtqDVN7un42fhKLw2GKV",
+    "fund": "FZQ6vDTMacXnX8iQiMxn8AKunJGgcDERcffrSuRmpF1u",
+    "mint": "Dv6gxe3Mkh5ru1fnYUaVrVGb5mWDBZzrJjSwGMojDSDS",
+    "tickets": "3X2KYEyU2bhBdE2j4TDYiNS1jJjv1nwJXLbhgTLi7byD",
+    "tickets-alice": "Cxv1xrKBpkGnwfcA8urwtqA7WAdZFqMWEGhrnrFFCfXR",
+    "equip": "BvHSKkS5s6Xknqm5pD5QGdQHdHdZL1swKzQbVzDRjsru",
+    "draw": "7Jr2Fs9YvQyNchMUoqMJiAog4CTXYSKsPJk4ET5Edu4Z",
+    "withdraw-alice": "GbfMpuBrdJfF866SpF11GMu4MLgFWVATbRBvmAoHDUCm",
+    "withdraw-bob": "BA7X6kzSTSkntCnmKrE3pB5aKX4cvq1UHKpGSRWeEudB"
+  },
+  "checks": [
+    "Solo-earned mint entry",
+    "Cancel refunds coin once",
+    "Bounded native testnet funding",
+    "Guest-signed native paid mint",
+    "Retry creates no second edition or charge",
+    "Dynamic equipped relic NFT",
+    "Weighted draw with two distinct champions",
+    "Expired unpaid reservation refunded",
+    "100% mint revenue allocated",
+    "Both champions withdrew native prizes"
+  ]
+}

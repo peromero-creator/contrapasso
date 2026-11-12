@@ -1,0 +1,16 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "transaction": "Ev6ae9hToAA6A9ddcUMoFKeHrPeLfsmryJy1fuKVcsHp",
+  "oldWasmSha256": "85578dfcacfe0a772bcf2d8c6c8926b598a4769d07ee9ac4907ab41b24c2dfc1",
+  "wasmSha256": "886e59db6ec033fb2d2cdd147ee5976c70a1f983bf19a0f19d72a99e56b3ff3d",
+  "stateHash": "dd4b8ee8fca8bdf7b1f7e4ea3e762d075437aa586c7d9d612b4227a8d8c381f3",
+  "statePreserved": true,
+  "nftSupply": "18",
+  "features": [
+    "upgrade",
+    "claim"
+  ],
+  "version": "0.4.0",
+  "verifiedAt": "2026-11-12T17:14:14.016Z"
+}

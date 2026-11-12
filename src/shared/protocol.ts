@@ -1,4 +1,5 @@
 import type { SkillId, Skills } from "../sim/skills.ts";
+import type { MarketOperation } from "./market.ts";
 import type { CombatBuild } from "../sim/build.ts";
 
 export interface ChainStatus {
@@ -9,6 +10,7 @@ export interface ChainStatus {
   pending: boolean;
   lastTransaction?: string;
   revision: number;
+  features?: string[];
 }
 export interface DuelOpponent {
   id: string;
@@ -19,15 +21,19 @@ export interface DuelOpponent {
   coins: number;
 }
 export interface ChainOperation {
+  transactionHash?: string;
   id: string;
   operation:
     | "register"
     | "solo"
     | "train"
+    | "upgrade"
+    | "claim"
     | "defense"
     | "duel_open"
     | "duel_settle"
-    | "duel_expire";
+    | "duel_expire"
+    | MarketOperation;
   championId: string;
   opponentId?: string;
   data: Record<string, unknown>;
@@ -47,7 +53,35 @@ export interface Champion {
   duelLosses: number;
   defending: boolean;
   lockedBy: string | null;
+  equipped?: { weapon: string | null; armor: string | null };
+  prizeYocto?: string;
+  pendingClaim?: { receiver: string; operationId: string };
   chain?: ChainStatus;
+}
+/** One NFT as the chain (or, in local preview, the save) reports it. */
+export interface NftToken {
+  tokenId: string;
+  ownerId: string;
+  title: string;
+  extra: Record<string, unknown>;
+}
+export interface NftView {
+  onChain: boolean;
+  features?: string[];
+  contractId?: string;
+  tokens: NftToken[];
+}
+export interface ClaimOutcome {
+  pending: boolean;
+  tokenId: string;
+  receiver: string;
+  transaction?: string;
+}
+export interface UpgradeOutcome {
+  slot: "weapon" | "armor";
+  success: boolean;
+  level: number;
+  cost: number;
 }
 export interface RunChallenge {
   id: string;

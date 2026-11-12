@@ -31,6 +31,23 @@ export class GameService {
     return this.serial(async () => {
       if (path === "/api/duel-progress")
         return this.referee.checkpoint(owner, body.id, body.inputs);
+      if (path === "/api/market") {
+        const existing = this.referee.marketIntent(owner, body.id);
+        if (!existing) await this.near.checkOwner(owner);
+        if (!this.near.config || !this.near.supports("market"))
+          throw new RefereeError("The Reliquary is not connected yet.", 503);
+        this.referee.queueMarket(owner, body.id, body.operation, body.data);
+        try {
+          await this.near.flush();
+        } catch {
+          /* Return durable intent and let the same id confirm on retry. */
+        }
+        return {
+          intent: this.referee.marketIntent(owner, body.id),
+          champion: this.near.status(this.referee.profile(owner)),
+          market: await this.near.market(this.referee.profile(owner)),
+        };
+      }
       await this.near.checkOwner(owner);
       let result: any;
       switch (path) {
@@ -43,6 +60,34 @@ export class GameService {
         case "/api/train":
           result = this.referee.train(owner, body.skill);
           break;
+        case "/api/upgrade":
+          // An older deployed contract would reject the receipt and leave chain and save out of step.
+          if (this.near.config && !this.near.supports("upgrade"))
+            throw new RefereeError(
+              "Gear upgrades open after the testnet contract is updated.",
+              503,
+            );
+          result = { upgrade: this.referee.upgrade(owner, body.slot) };
+          break;
+        case "/api/claim": {
+          if (!this.near.config || !this.near.supports("claim"))
+            throw new RefereeError(
+              "Claiming opens after the testnet contract is updated.",
+              503,
+            );
+          if (!(await this.near.accountExists(String(body.receiver))))
+            throw new RefereeError(
+              "That testnet account does not exist. Check the name.",
+              404,
+            );
+          const claimed = this.referee.claim(
+            owner,
+            body.receiver,
+            body.championId,
+          );
+          result = { claimed };
+          break;
+        }
         case "/api/defense":
           result = this.referee.defense(owner, body.enabled);
           break;
@@ -74,9 +119,38 @@ export class GameService {
         path === "/api/forfeit"
       )
         return this.near.status(this.referee.profile(owner));
+      if (path === "/api/upgrade")
+        result.champion = this.near.status(this.referee.profile(owner));
+      if (path === "/api/claim") {
+        result.champion = this.near.status(this.referee.profile(owner));
+        result.claimed = {
+          tokenId: `champion:${result.claimed.championId}`,
+          pending: !!this.referee.pendingClaim(result.claimed.championId),
+          receiver: result.claimed.receiver,
+          transaction: this.referee.claimTransaction(result.claimed.championId),
+        };
+      }
       if (path === "/api/results")
         result.champion = this.near.status(this.referee.profile(owner));
       return result;
+    });
+  }
+  market(owner: string) {
+    return this.serial(async () => {
+      try {
+        await this.near.checkOwner(owner);
+      } catch (e) {
+        if (!this.referee.profile(owner).chain?.pending) throw e;
+      }
+      return this.near.market(this.referee.profile(owner));
+    });
+  }
+  nft(owner: string) {
+    return this.serial(async () => {
+      if (this.near.config) {
+        await this.near.checkOwner(owner);
+      }
+      return this.near.tokens(this.referee.profile(owner));
     });
   }
   opponents(owner: string) {

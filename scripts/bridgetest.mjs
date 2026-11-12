@@ -1,8 +1,15 @@
+import {
+  openRound,
+  marketAction,
+  marketView,
+  prize,
+  pendingNative,
+} from "../contracts/market.js";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { verify } from "node:crypto";
+import { randomUUID, verify } from "node:crypto";
 import { KeyPair } from "near-api-js";
 import { Referee } from "../server/referee.ts";
 import { NearBridge } from "../server/near.ts";
@@ -57,22 +64,36 @@ try {
   );
   const near = new NearBridge(directory, referee),
     service = new GameService(referee, near);
+  let capabilities = [];
   const owners = new Map(),
     store = {
       champions: new Map(),
       duels: new Map(),
       used: new Map(),
+      market: new Map(),
+      rounds: new Map(),
+      reservations: new Map(),
       owner: (id) => owners.get(id),
-      pendingTransfer: () => false,
+      pendingTransfer: (id) => !!pendingNative(store, id),
+      prize: (id) => prize(store, id),
+      marketAction: (c, ctx, a) => marketAction(store, ctx, c, a),
       mint: (c, owner) => owners.set(c.id, owner),
       recordKills: () => {},
+      upgradeGear: () => {},
+      transfer: (c, receiver) => owners.set(c.id, receiver),
     };
   const clone = (value) => (value == null ? null : structuredClone(value));
   near.provider = {
     viewNodeStatus: async () => ({ chain_id: "testnet" }),
+    viewAccount: async () => ({ amount: "0" }),
     callFunction: async ({ method, args }) => {
       if (method === "game_config")
-        return { referee_public_key: referee.publicKeyHex };
+        return {
+          referee_public_key: referee.publicKeyHex,
+          features: capabilities,
+        };
+      if (method === "market_view")
+        return { ...marketView(store, args.champion_id) };
       if (method === "receipt_applied")
         return clone(store.used.get(args.receipt_id));
       if (method === "get_duel") return clone(store.duels.get(args.duel_id));
@@ -85,10 +106,16 @@ try {
     },
   };
   let fail = false,
-    calls = 0;
+    calls = 0,
+    terminal = false;
   near.account = {
     callFunctionRaw: async ({ args }) => {
       if (fail) throw new Error("Simulated RPC outage");
+      if (terminal)
+        throw Object.assign(new Error("Final testnet rejection"), {
+          txHash: "known-failed-transaction",
+          transactionResult: { status: { Failure: {} } },
+        });
       assert.ok(
         verify(
           null,
@@ -99,7 +126,13 @@ try {
       );
       const result = applyAction(
         store,
-        { contractId, nowMs: now, validAccount: () => true },
+        {
+          contractId,
+          nowMs: now,
+          validAccount: () => true,
+          entropy: Array(32).fill(7),
+          blockHeight: 123,
+        },
         JSON.parse(args.payload),
       );
       calls++;
@@ -172,6 +205,159 @@ try {
   await service.perform(alice, "/api/forfeit", { id: duel.id });
   assert.equal(total(), full);
   assert.equal(store.champions.get(referee.profile(alice).id).duelLosses, 1);
+  // Capability discovery comes from the contract, never an optimistic local flag.
+  await assert.rejects(
+    service.perform(alice, "/api/upgrade", { slot: "weapon" }),
+    /updated/,
+  );
+  capabilities = ["upgrade", "claim"];
+  near.checked = false;
+  // Upgrades change both the vault and equipped combat build.
+  const oldCoins = referee.profile(alice).coins;
+  const improved = await service.perform(alice, "/api/upgrade", {
+    slot: "weapon",
+  });
+  assert.equal(improved.champion.build.weaponLevel, 1);
+  assert.equal(improved.champion.coins, oldCoins - 15);
+  const source = referee.profile(alice).id;
+  // Do not rotate the guest or claim success until an outgoing transfer is final.
+  fail = true;
+  const waiting = await service.perform(alice, "/api/claim", {
+    championId: source,
+    receiver: "wallet.testnet",
+  });
+  assert.equal(waiting.claimed.pending, true);
+  assert.equal(waiting.champion.id, source);
+  assert.throws(() => referee.begin(alice), /pending transfer/);
+  fail = false;
+  const claimed = await service.perform(alice, "/api/claim", {
+    championId: source,
+    receiver: "wallet.testnet",
+  });
+  assert.equal(claimed.claimed.pending, false);
+  assert.notEqual(claimed.champion.id, source);
+  assert.equal(owners.get(source), "wallet.testnet");
+  assert.equal(referee.chainProfile(source).coins, oldCoins - 15);
+  assert.equal(claimed.champion.chain.pending, false);
+  assert.ok(claimed.claimed.transaction);
+  const minted = store.champions.size;
+  await service.perform(alice, "/api/claim", {
+    championId: source,
+    receiver: "wallet.testnet",
+  });
+  assert.equal(
+    store.champions.size,
+    minted,
+    "a retried claim must not rotate a second guest",
+  );
+  await assert.rejects(
+    service.perform(bob, "/api/claim", {
+      championId: source,
+      receiver: "wallet.testnet",
+    }),
+    /already moved/,
+  );
+  // Market intents debit only after confirmation and survive an uncertain relay response.
+  capabilities.push("market");
+  near.checked = false;
+  openRound(store, { nowMs: now }, { id: "bridge-round", durationSeconds: 30 });
+  const marketCoins = referee.profile(bob).coins;
+  const reserveId = randomUUID(),
+    reserveBody = {
+      id: reserveId,
+      operation: "reserve_mint",
+      data: { roundId: "bridge-round" },
+    };
+  fail = true;
+  const marketPending = await service.perform(bob, "/api/market", reserveBody);
+  assert.equal(marketPending.intent.complete, false);
+  assert.equal(
+    marketPending.champion.coins,
+    marketCoins,
+    "no optimistic coin debit",
+  );
+  assert.throws(() => referee.begin(bob), /pending transfer/);
+  fail = false;
+  const reserved = await service.perform(bob, "/api/market", reserveBody);
+  assert.equal(reserved.intent.complete, true);
+  assert.equal(reserved.champion.coins, marketCoins - 10);
+  assert.equal(
+    (await service.perform(bob, "/api/market", reserveBody)).champion.coins,
+    marketCoins - 10,
+  );
+  await assert.rejects(
+    service.perform(bob, "/api/market", {
+      ...reserveBody,
+      data: { roundId: "different" },
+    }),
+    /different choices/,
+  );
+  near.provider.viewAccount = async () => {
+    throw Object.assign(new Error("Guest account not activated"), {
+      name: "AccountDoesNotExistError",
+    });
+  };
+  const unfundedMint = await service.perform(bob, "/api/market", {
+    id: randomUUID(),
+    operation: "mint",
+    data: { roundId: "bridge-round" },
+  });
+  assert.equal(unfundedMint.intent.complete, true);
+  assert.match(unfundedMint.intent.error, /Get demo test NEAR/);
+  assert.equal(unfundedMint.champion.coins, marketCoins - 10);
+  assert.equal(referee.pendingChainOperations().length, 0);
+  near.provider.viewAccount = async () => ({ amount: "0" });
+  loseAck = true;
+  referee.acknowledgeChain = (...args) => {
+    if (loseAck) {
+      loseAck = false;
+      throw new Error("Market acknowledgement crash");
+    }
+    return ack(...args);
+  };
+  const ticketsBody = {
+    id: randomUUID(),
+    operation: "tickets",
+    data: { roundId: "bridge-round", count: 1 },
+  };
+  const ticketsPending = await service.perform(bob, "/api/market", ticketsBody);
+  assert.equal(ticketsPending.intent.complete, false);
+  const ticketCalls = calls;
+  const ticketSaved = await service.perform(bob, "/api/market", ticketsBody);
+  assert.equal(ticketSaved.intent.complete, true);
+  assert.equal(ticketSaved.champion.coins, marketCoins - 15);
+  assert.equal(
+    calls,
+    ticketCalls,
+    "lost acknowledgement never buys another ticket",
+  );
+  terminal = true;
+  const failedAction = await service.perform(bob, "/api/market", {
+    id: randomUUID(),
+    operation: "tickets",
+    data: { roundId: "bridge-round", count: 1 },
+  });
+  terminal = false;
+  assert.equal(failedAction.intent.complete, true);
+  assert.ok(failedAction.intent.error);
+  assert.equal(failedAction.champion.coins, marketCoins - 15);
+  assert.equal(
+    referee.pendingChainOperations().length,
+    0,
+    "known failure releases pending intent",
+  );
+  now += 30001;
+  const drawn = await service.perform(bob, "/api/market", {
+    id: randomUUID(),
+    operation: "draw_round",
+    data: { roundId: "bridge-round" },
+  });
+  assert.equal(drawn.intent.complete, true);
+  assert.equal(
+    drawn.champion.coins,
+    marketCoins - 5,
+    "unpaid reservation refunded to the draw caller",
+  );
   // A transferred opponent cannot receive a new guest challenge or poison unrelated saves.
   const bobId = referee.profile(bob).id;
   owners.set(bobId, "different-owner.testnet");

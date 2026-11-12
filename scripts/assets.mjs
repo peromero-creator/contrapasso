@@ -1,4 +1,7 @@
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { dirname, resolve, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,6 +53,24 @@ export async function buildAssets(configFile) {
         animation.addChannel(document.createAnimationChannel().setTargetNode(target).setTargetPath(channel.getTargetPath()).setSampler(copy));
       }
     }
+    // Optional: shrink oversized textures (uses macOS `sips`; skipped when it is unavailable).
+    if (spec.textureSize) {
+      for (const texture of document.getRoot().listTextures()) {
+        const size = texture.getSize();
+        if (!size || Math.max(...size) <= spec.textureSize) continue;
+        const extension = texture.getMimeType() === "image/png" ? "png" : "jpg";
+        const scratch = join(tmpdir(), `contrapasso-texture-${process.pid}.${extension}`);
+        try {
+          await writeFile(scratch, texture.getImage());
+          execFileSync("sips", ["-Z", String(spec.textureSize), ...(extension === "jpg" ? ["-s", "formatOptions", "85"] : []), scratch], { stdio: "ignore" });
+          texture.setImage(await readFile(scratch));
+        } catch {
+          console.warn(`${name}: texture left at ${size.join("x")} (sips unavailable)`);
+        } finally {
+          await rm(scratch, { force: true });
+        }
+      }
+    }
     for (const required of spec.requiredClips ?? []) if (!document.getRoot().listAnimations().some(a => a.getName() === required)) throw new Error(`${name}: required clip '${required}' is missing`);
     await document.transform(resample(), dedup(), prune(), unpartition(), weld(), meshopt({ encoder: MeshoptEncoder, level: "medium" }));
     const binary = await io.writeBinary(document);
@@ -57,7 +78,7 @@ export async function buildAssets(configFile) {
     const file = `models/${name}-${hash}.glb`;
     await writeFile(resolve(output, `${file}.tmp`), binary);
     await rename(resolve(output, `${file}.tmp`), resolve(output, file));
-    manifest.models[name] = { file: `/assets/${file}`, height: spec.height ?? 2.2, rotationY: spec.rotationY ?? 90, clips: document.getRoot().listAnimations().map(a => a.getName()), bytes: binary.byteLength, credit: spec.credit ?? null };
+    manifest.models[name] = { file: `/assets/${file}`, height: spec.height ?? 2.2, rotationY: spec.rotationY ?? 90, clips: document.getRoot().listAnimations().map(a => a.getName()), bytes: binary.byteLength, windows: spec.windows ?? {}, credit: spec.credit ?? null };
   }
   for (const [name, file] of Object.entries(config.floors ?? {})) {
     if (!["LIMBO", "LUST", "GLUTTONY", "GREED", "WRATH"].includes(name)) throw new Error(`Unknown circle: ${name}`);

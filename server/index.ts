@@ -63,6 +63,14 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(await service.profile(owner)));
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/market") {
+      res.end(JSON.stringify(await service.market(owner)));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/nft") {
+      res.end(JSON.stringify(await service.nft(owner)));
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/opponents") {
       res.end(JSON.stringify(await service.opponents(owner)));
       return;

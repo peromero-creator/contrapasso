@@ -1,8 +1,16 @@
 import type {
+  MarketView,
+  MarketOperation,
+  MarketIntent,
+} from "./shared/market";
+import type {
   Champion,
   Receipt,
   RunChallenge,
   DuelOpponent,
+  UpgradeOutcome,
+  NftView,
+  ClaimOutcome,
 } from "./shared/protocol";
 import type { SkillId } from "./sim/skills";
 
@@ -32,6 +40,26 @@ export const api = {
       inputs,
     }),
   train: (skill: SkillId) => request<Champion>("train", { skill }),
+  upgrade: (slot: "weapon" | "armor") =>
+    request<{ champion: Champion; upgrade: UpgradeOutcome }>("upgrade", {
+      slot,
+    }),
+  nft: () => request<NftView>("nft"),
+  market: () => request<MarketView>("market"),
+  marketAction: (
+    id: string,
+    operation: MarketOperation,
+    data: Record<string, unknown>,
+  ) =>
+    request<{ intent: MarketIntent; champion: Champion; market: MarketView }>(
+      "market",
+      { id, operation, data },
+    ),
+  claim: (receiver: string, championId: string) =>
+    request<{ champion: Champion; claimed: ClaimOutcome }>("claim", {
+      receiver,
+      championId,
+    }),
   opponents: () => request<DuelOpponent[]>("opponents"),
   duel: (opponentId: string) => request<RunChallenge>("duels", { opponentId }),
   defense: (enabled: boolean) => request<Champion>("defense", { enabled }),

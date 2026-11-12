@@ -186,8 +186,9 @@ kbd {
   z-index: 40;
   overflow: hidden;
   background:
-    radial-gradient(ellipse at 75% 95%, #5a2019 0, transparent 55%),
-    linear-gradient(110deg, #121312 5%, #211512 70%, #331912);
+    linear-gradient(90deg, #08090985 0%, #08090925 58%, #08090908),
+    url("/assets/ui/cover.jpg") center / cover no-repeat,
+    #111110;
   transition: transform 0.8s cubic-bezier(0.7, 0, 0.2, 1);
 }
 #landing.up {
@@ -904,8 +905,13 @@ h1 {
   font-size: 10px;
   color: var(--muted);
 }
-#forge {
+#forge,
+#nft,
+#market {
   z-index: 35;
+}
+#nft {
+  justify-content: flex-start;
 }
 .forge-inner {
   width: min(1000px, 100%);
@@ -1202,7 +1208,8 @@ h1 {
   .reward-hint {
     margin-bottom: 10px;
   }
-  #forge {
+  #forge,
+  #nft {
     justify-content: flex-start;
   }
   #forge-cards {
@@ -1476,5 +1483,270 @@ h1 {
   }
   .duel-rules {
     font-size: 12px;
+  }
+}
+
+/* gear tempering */
+.forge-section {
+  display: block;
+  margin: 18px 0 10px;
+}
+#gear-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.gear-card {
+  min-height: 0;
+}
+.gear-card .gear-level {
+  font: 700 34px var(--heading);
+  color: var(--gold);
+  line-height: 1;
+}
+@media (max-width: 700px) {
+  #gear-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* owned NFTs and wallet claim */
+.nft-open {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  padding: 8px 14px;
+}
+#nft-tokens {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+.nft-card {
+  padding: 18px;
+  background: #2b261e;
+  border: 1px solid #63543c;
+}
+.nft-card strong {
+  display: block;
+  margin: 6px 0 12px;
+  font: 600 22px var(--heading);
+  text-transform: uppercase;
+}
+.nft-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+.nft-card dt {
+  color: var(--muted);
+}
+.nft-card dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+#nft a {
+  color: var(--gold);
+}
+.claim-box {
+  padding: 18px;
+  border: 1px solid #63543c;
+  background: #211d17;
+}
+.claim-box p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 12px;
+}
+.claim-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.claim-row input {
+  flex: 1;
+  min-width: 220px;
+  padding: 12px 14px;
+  background: #15120e;
+  border: 1px solid #63543c;
+  color: var(--bone);
+  font: inherit;
+}
+.claim-result {
+  min-height: 20px;
+  color: var(--gold);
+}
+@media (max-width: 800px) {
+  #nft-tokens {
+    grid-template-columns: 1fr;
+  }
+}
+
+#landing .hell-disc {
+  display: none;
+}
+@media (max-width: 700px) {
+  #landing {
+    background-position: 68% center;
+  }
+  #landing:before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #0b0b0bdd, #0b0b0b40);
+    pointer-events: none;
+  }
+}
+
+/* Limited mint and champion-owned prize vault. */
+#market {
+  display: block;
+  overflow-y: auto;
+  padding: 44px 24px;
+}
+.market-inner {
+  max-width: 1000px;
+  margin-inline: auto;
+}
+.market-banner {
+  border: 1px solid #665335;
+  padding: 10px 16px;
+  color: var(--gold);
+  font: 600 12px var(--body);
+  letter-spacing: 0.13em;
+  margin: 20px 0;
+}
+.market-layout {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  border: 1px solid #63543c;
+  background: #211d17;
+}
+.relic-art {
+  position: relative;
+  background: #eae7db;
+  min-height: 350px;
+}
+.relic-art img {
+  width: 100%;
+  height: 350px;
+  object-fit: contain;
+  display: block;
+}
+.relic-art span {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  font: 600 11px var(--body);
+  letter-spacing: 0.16em;
+  color: #514331;
+}
+.relic-detail {
+  padding: 28px;
+}
+.relic-detail h3,
+.raffle-panel h3 {
+  font: 600 38px var(--heading);
+  margin: 8px 0 12px;
+  line-height: 1;
+}
+.relic-detail p,
+.raffle-panel p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.market-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 22px 0;
+}
+.market-metrics b {
+  display: block;
+  font: 600 26px var(--heading);
+  color: var(--bone);
+}
+.market-metrics span {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.market-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+  align-items: center;
+}
+.market-actions .btn {
+  margin: 0;
+  font-size: 13px;
+}
+.market-actions select {
+  padding: 12px;
+  color: var(--bone);
+  background: #211d17;
+  border: 1px solid #63543c;
+  font: inherit;
+}
+.raffle-panel {
+  margin: 20px 0;
+  padding: 24px 28px;
+  background: #1b1915;
+  border: 1px solid #63543c;
+}
+#raffle-winners {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--gold);
+  overflow-wrap: anywhere;
+}
+#market-result,
+#nft-action-result {
+  color: var(--gold);
+  line-height: 1.6;
+  min-height: 24px;
+}
+.market-fine {
+  margin: 20px 0;
+  font-size: 12px !important;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.nft-card .btn {
+  font-size: 12px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+}
+.nft-card img {
+  width: 100%;
+  height: 130px;
+  object-fit: contain;
+  background: #eae7db;
+  margin-top: 10px;
+}
+@media (max-width: 700px) {
+  #market {
+    padding: 24px 16px;
+  }
+  .market-layout {
+    grid-template-columns: 1fr;
+  }
+  .relic-art,
+  .relic-art img {
+    height: 240px;
+    min-height: 0;
+  }
+  .relic-detail,
+  .raffle-panel {
+    padding: 22px;
+  }
+  .market-inner .forge-heading h2 {
+    font-size: 36px;
   }
 }

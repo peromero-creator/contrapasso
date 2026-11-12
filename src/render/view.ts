@@ -17,8 +17,38 @@ import { dirAngle } from "../sim/dirs";
 import { rank } from "../sim/skills";
 import { ModelLibrary, type AnimatedModel } from "./assets";
 
-const PITCH = (55 * Math.PI) / 180;
-const CAM_DIST = 34;
+// 2.5D: an orthographic camera at a fixed tilt over a painted floor, with flat
+// shadowless light, so actors read as illustrated figures rather than lit 3D props.
+const PITCH = (42 * Math.PI) / 180;
+const CAM_DIST = 60;
+const VIEW_HEIGHT = 13;
+/** Seconds an enemy's attack and charge animations should take, to match the combat rules. */
+const WINDUP: Record<string, number> = {
+  imp: 0.34,
+  archer: 0.5,
+  brute: 0.65,
+  warden: 0.5,
+  champion: 0.35,
+};
+const CHARGE: Record<string, number> = {
+  brute: 0.55,
+  warden: 0.6,
+  champion: 0.3,
+};
+/** How the blade sits in the hero's right-hand bone (radians). */
+const GRIP: [number, number, number] = [0, -Math.PI / 2, 0];
+
+function canvasTexture(
+  size: number,
+  draw: (g: CanvasRenderingContext2D) => void,
+) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  draw(c.getContext("2d")!);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 /** One look per circle of the descent: fog, light and floor tint. */
 export const CIRCLES = [
@@ -143,7 +173,9 @@ const std = (color: number, emissive = 0x000000, ei = 1) =>
 export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
+  readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+  private viewH = VIEW_HEIGHT;
+  private aspect = 1;
   private composer: EffectComposer;
   private bloom: UnrealBloomPass;
   private ray = new THREE.Raycaster();
@@ -158,6 +190,37 @@ export class View {
 
   private ground!: THREE.Mesh;
   private sigil!: THREE.Mesh;
+  private sigilInner!: THREE.Mesh;
+  private rimMats: THREE.MeshBasicMaterial[] = [];
+  private splats: {
+    mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+    life: number;
+  }[] = [];
+  private shadowTex = canvasTexture(128, (g) => {
+    const grad = g.createRadialGradient(64, 64, 6, 64, 64, 62);
+    grad.addColorStop(0, "rgba(0,0,0,0.8)");
+    grad.addColorStop(0.55, "rgba(0,0,0,0.62)");
+    grad.addColorStop(0.8, "rgba(0,0,0,0.3)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+  });
+  private splatTex = canvasTexture(128, (g) => {
+    g.fillStyle = "#fff";
+    for (let i = 0; i < 11; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = i === 0 ? 0 : 12 + Math.random() * 30;
+      g.beginPath();
+      g.arc(
+        64 + Math.cos(a) * d,
+        64 + Math.sin(a) * d,
+        i === 0 ? 26 : 5 + Math.random() * 13,
+        0,
+        Math.PI * 2,
+      );
+      g.fill();
+    }
+  });
   private key!: THREE.DirectionalLight;
   private hemi!: THREE.HemisphereLight;
   private torches: THREE.PointLight[] = [];
@@ -168,6 +231,15 @@ export class View {
   private heroMats: THREE.MeshStandardMaterial[] = [];
   private heroBase: THREE.Color[] = [];
   private swordPivot = new THREE.Group();
+  private swordGrip = new THREE.Group();
+  private starterBlade = new THREE.Group();
+  private relicBlade: THREE.Group | null = null;
+  private relicEquipped = false;
+  useRelic(equipped: boolean) {
+    this.relicEquipped = equipped;
+    this.starterBlade.visible = !equipped || !this.relicBlade;
+    if (this.relicBlade) this.relicBlade.visible = equipped;
+  }
   private slash = new THREE.Group();
   private slashMat!: THREE.MeshBasicMaterial;
   private slashT = 0;
@@ -238,12 +310,10 @@ export class View {
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.enabled = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
 
-    this.scene.fog = new THREE.Fog(0x0b0e14, 38, 70);
     this.scene.background = new THREE.Color(0x0b0e14);
 
     this.buildArena();
@@ -252,7 +322,7 @@ export class View {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.6, 0.6, 0.8);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.6, 0.92);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -261,26 +331,15 @@ export class View {
   }
 
   private buildArena() {
-    this.hemi = new THREE.HemisphereLight(0x6a5a66, 0x120a0a, 1.1);
+    this.hemi = new THREE.HemisphereLight(0xffffff, 0xcfc4bc, 2.3);
     this.scene.add(this.hemi);
-    this.key = new THREE.DirectionalLight(0xffd0b0, 2.4);
-    this.key.position.set(9, 22, 10);
-    this.key.castShadow = true;
-    this.key.shadow.mapSize.set(2048, 2048);
-    const sc = this.key.shadow.camera;
-    sc.left = -22;
-    sc.right = 22;
-    sc.top = 16;
-    sc.bottom = -16;
-    sc.near = 1;
-    sc.far = 60;
-    this.key.shadow.bias = -0.0006;
+    this.key = new THREE.DirectionalLight(0xfff0e0, 1.1);
+    this.key.position.set(-6, 14, 16);
     this.scene.add(this.key);
 
-    const gmat = new THREE.MeshStandardMaterial({
+    const gmat = new THREE.MeshBasicMaterial({
       map: groundTexture(),
-      roughness: 0.95,
-      metalness: 0,
+      toneMapped: false,
     });
     this.baseGround = gmat.map;
     this.ground = new THREE.Mesh(
@@ -288,24 +347,51 @@ export class View {
       gmat,
     );
     this.ground.rotation.x = -Math.PI / 2;
-    this.ground.receiveShadow = true;
     this.scene.add(this.ground);
 
-    // the pit around the arena
-    const pit = new THREE.Mesh(
-      new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshBasicMaterial({ color: 0x020203 }),
+    // the void around the arena, a dark stone rim and a thin glowing edge
+    const flat = (
+      w: number,
+      d: number,
+      x: number,
+      y: number,
+      z: number,
+      material: THREE.Material,
+    ) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), material);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(x, y, z);
+      this.scene.add(m);
+      return m;
+    };
+    flat(
+      400,
+      400,
+      0,
+      -0.2,
+      0,
+      new THREE.MeshBasicMaterial({ color: 0x030203 }),
     );
-    pit.rotation.x = -Math.PI / 2;
-    pit.position.y = -0.6;
-    this.scene.add(pit);
-    const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(ARENA_HX * 2 + 1.2, 0.6, ARENA_HZ * 2 + 1.2),
-      std(0x1c1a1a),
+    flat(
+      ARENA_HX * 2 + 1.8,
+      ARENA_HZ * 2 + 1.8,
+      0,
+      -0.04,
+      0,
+      new THREE.MeshBasicMaterial({ color: 0x0d0a0b }),
     );
-    slab.position.y = -0.31;
-    slab.receiveShadow = true;
-    this.scene.add(slab);
+    const edge = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.5,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.rimMats.push(edge);
+    flat(ARENA_HX * 2 + 0.3, 0.12, 0, 0.01, -ARENA_HZ - 0.08, edge);
+    flat(ARENA_HX * 2 + 0.3, 0.12, 0, 0.01, ARENA_HZ + 0.08, edge);
+    flat(0.12, ARENA_HZ * 2 + 0.3, -ARENA_HX - 0.08, 0.01, 0, edge);
+    flat(0.12, ARENA_HZ * 2 + 0.3, ARENA_HX + 0.08, 0.01, 0, edge);
 
     const sigMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -318,64 +404,80 @@ export class View {
     this.sigil.rotation.x = -Math.PI / 2;
     this.sigil.position.y = 0.02;
     this.scene.add(this.sigil);
-    const inner = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.72, 6), sigMat);
-    inner.rotation.x = -Math.PI / 2;
-    inner.position.y = 0.02;
-    this.scene.add(inner);
+    this.sigilInner = new THREE.Mesh(
+      new THREE.RingGeometry(2.6, 2.72, 6),
+      sigMat,
+    );
+    this.sigilInner.rotation.x = -Math.PI / 2;
+    this.sigilInner.position.y = 0.02;
+    this.scene.add(this.sigilInner);
+  }
 
-    const wallMat = std(0x161314);
-    const mkWall = (w: number, d: number, x: number, z: number, h: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
-      m.position.set(x, h / 2 - 0.02, z);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      this.scene.add(m);
-    };
-    mkWall(ARENA_HX * 2 + 1.2, 0.6, 0, -ARENA_HZ - 0.3, 2.4);
-    mkWall(0.6, ARENA_HZ * 2 + 1.2, -ARENA_HX - 0.3, 0, 1.3);
-    mkWall(0.6, ARENA_HZ * 2 + 1.2, ARENA_HX + 0.3, 0, 1.3);
+  /** A soft dark disc under an actor: the only "shadow" in a 2.5D scene. */
+  private blobShadow(radius: number) {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 3.6, radius * 3.0),
+      new THREE.MeshBasicMaterial({
+        map: this.shadowTex,
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 0.03;
+    m.userData.keep = true;
+    return m;
+  }
 
-    const pillarGeo = new THREE.CylinderGeometry(0.55, 0.7, 4.2, 10);
-    const bowlGeo = new THREE.CylinderGeometry(0.75, 0.4, 0.45, 10);
-    const fireGeo = new THREE.SphereGeometry(0.42, 10, 8);
-    const spots: [number, number][] = [
-      [-ARENA_HX + 1.2, -ARENA_HZ + 1.2],
-      [ARENA_HX - 1.2, -ARENA_HZ + 1.2],
-      [-ARENA_HX + 1.2, ARENA_HZ - 1.2],
-      [ARENA_HX - 1.2, ARENA_HZ - 1.2],
-      [-6.5, -ARENA_HZ + 0.9],
-      [6.5, -ARENA_HZ + 0.9],
-    ];
-    spots.forEach(([x, z], i) => {
-      const tall = i < 2 || i > 3;
-      const p = new THREE.Mesh(pillarGeo, wallMat);
-      p.scale.y = tall ? 1 : 0.45;
-      p.position.set(x, tall ? 2.1 : 0.95, z);
-      p.castShadow = true;
-      this.scene.add(p);
-      const top = tall ? 4.3 : 2.0;
-      const bowl = new THREE.Mesh(bowlGeo, wallMat);
-      bowl.position.set(x, top, z);
-      this.scene.add(bowl);
-      const fm = new THREE.MeshStandardMaterial({
-        color: 0x000000,
-        emissive: 0xff7a2a,
-        emissiveIntensity: 1.5,
-      });
-      const fire = new THREE.Mesh(fireGeo, fm);
-      fire.position.set(x, top + 0.35, z);
-      this.scene.add(fire);
-      this.torchMats.push(fm);
-      if (i < 4) {
-        const l = new THREE.PointLight(0xff7a2a, 45, 22, 2);
-        l.position.set(x, top + 0.8, z);
-        this.scene.add(l);
-        this.torches.push(l);
+  private splat(x: number, z: number, size: number) {
+    let s = this.splats.find((q) => q.life <= 0);
+    if (!s) {
+      if (this.splats.length >= 70)
+        s = this.splats.reduce((a, b) => (a.life < b.life ? a : b));
+      else {
+        const mesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(1, 1),
+          new THREE.MeshBasicMaterial({
+            map: this.splatTex,
+            color: 0x4a0709,
+            transparent: true,
+            depthWrite: false,
+            toneMapped: false,
+          }),
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        this.scene.add(mesh);
+        s = { mesh, life: 0 };
+        this.splats.push(s);
       }
-    });
+    }
+    s.life = 9;
+    s.mesh.visible = true;
+    s.mesh.position.set(
+      Math.max(-ARENA_HX + 0.5, Math.min(ARENA_HX - 0.5, x)),
+      0.015 + Math.random() * 0.004,
+      Math.max(-ARENA_HZ + 0.5, Math.min(ARENA_HZ - 0.5, z)),
+    );
+    s.mesh.rotation.z = Math.random() * Math.PI * 2;
+    s.mesh.scale.set(
+      size * (0.8 + Math.random() * 0.6),
+      size * (0.8 + Math.random() * 0.6),
+      1,
+    );
+  }
+
+  private blood(x: number, z: number, drops: number, size: number) {
+    this.burst(x, 1.0, z, drops, 0x7a0d10, 5, false);
+    this.splat(
+      x + (Math.random() - 0.5) * 0.9,
+      z + (Math.random() - 0.5) * 0.9,
+      size,
+    );
   }
 
   private buildHero() {
+    this.hero.add(this.blobShadow(0.8));
     const add = (m: THREE.Mesh, mat: THREE.MeshStandardMaterial) => {
       m.castShadow = true;
       this.hero.add(m);
@@ -431,7 +533,9 @@ export class View {
       std(0x3a2a20),
     );
     hilt.position.x = 0.3;
-    this.swordPivot.add(blade, hilt);
+    this.starterBlade.add(blade, hilt);
+    this.swordGrip.add(this.starterBlade);
+    this.swordPivot.add(this.swordGrip);
     this.swordPivot.position.y = 1.05;
     this.hero.add(this.swordPivot);
     this.scene.add(this.hero);
@@ -439,15 +543,30 @@ export class View {
       if (!model) return;
       this.heroModel = model;
       for (const child of this.hero.children)
-        if (child !== this.swordPivot) child.visible = false;
+        if (child !== this.swordPivot && !child.userData.keep)
+          child.visible = false;
       this.hero.add(model.root);
+      // carry the blade in the right hand instead of orbiting the body
+      const hand = model.bone("RightHand");
+      if (hand) {
+        this.hero.updateWorldMatrix(true, true);
+        const scale = hand.getWorldScale(new THREE.Vector3());
+        const grip = this.swordGrip;
+        grip.scale.set(1 / scale.x, 1 / scale.y, 1 / scale.z);
+        grip.rotation.set(GRIP[0], GRIP[1], GRIP[2]);
+        hand.add(grip);
+        blade.position.set(0.86, 0, 0);
+        hilt.position.set(0.05, 0, 0);
+        // The entire grip moves to the hand, including a relic loaded before the hero.
+      }
     });
     void this.models.create("sword", 1.55).then((model) => {
       if (!model) return;
-      blade.visible = hilt.visible = false;
+      this.relicBlade = model.root;
       model.root.rotation.z = -Math.PI / 2;
-      model.root.position.x = 0.3;
-      this.swordPivot.add(model.root);
+      model.root.position.x = -0.25;
+      this.swordGrip.add(model.root);
+      this.useRelic(this.relicEquipped);
     });
 
     this.slashMat = new THREE.MeshBasicMaterial({
@@ -503,18 +622,20 @@ export class View {
     if (idx === this.circle) return;
     this.circle = idx;
     const c = CIRCLES[idx];
-    (this.scene.fog as THREE.Fog).color.setHex(c.fog);
     (this.scene.background as THREE.Color).setHex(c.fog);
-    (this.ground.material as THREE.MeshStandardMaterial).color.setHex(c.tint);
+    (this.ground.material as THREE.MeshBasicMaterial).color.setHex(c.tint);
+    for (const m of this.rimMats) m.color.setHex(c.glow);
     this.key.color.setHex(c.light);
     (this.sigil.material as THREE.MeshBasicMaterial).color.setHex(c.glow);
     for (const l of this.torches) l.color.setHex(c.glow);
     for (const m of this.torchMats) m.emissive.setHex(c.glow);
     void this.models.floor(c.name).then((texture) => {
       if (this.circle !== idx) return;
-      const material = this.ground.material as THREE.MeshStandardMaterial;
+      const material = this.ground.material as THREE.MeshBasicMaterial;
       material.map = texture ?? this.baseGround;
-      material.color.setHex(texture ? 0xffffff : c.tint);
+      // painted floors are dimmed a little so the actors stand out
+      material.color.setHex(texture ? 0xc4c4c4 : c.tint);
+      this.sigil.visible = this.sigilInner.visible = !texture;
       material.needsUpdate = true;
     });
   }
@@ -632,6 +753,7 @@ export class View {
       tele.position.set(len / 2, 0.05, 0);
       group.add(tele);
     }
+    group.add(this.blobShadow(h * 0.33));
     const hpBg = new THREE.Sprite(
       new THREE.SpriteMaterial({ color: 0x140808, depthTest: false }),
     );
@@ -666,6 +788,7 @@ export class View {
     n: number,
     color: number,
     speed: number,
+    glow = true,
   ) {
     for (let i = 0; i < n; i++) {
       let p = this.particles.find((q) => q.life <= 0);
@@ -691,7 +814,13 @@ export class View {
       p.vy = 2 + Math.random() * 5;
       p.max = p.life = 0.25 + Math.random() * 0.35;
       p.mesh.position.set(x, y, z);
-      (p.mesh.material as THREE.MeshBasicMaterial).color.setHex(color);
+      const material = p.mesh.material as THREE.MeshBasicMaterial;
+      material.color.setHex(color);
+      const blending = glow ? THREE.AdditiveBlending : THREE.NormalBlending;
+      if (material.blending !== blending) {
+        material.blending = blending;
+        material.needsUpdate = true;
+      }
       p.mesh.visible = true;
     }
   }
@@ -711,6 +840,7 @@ export class View {
         case "hit":
           this.damageText(e.x, e.z, String(e.amount ?? 0), "#fff0d4");
           this.burst(e.x, 1.1, e.z, 6, 0xffd9a0, 7);
+          this.blood(e.x, e.z, 4, 0.7);
           this.shake = Math.max(this.shake, (e.amount ?? 0) > 40 ? 0.28 : 0.14);
           stop = Math.max(stop, (e.amount ?? 0) > 40 ? 0.055 : 0.028);
           break;
@@ -724,6 +854,17 @@ export class View {
             e.kind === "warden" ? 60 : 16,
             e.kind === "archer" ? 0xb070ff : 0xff5a3a,
             9,
+          );
+          this.blood(
+            e.x,
+            e.z,
+            e.kind === "warden" ? 36 : 12,
+            e.kind === "warden" ? 3 : 1.5,
+          );
+          this.splat(
+            e.x + (Math.random() - 0.5) * 1.4,
+            e.z + (Math.random() - 0.5) * 1.4,
+            0.8,
           );
           this.shake = Math.max(this.shake, e.kind === "warden" ? 0.9 : 0.25);
           stop = Math.max(stop, 0.05);
@@ -811,7 +952,7 @@ export class View {
       this.slashT -= dt;
       this.slash.position.set(p.x, 0.9, p.z);
       this.slash.rotation.y = -dirAngle(p.aim);
-      this.slashMat.opacity = Math.max(0, this.slashT / 0.16) * 0.85;
+      this.slashMat.opacity = Math.max(0, this.slashT / 0.16) * 0.24;
     } else {
       this.slashMat.opacity = 0;
     }
@@ -832,7 +973,8 @@ export class View {
             return;
           }
           for (const child of actor.group.children)
-            if (child !== actor.tele) child.visible = false;
+            if (child !== actor.tele && !child.userData.keep)
+              child.visible = false;
           actor.model = model;
           actor.group.add(model.root);
         });
@@ -916,19 +1058,29 @@ export class View {
       if (q.life <= 0) q.mesh.visible = false;
     }
 
-    // camera follows the hero loosely so the whole arena stays readable
-    const tx = p.x * 0.45;
-    const tz = p.z * 0.3 - 0.8;
+    for (const q of this.splats) {
+      if (q.life <= 0) continue;
+      q.life -= dt;
+      q.mesh.material.opacity = Math.min(0.85, q.life / 2.5);
+      if (q.life <= 0) q.mesh.visible = false;
+    }
+
+    // fixed tilt; follow the hero but never look far past the arena
+    const halfW = (this.viewH * this.aspect) / 2;
+    const halfD = this.viewH / (2 * Math.sin(PITCH));
+    const limX = Math.max(0, ARENA_HX + 1.6 - halfW);
+    const limZ = Math.max(0, ARENA_HZ + 2.4 - halfD);
+    const tx = Math.max(-limX, Math.min(limX, p.x));
+    const tz = Math.max(-limZ, Math.min(limZ, p.z)) - 0.8;
     this.target.x += (tx - this.target.x) * Math.min(1, dt * 5);
     this.target.z += (tz - this.target.z) * Math.min(1, dt * 5);
     this.shake = Math.max(0, this.shake - dt * 2.4);
     const sx = (Math.random() - 0.5) * this.shake;
     const sz = (Math.random() - 0.5) * this.shake;
-    const dist = CAM_DIST * Math.max(1, 1.7 / this.camera.aspect);
     this.camera.position.set(
       this.target.x + sx,
-      Math.sin(PITCH) * dist,
-      this.target.z + Math.cos(PITCH) * dist + sz,
+      Math.sin(PITCH) * CAM_DIST,
+      this.target.z + Math.cos(PITCH) * CAM_DIST + sz,
     );
     this.camera.lookAt(this.target.x + sx, 0, this.target.z + sz);
   }
@@ -937,17 +1089,25 @@ export class View {
     v.group.position.set(e.x, 0, e.z);
     v.group.rotation.y = -Math.atan2(e.dz, e.dx);
     const rising = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 0.9) : 1;
-    v.group.scale.set(1, rising, 1);
+    const pop = e.flash > 0 ? 1 + 0.16 * Math.min(1, e.flash / 0.14) : 1;
+    v.group.scale.set(pop, rising * pop, pop);
     const wind = e.state === "windup";
     if (v.model) {
-      v.model.play(
+      const state =
         e.state === "act"
           ? "dash"
           : wind
             ? "attack"
             : e.state === "seek"
               ? "run"
-              : "idle",
+              : "idle";
+      v.model.play(
+        state,
+        state === "attack"
+          ? WINDUP[e.kind]
+          : state === "dash"
+            ? CHARGE[e.kind]
+            : undefined,
       );
       v.model.flash(
         e.flash > 0
@@ -1004,14 +1164,15 @@ export class View {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w, h);
-    this.camera.aspect = w / h;
-    // Portrait panels pull the camera back to fit the arena. Keep that arena
-    // in front of the fog and far clipping plane at the new distance.
-    const dist = CAM_DIST * Math.max(1, 1.7 / this.camera.aspect);
-    this.camera.far = dist + 100;
-    const fog = this.scene.fog as THREE.Fog;
-    fog.near = dist + 4;
-    fog.far = dist + 36;
+    this.aspect = w / h;
+    // narrow windows zoom out so at least 20 units of arena width stay visible
+    this.viewH = Math.max(VIEW_HEIGHT, 20 / this.aspect);
+    const halfW = (this.viewH * this.aspect) / 2;
+    this.camera.left = -halfW;
+    this.camera.right = halfW;
+    this.camera.top = this.viewH / 2;
+    this.camera.bottom = -this.viewH / 2;
+    this.camera.far = CAM_DIST * 2 + 100;
     this.camera.updateProjectionMatrix();
   }
 

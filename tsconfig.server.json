@@ -18,6 +18,10 @@
     "src/sim",
     "src/shared",
     "src/dev",
-    "scripts/near-smoke.ts"
+    "scripts/near-smoke.ts",
+    "scripts/near-update.ts",
+    "scripts/near-round.ts",
+    "scripts/near-market-smoke.ts",
+    "scripts/near-feature-smoke.ts"
   ]
 }
