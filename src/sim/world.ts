@@ -1,4 +1,15 @@
 import {
+  abilityState,
+  CAST_TIME,
+  CAST_CONTACT,
+  CORE_TIME,
+  CORE_CONTACT,
+  spellCooldown,
+  type AbilityState,
+  type AbilityId,
+  type CoreId,
+} from "./abilities.ts";
+import {
   weapon,
   weaponId,
   heavyReach,
@@ -30,6 +41,8 @@ export interface Input {
   /** direction index the hero faces */
   aim: number;
   attack: boolean;
+  cast?: boolean;
+  ultimate?: boolean;
   dash: boolean;
   /** Offered power slot, 1..3. Zero/undefined means no selection. */
   choice?: number;
@@ -63,6 +76,7 @@ export interface Enemy {
   comboT?: number;
   armorLevel?: number;
   retaliationCd?: number;
+  ability?: AbilityState;
   attackKind?: "dash" | "swing";
   /** Shove from a sword hit: a velocity that plays out over knockT seconds. */
   knockX?: number;
@@ -79,14 +93,14 @@ export interface Shot {
   life: number;
   dmg: number;
   side?: "player" | "enemy";
-  style?: "bolt" | "soul";
+  style?: "bolt" | "soul" | "lance";
   pierce?: number;
   hitIds?: number[];
   skills?: Skills;
   heavy?: boolean;
 }
 
-export interface Player {
+export interface Player extends AbilityState {
   x: number;
   z: number;
   hp: number;
@@ -133,9 +147,14 @@ export interface SimEvent {
     | "burn"
     | "heal"
     | "echo"
-    | "ranged";
+    | "ranged"
+    | "ability"
+    | "combo";
   x: number;
   z: number;
+  ability?: AbilityId;
+  stage?: "charge" | "release" | "pulse";
+  side?: "player" | "enemy";
   kind?: EnemyKind;
   amount?: number;
   dir?: number;
@@ -157,6 +176,16 @@ export interface World {
   nextId: number;
   offers: SkillId[];
   unlocked: readonly SkillId[];
+  zones: {
+    x: number;
+    z: number;
+    side: "player" | "enemy";
+    id: CoreId;
+    age: number;
+    pulses: number;
+    skills: Skills;
+    ownerId?: number;
+  }[];
   pickups: { id: number; x: number; z: number; healing: number }[];
   mode: "solo" | "duel";
 }
@@ -200,6 +229,7 @@ export function createWorld(
     weaponLevel: number;
     armorLevel: number;
     weaponId?: WeaponId;
+    core?: CoreId | null;
   } = { weaponLevel: 0, armorLevel: 0 },
 ): World {
   const skills: Skills = {};
@@ -215,6 +245,7 @@ export function createWorld(
     spawnDelay: 0.9,
     phase: "fight",
     player: {
+      ...abilityState(equipment.core, skills),
       x: 0,
       z: ARENA_HZ - 2.5,
       hp: maxHp,
@@ -246,6 +277,7 @@ export function createWorld(
     offers: [],
     unlocked: [...trained],
     pickups: [],
+    zones: [],
     mode: "solo",
   };
   return w;
@@ -267,6 +299,7 @@ export function createDuelWorld(
     z: 0,
     aim: 0,
     skills: { ...challenger.skills },
+    ...abilityState(challenger.core, challenger.skills),
   });
   w.player.hp = w.player.maxHp =
     100 + 20 * rank(challenger.skills, "iron") + challenger.armorLevel * 3;
@@ -291,6 +324,7 @@ export function createDuelWorld(
     burnT: 0,
     burnCd: 0,
     skills: { ...defender.skills },
+    ability: abilityState(defender.core, defender.skills),
     weaponLevel: defender.weaponLevel,
     weaponId: weaponId(defender.weaponId),
     armorLevel: defender.armorLevel,
@@ -372,13 +406,28 @@ function spawnWave(w: World) {
 function hurtPlayer(w: World, dmg: number, dot = false): boolean {
   const p = w.player;
   if ((!dot && p.invuln > 0) || w.phase !== "fight") return false;
-  dmg = Math.max(1, Math.round(dmg * (1 - 0.1 * rank(p.skills, "iron"))));
+  dmg = Math.max(
+    1,
+    Math.round(
+      dmg * (1 - 0.1 * rank(p.skills, "iron")) * (p.wardT > 0 ? 0.55 : 1),
+    ),
+  );
   p.hp -= dmg;
+  const rival = w.enemies.find((e) => e.kind === "champion");
+  if (
+    rival?.ability?.core &&
+    rival.ability.castT <= 0 &&
+    !w.zones.some((z) => z.side === "enemy")
+  )
+    rival.ability.charge = Math.min(
+      100,
+      rival.ability.charge + Math.min(dmg, p.hp + dmg) * 0.18,
+    );
   if (!dot) p.invuln = 0.55;
   p.flash = 0.25;
   w.events.push({ type: "hurt", x: p.x, z: p.z, amount: dmg });
   if (!dot && rank(p.skills, "reprisal") > 0)
-    nova(w, p.x, p.z, 3.5, 16 * rank(p.skills, "reprisal"));
+    nova(w, p.x, p.z, 3.5, 16 * rank(p.skills, "reprisal"), "iron");
   if (p.hp <= 0) {
     p.hp = 0;
     w.phase = "dead";
@@ -389,7 +438,20 @@ function hurtPlayer(w: World, dmg: number, dot = false): boolean {
 
 function hurtEnemy(w: World, e: Enemy, raw: number, dot = false) {
   const skills = e.skills ?? {};
-  const dmg = Math.max(1, Math.round(raw * (1 - 0.1 * rank(skills, "iron"))));
+  const dmg = Math.max(
+    1,
+    Math.round(
+      raw *
+        (1 - 0.1 * rank(skills, "iron")) *
+        ((e.ability?.wardT ?? 0) > 0 ? 0.55 : 1),
+    ),
+  );
+  const p = w.player;
+  if (p.core && p.castT <= 0 && !w.zones.some((z) => z.side === "player"))
+    p.charge = Math.min(
+      100,
+      p.charge + Math.max(0, Math.min(e.hp, dmg)) * 0.18,
+    );
   e.hp -= dmg;
   e.flash = 0.14;
   if (!dot)
@@ -407,7 +469,14 @@ function hurtEnemy(w: World, e: Enemy, raw: number, dot = false) {
   }
 }
 
-function nova(w: World, x: number, z: number, radius: number, dmg: number) {
+function nova(
+  w: World,
+  x: number,
+  z: number,
+  radius: number,
+  dmg: number,
+  motif?: CoreId,
+) {
   for (const e of w.enemies) {
     if (e.spawn > 0 || e.hp <= 0) continue;
     const dx = e.x - x,
@@ -423,6 +492,15 @@ function nova(w: World, x: number, z: number, radius: number, dmg: number) {
     )
       s.life = 0;
   w.events.push({ type: "nova", x, z, amount: radius });
+  if (motif)
+    w.events.push({
+      type: "ability",
+      ability: motif,
+      stage: "pulse",
+      x,
+      z,
+      amount: radius,
+    });
 }
 
 function offerSkills(w: World) {
@@ -504,13 +582,15 @@ function fireWeapon(
   heavy: boolean,
   combo: boolean,
   side: "player" | "enemy",
+  woven = false,
 ) {
   const blade = weapon(identity),
     speed = blade.projectileSpeed!;
   const damage = Math.round(
     (blade.damage + level * 2) *
       (heavy ? blade.heavy + 0.6 * rank(skills, "verdict") : 1) *
-      (combo ? 1 + 0.25 * rank(skills, "coup") : 1),
+      (combo ? 1 + 0.25 * rank(skills, "coup") : 1) *
+      (woven ? 1.25 : 1),
   );
   const spread = heavy && blade.ranged === "soul" ? [-32, 0, 32] : [0];
   for (const offset of spread) {
@@ -542,8 +622,14 @@ function melee(w: World) {
   const base = blade.damage + p.weaponLevel * 2;
   const dmg = Math.round(
     (heavy ? base * (blade.heavy + 0.6 * rank(p.skills, "verdict")) : base) *
-      (p.comboT > 0 ? 1 + 0.25 * rank(p.skills, "coup") : 1),
+      (p.comboT > 0 ? 1 + 0.25 * rank(p.skills, "coup") : 1) *
+      (p.weaveT > 0 ? 1.25 : 1),
   );
+  if (p.comboT > 0 && rank(p.skills, "coup"))
+    w.events.push({ type: "combo", x: p.x, z: p.z, dir: p.aim });
+  if (p.weaveT > 0)
+    w.events.push({ type: "combo", x: p.x, z: p.z, dir: p.aim });
+  p.weaveT = 0;
   p.comboT = 0;
   if (heavy && p.weaponId === "tollkeeper")
     nova(w, p.x + ax * 1.5, p.z + az * 1.5, 2.5, 10 + p.weaponLevel);
@@ -572,7 +658,7 @@ function melee(w: World) {
       Math.round(dmg * executionBonus(p.weaponId, heavy, e.hp, e.maxHp)),
     );
     if (heavy && burning && rank(p.skills, "pyre"))
-      nova(w, e.x, e.z, 2.5, 12 * rank(p.skills, "pyre"));
+      nova(w, e.x, e.z, 2.5, 12 * rank(p.skills, "pyre"), "ember");
     if (rank(p.skills, "ember") > 0) e.burnT = 3;
     const kb =
       e.kind === "warden"
@@ -594,6 +680,172 @@ function melee(w: World) {
   }
 }
 
+function beginAbility(
+  w: World,
+  actor: { x: number; z: number },
+  a: AbilityState,
+  id: AbilityId,
+  aim: number,
+  side: "player" | "enemy",
+) {
+  a.castId = id;
+  a.castT = id === "lance" ? CAST_TIME : CORE_TIME;
+  a.castAim = aim;
+  a.castN++;
+  a.castPending = true;
+  if (id !== "lance") a.charge = 0;
+  w.events.push({
+    type: "ability",
+    ability: id,
+    stage: "charge",
+    x: actor.x,
+    z: actor.z,
+    dir: aim,
+    side,
+  });
+}
+function tickAbility(
+  w: World,
+  actor: { x: number; z: number },
+  a: AbilityState,
+  skills: Skills,
+  identity: WeaponId,
+  side: "player" | "enemy",
+) {
+  a.spellCd = Math.max(0, a.spellCd - DT);
+  a.wardT = Math.max(0, a.wardT - DT);
+  a.weaveT = Math.max(0, a.weaveT - DT);
+  if (a.castT <= 0) return;
+  a.castT = Math.max(0, a.castT - DT);
+  const id = a.castId!;
+  const duration = id === "lance" ? CAST_TIME : CORE_TIME;
+  const contact = id === "lance" ? CAST_CONTACT : CORE_CONTACT;
+  if (!a.castPending || a.castT > duration - contact) return;
+  a.castPending = false;
+  if (id === "lance") {
+    a.spellCd = spellCooldown(skills);
+    a.weaveT = 2.5;
+    const staff = identity === "vesper-reed";
+    for (const offset of staff ? [-28, 0, 28] : [0]) {
+      const aim = (a.castAim + offset + DIRS) % DIRS;
+      w.shots.push({
+        id: w.nextId++,
+        x: actor.x + DX[aim] * 0.7,
+        z: actor.z + DZ[aim] * 0.7,
+        vx: DX[aim] * 14,
+        vz: DZ[aim] * 14,
+        life: 0.8 + 0.04 * rank(skills, "reach"),
+        dmg: 24 + 10 * rank(skills, "ember"),
+        side,
+        style: "lance",
+        pierce: staff ? 3 : 2,
+        hitIds: [],
+        skills: { ...skills },
+        heavy: true,
+      });
+    }
+  } else {
+    w.zones.push({
+      x: actor.x,
+      z: actor.z,
+      side,
+      id,
+      age: 0,
+      pulses: 0,
+      skills: { ...skills },
+      ownerId: side === "enemy" ? (actor as Enemy).id : undefined,
+    });
+    if (id === "iron") a.wardT = 5;
+  }
+  w.events.push({
+    type: "ability",
+    ability: id,
+    stage: "release",
+    x: actor.x,
+    z: actor.z,
+    dir: a.castAim,
+    side,
+  });
+}
+function stepZones(w: World) {
+  for (const z of w.zones) {
+    const owner =
+      z.side === "player"
+        ? w.player
+        : w.enemies.find((e) => e.id === z.ownerId);
+    if (!owner || owner.hp <= 0 || w.phase !== "fight") {
+      z.age = 99;
+      continue;
+    }
+    if (z.id === "ash") {
+      z.x = owner.x;
+      z.z = owner.z;
+    }
+    const max = z.id === "ember" ? 3 : z.id === "ash" ? 6 : 1;
+    if (z.pulses < max && z.age + 0.00001 >= z.pulses * 0.5) {
+      const radius =
+        z.id === "ember" ? 3.5 + z.pulses : z.id === "ash" ? 4.5 : 5;
+      const dmg =
+        z.id === "ember"
+          ? 28 + 8 * rank(z.skills, "pyre")
+          : z.id === "ash"
+            ? 18 + 5 * rank(z.skills, "afterimage")
+            : 40 + 12 * rank(z.skills, "mercy");
+      let targets = 0;
+      if (z.side === "player") {
+        for (const e of w.enemies)
+          if (
+            e.hp > 0 &&
+            e.spawn <= 0 &&
+            (e.x - z.x) ** 2 + (e.z - z.z) ** 2 <= (radius + e.r) ** 2
+          ) {
+            hurtEnemy(w, e, dmg);
+            targets++;
+            if (z.id === "ember") e.burnT = 3;
+          }
+      } else if (
+        (w.player.x - z.x) ** 2 + (w.player.z - z.z) ** 2 <=
+          (radius + 0.5) ** 2 &&
+        hurtPlayer(w, dmg)
+      ) {
+        targets++;
+        if (z.id === "ember") {
+          w.player.burnT = 3;
+          w.player.burnCd = 0.5;
+        }
+      }
+      if (z.id === "iron" && targets && owner.hp > 0 && w.phase === "fight") {
+        const hp = Math.min(
+          owner.maxHp - owner.hp,
+          targets * (10 + 5 * rank(z.skills, "mercy")),
+        );
+        owner.hp += hp;
+        w.events.push({ type: "heal", x: owner.x, z: owner.z, amount: hp });
+      }
+      for (const s of w.shots)
+        if (
+          (s.side ?? "enemy") !== z.side &&
+          (s.x - z.x) ** 2 + (s.z - z.z) ** 2 < radius ** 2
+        )
+          s.life = 0;
+      w.events.push({
+        type: "ability",
+        ability: z.id,
+        stage: "pulse",
+        x: z.x,
+        z: z.z,
+        side: z.side,
+        amount: radius,
+      });
+      z.pulses++;
+    }
+    z.age += DT;
+  }
+  w.zones = w.zones.filter(
+    (z) => z.age < (z.id === "ash" ? 3 : z.id === "ember" ? 1.5 : 0.6),
+  );
+}
+
 function stepPlayer(w: World, input: Input) {
   const p = w.player;
   if (p.comboT > 0) p.comboT -= DT;
@@ -602,6 +854,23 @@ function stepPlayer(w: World, input: Input) {
   if (p.invuln > 0) p.invuln -= DT;
   if (p.flash > 0) p.flash -= DT;
   if (p.swingT > 0) p.swingT -= DT;
+  tickAbility(w, p, p, p.skills, p.weaponId, "player");
+  if (
+    w.phase === "fight" &&
+    p.dashT <= 0 &&
+    p.castT <= 0 &&
+    p.swingT <= 0 &&
+    !input.dash
+  ) {
+    if (input.ultimate && p.core && p.charge >= 100)
+      beginAbility(w, p, p, p.core, input.aim, "player");
+    else if (input.cast && rank(p.skills, "ember") && p.spellCd <= 0)
+      beginAbility(w, p, p, "lance", input.aim, "player");
+  }
+  if (p.castT > 0) {
+    p.aim = p.castAim;
+    return;
+  }
 
   if (input.dash && p.dashCd <= 0 && p.dashT <= 0) {
     p.dashDir = input.move >= 0 ? input.move : input.aim;
@@ -613,7 +882,7 @@ function stepPlayer(w: World, input: Input) {
     p.pendingStrike = false;
     w.events.push({ type: "dash", x: p.x, z: p.z, dir: p.dashDir });
     if (rank(p.skills, "ash") > 0)
-      nova(w, p.x, p.z, 2.5, 18 * rank(p.skills, "ash"));
+      nova(w, p.x, p.z, 2.5, 18 * rank(p.skills, "ash"), "ash");
   }
 
   if (p.dashT > 0) {
@@ -671,7 +940,11 @@ function stepPlayer(w: World, input: Input) {
           p.swingN % 3 === 0,
           p.comboT > 0,
           "player",
+          p.weaveT > 0,
         );
+        if (p.weaveT > 0 || (p.comboT > 0 && rank(p.skills, "coup")))
+          w.events.push({ type: "combo", x: p.x, z: p.z, dir: p.aim });
+        p.weaveT = 0;
         p.comboT = 0;
       } else if (blade.impactDelay) p.pendingStrike = true;
       else melee(w);
@@ -722,6 +995,22 @@ function stepEnemy(w: World, e: Enemy) {
     case "champion": {
       const skills = e.skills ?? {};
       const blade = weapon(e.weaponId);
+      const a = (e.ability ??= abilityState(null, skills));
+      tickAbility(w, e, a, skills, weaponId(e.weaponId), "enemy");
+      if (a.castT > 0) return;
+      if (e.state === "seek" && e.cd <= 0 && d < 9) {
+        const id =
+          a.core && a.charge >= 100
+            ? a.core
+            : rank(skills, "ember") && a.spellCd <= 0 && d > 3
+              ? "lance"
+              : null;
+        if (id) {
+          beginAbility(w, e, a, id, dirIndex(ex, ez), "enemy");
+          e.cd = 1;
+          return;
+        }
+      }
       if ((e.comboT ?? 0) > 0) e.comboT! -= DT;
       const attackReach = blade.reach + 0.6 * rank(skills, "reach");
       if (e.state === "seek") {
@@ -776,7 +1065,9 @@ function stepEnemy(w: World, e: Enemy) {
                 heavy,
                 (e.comboT ?? 0) > 0,
                 "enemy",
+                a.weaveT > 0,
               );
+              a.weaveT = 0;
               e.state = "recover";
               e.comboT = 0;
               e.t = blade.swing;
@@ -788,8 +1079,10 @@ function stepEnemy(w: World, e: Enemy) {
               (blade.damage + (e.weaponLevel ?? 0) * 2) *
                 (heavy ? blade.heavy + 0.6 * rank(skills, "verdict") : 1) *
                 ((e.comboT ?? 0) > 0 ? 1 + 0.25 * rank(skills, "coup") : 1) *
+                (a.weaveT > 0 ? 1.25 : 1) *
                 executionBonus(weaponId(e.weaponId), heavy, p.hp, p.maxHp),
             );
+            a.weaveT = 0;
             const direct =
               d <= attackReach + heavyReach(weaponId(e.weaponId), heavy) &&
               facing >= blade.arc - 0.12 * rank(skills, "reach");
@@ -1011,6 +1304,8 @@ export function step(w: World, input: Input): void {
     if (p.hp > 0) stepEnemy(w, e);
   }
 
+  stepZones(w);
+
   // keep enemies from stacking on each other
   for (let i = 0; i < w.enemies.length; i++) {
     const a = w.enemies[i];
@@ -1050,7 +1345,7 @@ export function step(w: World, input: Input): void {
         hurtEnemy(w, e, s.dmg);
         if (rank(s.skills ?? {}, "ember")) e.burnT = 3;
         if (s.heavy && burning && rank(s.skills ?? {}, "pyre"))
-          nova(w, e.x, e.z, 2.5, 12 * rank(s.skills ?? {}, "pyre"));
+          nova(w, e.x, e.z, 2.5, 12 * rank(s.skills ?? {}, "pyre"), "ember");
         (s.hitIds ??= []).push(e.id);
         s.pierce = (s.pierce ?? 1) - 1;
         if (s.pierce <= 0) {
@@ -1156,6 +1451,7 @@ export function step(w: World, input: Input): void {
     if (dx * dx + dz * dz < PORTAL.r * PORTAL.r) {
       w.floor += 1;
       w.pickups = [];
+      w.zones = [];
       w.wave = 0;
       w.wavesInFloor = wavesFor(w.floor);
       w.spawnDelay = 1.0;

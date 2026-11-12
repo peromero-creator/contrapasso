@@ -12,7 +12,7 @@ Tracks: `games` and `nfts`.
 
 1. Open the title screen, take the descent, and show movement, aiming, a heavy third swing, dash and the vitality bar.
 2. Clear a circle, choose a rank for an unlocked power and descend through the lit gate. At the end, show replay verification and the confirmed coin save.
-3. Open Train Champion, show the connected skill paths, unlock a permanent skill with coin, or temper an equipped item. Show its updated dynamic NFT metadata in What You Own.
+3. Open Train Champion, preview the actual casting animation and unlock Ember Edge with earned coin. Attune one soul core, cast with Q, follow with a boosted weapon strike, and unleash R at 100% charge. Show the skill and core in What You Own.
 4. Open Duel, choose a matched funded defender and show the rival health bar. Explain the 10+10 coin escrow and saved-build opponent. A completed or forfeited match settles the record and existing coin pool.
 5. Open the Reliquary. Show limited supply, a coin reservation, demo funding, a native paid mint, seven distinct tradable weapon identities, repeatable earned mints, a silent attack preview and the transparent application treasury. Equip a relic in What You Own and show it in combat.
 6. Open Player Market, show a listed relic’s level and kill history, buy it with test NEAR and equip the same NFT. Show seller proceeds and the 10% treasury share. There are no raffle tickets.
@@ -30,6 +30,7 @@ Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1
 - [Ranged weapons and native resale](testnet-exchange-proof.json).
 - [Treasury transition](testnet-treasury-proof.json).
 - [Repeated mint and new melee weapon proof](testnet-forge-proof.json).
+- [Active skills, soul core and replay proof](testnet-soul-proof.json).
 - [Historical mint / raffle proof](testnet-market-proof.json).
 - `npm ci`, `npm test`, `npm run build`, `npm run contract:test`.
 - `npm run dev`; open `http://127.0.0.1:5173/?silent=1`.
@@ -43,7 +44,8 @@ Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1
 - [x] Testnet limited mint and application treasury, with legacy prize rights preserved.
 - [x] Seven tradable weapon archetypes, including two ranged classes, with in-hand models and attack animations.
 - [x] Native player marketplace, retained NFT traits and seller withdrawals.
-- [x] Twelve coin-unlocked skills, healing pickups and ambient inhabitants.
+- [x] Twelve coin-unlocked skills, staff casting, three NFT-carried core attunements and weapon weaving.
+- [x] Healing pickups, ambient inhabitants and dressed catacomb perimeters.
 - [x] Original project art, optimized models and painted floors.
 - [x] MIT code license and dependency/art credits.
 - [ ] Record and upload the final video.

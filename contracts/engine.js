@@ -1,3 +1,4 @@
+import { coreId, availableCore } from "../src/sim/abilities.ts";
 // Shared contract rules. No network, filesystem, clock or randomness.
 import { SKILLS, SKILL_IDS, canLearn } from "../src/sim/skills.ts";
 import {
@@ -40,6 +41,7 @@ export function build(value) {
   );
   return {
     skills: powers(value.skills),
+    core: availableCore(value.core, powers(value.skills)),
     weaponId: weaponId(value.weaponId),
     weaponLevel: value.weaponLevel,
     armorLevel: value.armorLevel,
@@ -234,6 +236,10 @@ export function applyAction(store, context, action) {
       for (const id of c.skills)
         c.build.skills[id] = Math.max(c.build.skills[id] ?? 0, 1);
       store.recordKills(c, data.kills);
+    } else if (action.operation === "attune") {
+      const core = coreId(data.core);
+      requireThat(core && c.skills.includes(core), "Unlock this core skill first");
+      c.build.core = core;
     } else if (action.operation === "train") {
       requireThat(
         SKILL_IDS.includes(data.skill) && !c.skills.includes(data.skill),

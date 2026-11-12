@@ -6,8 +6,8 @@ Deployed and verified on public NEAR testnet on 2026-11-12. No mainnet assets ar
 
 - Contract: [contrapasso-261112-a23809.testnet](https://testnet.nearblocks.io/address/contrapasso-261112-a23809.testnet)
 - Deployment: [5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5](https://testnet.nearblocks.io/txns/5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5)
-- WASM SHA-256: `d53cfdd765587876b31063ebaca5029da0fccb777a5c4f7b89d9601d96a3ebe2`
-- Latest code-only update: [5VUXz7F1NwrqvNt776N5HFxs8f8Jd2RsG8yykMWa6fFL](https://testnet.nearblocks.io/txns/5VUXz7F1NwrqvNt776N5HFxs8f8Jd2RsG8yykMWa6fFL), version 0.8.0. Existing state and 31 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
+- WASM SHA-256: `1a779d74ca677e3658d2b3fd3773295cfa2e94836050145a011a8b52038a23d8`
+- Latest code-only update: [4AGpJTHMu9142iQLZ9111Vpm2H4CfHi7DKn7VNhEdHsd](https://testnet.nearblocks.io/txns/4AGpJTHMu9142iQLZ9111Vpm2H4CfHi7DKn7VNhEdHsd), version 0.9.0. Existing state and 34 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
 - Published code and referee public key were read back and matched. The local server is connected through a restricted relay key.
 - Live verification passed: two guest champions played verified Solo, a permanent power was bought, defense was enabled, both Duel stakes were locked, and the winning replay paid the pool and updated both NFTs. Repeating a result did not award twice.
 - A separate silent browser run earned 165 coin, then won its Duel and finished with 175 coin and a 1–0 record, confirmed directly from NFT metadata.
@@ -50,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.7.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.8.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -130,3 +130,13 @@ The contract tracks native pool/prize liabilities. Prizes belong to champion IDs
 `nft_payout` / `nft_transfer_payout` quote NEP-199 payouts: 90% seller, 10% contract, preserving all units and enforcing the recipient limit. The marketplace is responsible for payment. Only native value actually attached to `collect_royalty` enters recorded raffle accounting; sending a quote or transferring an NFT alone does not create pool revenue.
 
 With approved testnet writes, `npm run near:market-smoke -- --execute` uses private, resumable test sessions to exercise coin access/refund, sponsored native mint, same-id retry, gear metadata/equip, tickets, draw, unpaid reservation refund and both native withdrawals. It writes only public proof to `docs/testnet-market-proof.json`. Private cookies and intent progress remain under `.data/`.
+
+## Soul core and active skills (0.9)
+
+`attune` binds one owned Ember Edge, Ash Step or Iron Vow attunement to `build.core`. It costs no additional coin and cannot grant training. The signed operation enforces owner/revision checks and the existing Duel/transfer locks. The core is retained in champion transfers and in authenticated Solo/Duel loadouts; it is not taken from a browser preference. `soul_core` advertises actual deployed support.
+
+The 27-bit replay codec adds cast and ultimate inputs. Soul Lance requires paid Ember Edge. Core energy begins at zero and is earned by actual damage, bounded by remaining target life. Ultimate pulses cannot fill their own energy meter. The referee reproduces casting, projectiles, timed area effects, healing and the weapon follow-up bonus at 60 Hz. Duel defenders use the same ability rules and fixed cast direction.
+
+Fresh WASM and an in-place 0.8→0.9 upgrade passed the actual VM suite, including unowned-core rejection, Duel locks and core retention after NFT transfer. The 0.8 deployment record is [archived here](testnet-forge-upgrade-proof.json). Live proof: [soul combat verification](testnet-soul-proof.json). Reproduce only within the authorized testnet scope with `npm run near:soul-smoke -- --execute`; private sessions remain under `.data/`.
+
+The live replay check cast 15 Soul Lances and six core ultimates, reached circle four with 61 kills, and rejected duplicate rewards. A separate silent browser run bought Ember Edge, attuned Furnace Heart, minted and equipped Vesper Reed, and recorded 46 kills on that same staff NFT. It reached circle three; the daily cap correctly credited no extra coin. Core choice survived both results. Transaction IDs and direct NFT read-back are in the proof above.

@@ -11,6 +11,8 @@ export class Underworld {
   private drops = new Map<number, THREE.Group>();
   private cloth: THREE.Mesh[] = [];
   private time = 0;
+  private souls: THREE.Group[] = [];
+  private censers: THREE.Group[] = [];
   private stone = new THREE.MeshStandardMaterial({
     color: 0x928a7e,
     roughness: 1,
@@ -61,6 +63,16 @@ export class Underworld {
       const g = new THREE.Group();
       this.root.add(g);
       this.circles.push(g);
+      // A continuous catacomb foundation grounds the niches instead of leaving props in a black void.
+      const foundation = this.mesh(g,new THREE.PlaneGeometry(64,48),this.dark,0,-.12,0);
+      foundation.rotation.x = -Math.PI/2;
+      for(const side of [-1,1]) {
+        for(let i=0;i<7;i++) {
+          const h=1.4+(i%3)*.4;
+          this.box(g,4.8,h,1.4,side*(4+i*4.4),h/2-.2,-ARENA_HZ-4.8,this.dark);
+        }
+        this.box(g,1.2,1.3,28,side*(ARENA_HX+5.8),.4,0,this.dark);
+      }
       // A low masonry shelf grounds scenery in the painted arena without covering combat.
       for (const side of [-1, 1]) {
         this.box(
@@ -143,6 +155,7 @@ export class Underworld {
         }
         this.basin(g, x, 3, 1.1);
       }
+      this.populate(g, circle);
       // Broken reliefs at the far wall form a backdrop, not a row of obstacles.
       this.box(g, 7, 0.4, 1.6, -8, 0.1, -ARENA_HZ - 1.1, this.dark);
       this.box(g, 3.5, 0.9, 0.8, -9, 0.55, -ARENA_HZ - 1.4, this.stone);
@@ -322,8 +335,161 @@ export class Underworld {
     );
     this.cloth.push(cloth);
   }
+  private populate(g: THREE.Group, circle: number) {
+    const ash = new THREE.MeshStandardMaterial({
+      color: [0x606773, 0x73505c, 0x67634b, 0x79694b, 0x694c45][circle],
+      roughness: 1,
+    });
+    // Stage ritual niches at the back, keeping the central gate and floor entirely readable.
+    for (const side of [-1, 1]) {
+      const x = side * 12.5,
+        z = -ARENA_HZ - 1.9;
+      for (let i = 0; i < 4; i++) {
+        const rib = this.mesh(
+          g,
+          new THREE.TorusGeometry(1.4 - i * 0.12, 0.1, 5, 18, Math.PI * 0.85),
+          this.bone,
+          x + side * i * 0.5,
+          1.1,
+          z + i * 0.1,
+        );
+        rib.rotation.set(Math.PI / 2, 0.3 * side, Math.PI / 2);
+      }
+      for (let i = 0; i < 12; i++) {
+        const ox = x + Math.sin(i * 2.4) * 1.6,
+          oz = z + Math.cos(i * 3.1) * 0.7;
+        const skull = this.mesh(
+          g,
+          new THREE.IcosahedronGeometry(0.16 + (i % 3) * 0.025, 1),
+          this.bone,
+          ox,
+          0.2 + (i % 2) * 0.1,
+          oz,
+        );
+        skull.scale.set(0.9, 1.1, 0.85);
+        // Recessed eye sockets remain dark rather than emitting light.
+        for (const eye of [-1, 1])
+          this.mesh(
+            g,
+            new THREE.SphereGeometry(0.047, 5, 4),
+            this.dark,
+            ox + eye * 0.063,
+            0.24 + (i % 2) * 0.1,
+            oz + 0.13,
+          );
+      }
+      const hanging = new THREE.Group();
+      hanging.position.set(side * (ARENA_HX + 1.3), 4.2, -6);
+      g.add(hanging);
+      this.censers.push(hanging);
+      for (let i = 0; i < 12; i++) {
+        const link = this.mesh(
+          hanging,
+          new THREE.TorusGeometry(0.1, 0.018, 4, 8),
+          this.bronze,
+          0,
+          -i * 0.16,
+          0,
+        );
+        link.rotation.y = i % 2 ? Math.PI / 2 : 0;
+      }
+      this.mesh(
+        hanging,
+        new THREE.ConeGeometry(0.33, 0.6, 6),
+        this.bronze,
+        0,
+        -2.1,
+        0,
+      ).rotation.z = Math.PI;
+      // Sloping stalactites frame the far corners; no overhead silhouette crosses the player.
+      for (let i = 0; i < 4; i++)
+        this.mesh(
+          g,
+          new THREE.ConeGeometry(0.3 + i * 0.06, 1.1 + i * 0.17, 5),
+          this.dark,
+          side * (15 + i * 0.8),
+          4.2 - i * 0.12,
+          z - 1,
+        ).rotation.z = Math.PI;
+      for (let i = 0; i < 3; i++) {
+        const soul = new THREE.Group();
+        soul.position.set(
+          side * (ARENA_HX + 2.4) + (i % 2) * 0.5,
+          0.2,
+          4 + i * 1.15,
+        );
+        g.add(soul);
+        this.souls.push(soul);
+        this.mesh(soul, new THREE.ConeGeometry(0.24, 0.95, 6), ash, 0, 0.48, 0);
+        const head = this.mesh(
+          soul,
+          new THREE.SphereGeometry(0.13, 6, 5),
+          this.bone,
+          0,
+          1.03,
+          0.03,
+        );
+        head.scale.y = 1.25;
+        const face = this.mesh(
+          soul,
+          new THREE.PlaneGeometry(0.14, 0.19),
+          this.dark,
+          0,
+          1.05,
+          0.155,
+        );
+        face.rotation.x = -0.1;
+        soul.userData.baseZ = soul.position.z;
+        soul.userData.phase = i + circle;
+      }
+      // Tiny candles and charred offerings near the inner lip, all under ankle height.
+      for (let i = 0; i < 8; i++) {
+        const px = side * (ARENA_HX + 0.2 + (i % 2) * 0.2),
+          pz = -8 + i * 1.9;
+        this.mesh(
+          g,
+          new THREE.CylinderGeometry(0.055, 0.075, 0.18, 5),
+          this.bone,
+          px,
+          0.09,
+          pz,
+        );
+        this.mesh(
+          g,
+          new THREE.ConeGeometry(0.045, 0.12, 5),
+          new THREE.MeshBasicMaterial({ color: 0x9e7444 }),
+          px,
+          0.24,
+          pz,
+        );
+      }
+    }
+    // Low flat inlays enrich the playable floor without pretending to be collidable props.
+    const seal = new THREE.Mesh(
+      new THREE.RingGeometry(3.8, 3.83, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0x9d8b71,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    seal.rotation.x = -Math.PI / 2;
+    seal.position.set(0, 0.025, 0);
+    g.add(seal);
+  }
   sync(w: World, dt: number) {
     this.time += dt;
+    for (const soul of this.souls) {
+      soul.position.y =
+        0.2 + Math.sin(this.time * 0.7 + soul.userData.phase) * 0.045;
+      soul.position.z =
+        soul.userData.baseZ +
+        Math.sin(this.time * 0.12 + soul.userData.phase) * 0.18;
+    }
+    for (const [i, c] of this.censers.entries())
+      c.rotation.z = Math.sin(this.time * 0.45 + i) * 0.04;
     this.root.visible = w.mode === "solo";
     const circle = Math.max(0, Math.min(4, w.floor - 1));
     this.circles.forEach((g, i) => {

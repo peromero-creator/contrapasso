@@ -21,12 +21,12 @@ Open [localhost:5173](http://127.0.0.1:5173/). This starts the game and local re
 6. **Player Market** lists unequipped tradable weapon NFTs for 0.001–1 test NEAR. Purchases preserve the token’s upgrades and history; 90% becomes seller proceeds and 10% enters the treasury. Withdraw proceeds from the same screen.
 7. With testnet connected, **Duel** lists matched defenders. Both vaults stake 10 coin; the winner takes 20. Fights last up to 90 seconds. Forfeit or abandonment loses the challenger stake. Enable defense to let others challenge your build.
 
-Escape pauses; losing focus also pauses. R restarts Solo. Sound defaults off; M enables it. [Silent mode](http://127.0.0.1:5173/?silent=1) hard-disables audio. The development-only `?silent=1&autoplay=1` bot still requires manual power choices.
+Escape pauses; losing focus also pauses. Q casts Soul Lance after learning Ember Edge. R releases an attuned soul core at 100% charge; N restarts Solo. Sound defaults off; M enables it. [Silent mode](http://127.0.0.1:5173/?silent=1) hard-disables audio. The development-only `?silent=1&autoplay=1` bot still requires manual power choices.
 
 ## Features and status
 
 - Deterministic 60 Hz combat, five circles, enemy waves and Warden.
-- Twelve ranked skills in three prerequisite paths, coin-funded unlocks, saved progress and a 300-coin daily Solo cap.
+- Twelve ranked skills in three prerequisite paths, paid unlocks, staff casting and a three-choice soul core carried by the champion NFT. Bounded coin earning and replay verification remain in place.
 - Replay-verifying referee, Ed25519 receipts and durable transaction retries.
 - Dynamic champion/gear NFTs, coin-funded + upgrades, transfer-aware inventory, wallet claiming, coin and native prize vaults.
 - Limited native testnet mints, refundable coin reservations, transparent application treasury and NEP-199 royalty quotations. Legacy prize withdrawals remain available to their owners.

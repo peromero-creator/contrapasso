@@ -54,6 +54,18 @@
         "attack-spear": {
           "file": "art/source/hero-arsenal-actions.glb",
           "clip": "Thrust_Slash"
+        },
+        "cast": {
+          "file": "art/source/hero-soul-actions.glb",
+          "clip": "mage_soell_cast_3"
+        },
+        "ultimate": {
+          "file": "art/source/hero-soul-actions.glb",
+          "clip": "Charged_Spell_Cast"
+        },
+        "ultimate-iron": {
+          "file": "art/source/hero-soul-actions.glb",
+          "clip": "Sword_Judgment"
         }
       },
       "requiredClips": [
@@ -68,7 +80,10 @@
         "attack-staff",
         "attack-axe",
         "attack-axe-heavy",
-        "attack-spear"
+        "attack-spear",
+        "cast",
+        "ultimate",
+        "ultimate-iron"
       ],
       "windows": {
         "attack": [
@@ -106,6 +121,18 @@
         "attack-spear": [
           0.55,
           1.35
+        ],
+        "cast": [
+          0.35,
+          1.45
+        ],
+        "ultimate": [
+          1.25,
+          2.1
+        ],
+        "ultimate-iron": [
+          0.7,
+          1.7
         ]
       },
       "credit": {

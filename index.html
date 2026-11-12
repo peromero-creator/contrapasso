@@ -35,7 +35,17 @@
           </div>
           <div class="combo">
             <i id="combo-1"></i><i id="combo-2"></i><i id="combo-3"></i
-            ><span>III / HEAVY</span>
+            ><span id="combo-instruction">I → II → III</span>
+          </div>
+        </div>
+        <div class="ability-bar">
+          <div id="cast-slot">
+            <kbd>Q</kbd><span id="cast-label">SOUL LANCE</span
+            ><i><b id="cast-meter"></b></i>
+          </div>
+          <div id="core-slot">
+            <kbd>R</kbd><span id="core-label">ATTUNE A CORE</span
+            ><i><b id="core-meter"></b></i>
           </div>
         </div>
         <div id="held-weapon" class="eyebrow"></div>
@@ -72,6 +82,7 @@
       </div>
       <div id="help">
         <kbd>WASD</kbd> move <kbd>HOLD CLICK</kbd> attack <kbd>SPACE</kbd> dash
+        <kbd>Q</kbd> cast <kbd>R</kbd> core
       </div>
     </div>
 
@@ -219,6 +230,34 @@
         <span class="eyebrow forge-section"
           >SKILL TREE · UNLOCK WITH EARNED COIN</span
         >
+        <div class="skill-theatre">
+          <div>
+            <canvas
+              id="skill-stage"
+              aria-label="Silent skill animation preview"
+            ></canvas
+            ><span id="skill-preview-label">SILENT PREVIEW</span>
+          </div>
+          <article>
+            <span class="eyebrow">YOUR BODY IS THE WEAPON</span>
+            <h3 id="skill-preview-name">Soul Lance</h3>
+            <p id="skill-preview-description"></p>
+            <button id="preview-lance" class="btn ghost">
+              PREVIEW STAFF CAST · Q</button
+            ><small
+              >Previewing does not unlock a skill. Learn it with earned coin
+              below.</small
+            >
+          </article>
+        </div>
+        <div class="core-heading">
+          <span class="eyebrow">SOUL CORE · ONE ATTUNEMENT</span>
+          <p>
+            Learn Ember Edge, Ash Step or Iron Vow to awaken a core. Attuning is
+            free. Your choice stays on your champion NFT.
+          </p>
+        </div>
+        <div id="core-cards"></div>
         <div id="forge-cards"></div>
         <span class="eyebrow forge-section">TEMPER YOUR GEAR</span>
         <div id="gear-cards"></div>
@@ -298,7 +337,10 @@
           <div id="arsenal-choices" aria-label="Choose a weapon"></div>
           <div class="market-layout">
             <div class="relic-art">
-              <canvas id="relic-stage" aria-label="Selected weapon attack animation preview"></canvas>
+              <canvas
+                id="relic-stage"
+                aria-label="Selected weapon attack animation preview"
+              ></canvas>
               <span id="relic-motion">IN-GAME MODEL / SILENT PREVIEW</span>
             </div>
             <div class="relic-detail">

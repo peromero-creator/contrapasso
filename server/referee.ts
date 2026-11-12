@@ -1,3 +1,4 @@
+import { coreId } from "../src/sim/abilities.ts";
 import { WEAPON_IDS } from "../src/sim/weapons.ts";
 import {
   MARKET_OPERATIONS,
@@ -328,6 +329,7 @@ export class Referee {
     let equipment: RunChallenge["equipment"] = {
       weaponLevel: a.build.weaponLevel,
       weaponId: a.build.weaponId,
+      core: a.build.core,
       armorLevel: a.build.armorLevel,
     };
     if (retry !== undefined) {
@@ -386,6 +388,21 @@ export class Referee {
       ...challenge,
       resumeInputs: run.mode === "duel" ? (progress ?? []) : undefined,
     });
+  }
+  attune(owner: string, value: unknown): Champion {
+    const a = this.account(owner, true);
+    demand(!a.lockedBy, "Finish your Duel first.");
+    const core = coreId(value);
+    demand(core && a.skills.includes(core), "Unlock this core skill first.");
+    a.build.core = core;
+    this.enqueue({
+      id: `attune:${randomUUID()}`,
+      operation: "attune",
+      championId: a.id,
+      data: { core },
+    });
+    this.save();
+    return this.profile(owner);
   }
   train(owner: string, id: unknown): Champion {
     const a = this.account(owner, true);
@@ -578,6 +595,7 @@ export class Referee {
       equipment: {
         weaponLevel: a.build.weaponLevel,
         weaponId: a.build.weaponId,
+        core: a.build.core,
         armorLevel: a.build.armorLevel,
       },
       challengerBuild: copyBuild(a.build),

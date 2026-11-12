@@ -2240,3 +2240,196 @@ h1 {
     height: 320px;
   }
 }
+
+/* The soul altar uses muted mineral colors; motion lives inside the preview. */
+.skill-theatre {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) 1.1fr;
+  border: 1px solid #66543b;
+  background: #191714;
+  margin: 24px 0;
+}
+.skill-theatre > div {
+  position: relative;
+  min-height: 300px;
+}
+#skill-stage {
+  width: 100%;
+  height: 300px;
+  display: block;
+}
+#skill-preview-label {
+  position: absolute;
+  bottom: 14px;
+  left: 18px;
+  font:
+    600 11px Barlow,
+    sans-serif;
+  letter-spacing: 0.12em;
+  color: #cab58d;
+}
+.skill-theatre article {
+  padding: 32px;
+  align-self: center;
+}
+.skill-theatre h3 {
+  font:
+    600 28px Cinzel,
+    serif;
+  margin: 12px 0;
+  color: #eadbc2;
+}
+.skill-theatre p,
+.core-card p {
+  line-height: 1.65;
+  color: #b3aaa0;
+}
+.skill-theatre small {
+  display: block;
+  line-height: 1.6;
+  margin-top: 16px;
+  color: #8e877d;
+}
+.core-heading {
+  margin: 36px 0 16px;
+}
+.core-heading p {
+  max-width: 700px;
+  color: #aaa197;
+  line-height: 1.6;
+}
+#core-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 42px;
+}
+.core-card {
+  padding: 22px;
+  background: #211d19;
+  border: 1px solid #4b4136;
+  display: flex;
+  flex-direction: column;
+}
+.core-card.attuned {
+  border-color: #c3a879;
+  background: #2b251d;
+}
+.core-card h3 {
+  font:
+    600 17px Cinzel,
+    serif;
+  margin: 18px 0 6px;
+  color: #dfceb0;
+}
+.core-card p {
+  font-size: 13px;
+  flex: 1;
+}
+.core-card > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.core-card .btn {
+  font-size: 13px;
+  padding: 12px;
+}
+.core-card .skill-icon {
+  width: 32px;
+  height: 32px;
+  color: #c7ae83;
+}
+.skill-path {
+  position: relative;
+}
+.skill-node:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  width: 1px;
+  height: 18px;
+  background: #78654b;
+  bottom: -19px;
+  left: 50%;
+}
+.ability-bar {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0 12px;
+  max-width: 400px;
+}
+.ability-bar > div {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  padding: 10px 12px 13px;
+  background: #171512d9;
+  border: 1px solid #4d4238;
+  min-width: 155px;
+}
+.ability-bar span {
+  font:
+    600 10px Cinzel,
+    serif;
+  align-self: center;
+  color: #a9a397;
+}
+.ability-bar kbd {
+  font:
+    600 12px Barlow,
+    sans-serif;
+  color: #d4bea0;
+}
+.ability-bar i {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #302820;
+}
+.ability-bar b {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #8c7b61;
+  transition: width 0.1s linear;
+}
+#cast-slot b {
+  background: #779ba3;
+}
+#core-slot.ready {
+  border-color: #c1a677;
+}
+#core-slot.ready span,
+#cast-slot.ready span {
+  color: #ead9b9;
+}
+#combo-instruction {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  max-width: 145px;
+}
+@media (max-width: 760px) {
+  .skill-theatre {
+    grid-template-columns: 1fr;
+  }
+  .skill-theatre article {
+    padding: 22px;
+  }
+  #core-cards {
+    grid-template-columns: 1fr;
+  }
+  .ability-bar > div {
+    min-width: 125px;
+    padding: 8px;
+  }
+  .ability-bar {
+    gap: 6px;
+  }
+  .ability-bar span {
+    font-size: 8px;
+  }
+}

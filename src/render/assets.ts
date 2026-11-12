@@ -151,7 +151,9 @@ export class AnimatedModel {
     this.active?.fadeOut(0.07);
     next.reset().fadeIn(0.07);
     const once =
-      (state.startsWith("attack") || ["dash", "death"].includes(state)) &&
+      (state.startsWith("attack") ||
+        ["dash", "death", "cast"].includes(state) ||
+        state.startsWith("ultimate")) &&
       this.actions.get(state) === next;
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
     next.clampWhenFinished = once;

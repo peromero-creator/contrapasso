@@ -1,3 +1,13 @@
+import { SoulFx } from "./soul-fx";
+import { createWorld } from "../sim/world";
+import {
+  CAST_TIME,
+  CAST_CONTACT,
+  CORE_TIME,
+  CORE_CONTACT,
+  type AbilityId,
+  CORES,
+} from "../sim/abilities";
 import * as THREE from "three";
 import { ModelLibrary, type AnimatedModel } from "./assets";
 import { weapon, weaponId, type WeaponId } from "../sim/weapons";
@@ -127,6 +137,11 @@ export function paintRelics(root: ParentNode = document) {
 export class RelicStage {
   private renderer: THREE.WebGLRenderer;
   private scene = chamber();
+  private fx = new SoulFx(this.scene);
+  private previewWorld = createWorld(1);
+  private ability: AbilityId | null = null;
+  private elapsed = 0;
+  private emitted = 0;
   private camera = new THREE.PerspectiveCamera(37, 1, 0.1, 30);
   private hero: AnimatedModel | null = null;
   private blade: AnimatedModel | null = null;
@@ -166,6 +181,20 @@ export class RelicStage {
     });
     this.tick = this.tick.bind(this);
     requestAnimationFrame(this.tick);
+  }
+  preview(ability: AbilityId | null) {
+    this.ability = ability;
+    this.timer = 0;
+    this.playing = false;
+    this.fx.clear();
+    this.camera.position.set(
+      ...((ability
+        ? ability === "lance"
+          ? [3.5, 3, 6.5]
+          : [5, 5, 9]
+        : [3.5, 2.8, 5.5]) as [number, number, number]),
+    );
+    this.camera.lookAt(0.25, 1.1, 0);
   }
   async select(id: WeaponId) {
     if (id === this.identity && this.blade) return;
@@ -213,6 +242,61 @@ export class RelicStage {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
+    }
+    this.previewWorld.player.core = this.ability === "lance" ? null : this.ability;
+    this.previewWorld.player.wardT = this.ability === "iron" && this.elapsed > CORE_CONTACT && this.elapsed < 4 ? 1 : 0;
+    this.fx.sync(this.previewWorld, dt);
+    if (this.ability) {
+      this.timer -= dt;
+      const duration = this.ability === "lance" ? CAST_TIME : CORE_TIME;
+      const contact = this.ability === "lance" ? CAST_CONTACT : CORE_CONTACT;
+      if (this.timer <= 0) {
+        this.playing = true;
+        this.elapsed = 0;
+        this.emitted = 0;
+        this.timer = 4.8;
+        this.hero.play(
+          this.ability === "lance"
+            ? "cast"
+            : this.ability === "iron"
+              ? "ultimate-iron"
+              : "ultimate",
+          duration,
+          true,
+        );
+        this.fx.event({
+          type: "ability",
+          ability: this.ability,
+          stage: "charge",
+          x: 0,
+          z: 0,
+        });
+        this.label.textContent = `SILENT PREVIEW · ${this.ability === "lance" ? "SOUL LANCE" : CORES[this.ability].name.toUpperCase()}`;
+      }
+      this.elapsed += dt;
+      const count =
+        this.ability === "ember" ? 3 : this.ability === "ash" ? 6 : 1;
+      if (
+        this.emitted < count &&
+        this.elapsed >= contact + this.emitted * 0.5
+      ) {
+        this.fx.event({
+          type: "ability",
+          ability: this.ability,
+          stage: "pulse",
+          x: 0,
+          z: 0,
+          amount: this.ability === "ember" ? 3.5 + this.emitted : undefined,
+        });
+        this.emitted++;
+      }
+      if (this.playing && this.elapsed > duration) {
+        this.hero.play("idle");
+        this.playing = false;
+      }
+      this.hero.update(dt);
+      this.renderer.render(this.scene, this.camera);
+      return;
     }
     this.timer -= dt;
     if (this.timer <= 0) {

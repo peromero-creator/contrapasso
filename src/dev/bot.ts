@@ -40,6 +40,8 @@ export function bot(w: World): Input {
           : aim,
     aim,
     attack: close,
+    cast: target.d < 10 && p.spellCd <= 0,
+    ultimate: target.d < 5 && p.charge >= 100,
     dash: dodge && w.tick % 90 === 0,
   };
 }

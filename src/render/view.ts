@@ -1,3 +1,6 @@
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
+import { SoulFx } from "./soul-fx";
+import { CAST_TIME, CORE_TIME } from "../sim/abilities";
 import { attackClip, orientWeapon } from "./weapon-pose";
 import { Gore } from "./gore";
 import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
@@ -179,6 +182,10 @@ export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   private gore = new Gore(this.scene);
+  private soul = new SoulFx(this.scene);
+  private previousCast = 0;
+  private echoes: { root: THREE.Object3D; life: number }[] = [];
+  private echoCd = 0;
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   private viewH = VIEW_HEIGHT;
   private aspect = 1;
@@ -914,6 +921,7 @@ export class View {
     let stop = 0;
     const glow = CIRCLES[this.circle]?.glow ?? 0xffa040;
     for (const e of events) {
+      this.soul.event(e);
       switch (e.type) {
         case "swing":
           this.slashT = 0.16;
@@ -997,6 +1005,7 @@ export class View {
       w.tick < this.lastWorldTick || w.floor - 1 !== this.circle;
     if (w.tick < this.lastWorldTick) {
       this.gore.clear();
+      this.soul.clear();
       for (const c of this.fallen) this.disposeEnemy(c.view);
       this.fallen = [];
       for (const s of this.splats) {
@@ -1014,6 +1023,8 @@ export class View {
     )
       this.useWeapon(p.weaponId, p.weaponLevel);
     this.underworld.sync(w, dt);
+    if (battlefieldChanged) this.soul.clear();
+    this.soul.sync(w, dt);
     this.slashMat.color.setHex(weapon(p.weaponId).color);
     if (
       p.weaponLevel >= 3 &&
@@ -1042,20 +1053,79 @@ export class View {
       this.heroModel.play(
         w.phase === "dead"
           ? "death"
-          : dashing
-            ? "dash"
-            : p.swingT > 0
-              ? attackClip(p.weaponId, p.swingN)
-              : moving
-                ? "run"
-                : "idle",
-        p.swingT > 0 ? weapon(p.weaponId).swing : undefined,
-        p.swingT > 0 && p.swingN !== this.previousHeroSwing,
+          : p.castT > 0
+            ? p.castId === "lance"
+              ? "cast"
+              : p.castId === "iron"
+                ? "ultimate-iron"
+                : "ultimate"
+            : dashing
+              ? "dash"
+              : p.swingT > 0
+                ? attackClip(p.weaponId, p.swingN)
+                : moving
+                  ? "run"
+                  : "idle",
+        p.castT > 0
+          ? p.castId === "lance"
+            ? CAST_TIME
+            : CORE_TIME
+          : p.swingT > 0
+            ? weapon(p.weaponId).swing
+            : undefined,
+        (p.castT > 0 && p.castN !== this.previousCast) ||
+          (p.swingT > 0 && p.swingN !== this.previousHeroSwing),
       );
       this.heroModel.flash(p.flash > 0 ? 0x401b16 : null);
       this.heroModel.update(dt);
     }
+    this.echoCd -= dt;
+    if (
+      p.dashT > 0 &&
+      rank(p.skills, "afterimage") &&
+      this.echoCd <= 0 &&
+      this.heroModel
+    ) {
+      this.echoCd = 0.055;
+      const ghost = cloneSkeleton(this.hero);
+      ghost.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          const tint = (mat: THREE.Material) => {
+            const m = mat.clone();
+            m.transparent = true;
+            m.opacity = 0.16;
+            m.depthWrite = false;
+            if (m instanceof THREE.MeshStandardMaterial) {
+              m.color.setHex(0x647c89);
+              m.emissive.setHex(0);
+            }
+            return m;
+          };
+          o.material = Array.isArray(o.material)
+            ? o.material.map(tint)
+            : tint(o.material);
+        }
+      });
+      this.scene.add(ghost);
+      this.echoes.push({ root: ghost, life: 0.3 });
+    }
+    for (const echo of this.echoes) {
+      echo.life -= dt;
+      if (battlefieldChanged) echo.life = 0;
+      echo.root.traverse((o) => {
+        if (o instanceof THREE.Mesh)
+          for (const m of Array.isArray(o.material)
+            ? o.material
+            : [o.material]) {
+            m.opacity = 0.16 * Math.max(0, echo.life / 0.3);
+            if (echo.life <= 0) m.dispose();
+          }
+      });
+      if (echo.life <= 0) this.scene.remove(echo.root);
+    }
+    this.echoes = this.echoes.filter((e) => e.life > 0);
     this.previousHeroSwing = p.swingN;
+    this.previousCast = p.castN;
     this.previousHero.set(p.x, p.z);
     for (let i = 0; i < this.heroMats.length; i++) {
       this.heroMats[i].emissive.copy(this.heroBase[i]);
@@ -1156,7 +1226,9 @@ export class View {
       let m = this.shots.get(s.id);
       if (!m) {
         m = new THREE.Mesh(
-          s.style === "bolt" ? this.boltGeo : this.shotGeo,
+          s.style === "bolt" || s.style === "lance"
+            ? this.boltGeo
+            : this.shotGeo,
           s.side === "player"
             ? s.style === "bolt"
               ? this.boltMat
@@ -1166,6 +1238,11 @@ export class View {
         this.scene.add(m);
         this.shots.set(s.id, m);
       }
+      m.scale.set(
+        s.style === "lance" ? 3.5 : 1,
+        s.style === "lance" ? 0.55 : 1,
+        s.style === "lance" ? 0.55 : 1,
+      );
       m.position.set(s.x, 0.9, s.z);
       m.rotation.y = -Math.atan2(s.vz, s.vx);
     }
@@ -1262,27 +1339,40 @@ export class View {
 
   private syncEnemy(e: Enemy, v: EnemyView) {
     v.group.position.set(e.x, 0, e.z);
-    v.group.rotation.y = -Math.atan2(e.dz, e.dx);
+    v.group.rotation.y =
+      (e.ability?.castT ?? 0) > 0
+        ? -dirAngle(e.ability!.castAim)
+        : -Math.atan2(e.dz, e.dx);
     const rising = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 0.9) : 1;
     const pop = e.flash > 0 ? 1 + 0.16 * Math.min(1, e.flash / 0.14) : 1;
     v.group.scale.set(pop, rising * pop, pop);
     const wind = e.state === "windup";
     if (v.model) {
       const state =
-        e.state === "act"
-          ? "dash"
-          : wind
-            ? attackClip(e.weaponId, e.pattern)
-            : e.state === "seek"
-              ? "run"
-              : "idle";
+        (e.ability?.castT ?? 0) > 0
+          ? e.ability?.castId === "lance"
+            ? "cast"
+            : e.ability?.castId === "iron"
+              ? "ultimate-iron"
+              : "ultimate"
+          : e.state === "act"
+            ? "dash"
+            : wind
+              ? attackClip(e.weaponId, e.pattern)
+              : e.state === "seek"
+                ? "run"
+                : "idle";
       v.model.play(
         state,
-        state.startsWith("attack")
-          ? WINDUP[e.kind]
-          : state === "dash"
-            ? CHARGE[e.kind]
-            : undefined,
+        state === "cast"
+          ? CAST_TIME
+          : state.startsWith("ultimate")
+            ? CORE_TIME
+            : state.startsWith("attack")
+              ? WINDUP[e.kind]
+              : state === "dash"
+                ? CHARGE[e.kind]
+                : undefined,
       );
       v.model.flash(
         e.flash > 0

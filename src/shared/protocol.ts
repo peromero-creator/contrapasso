@@ -27,6 +27,7 @@ export interface ChainOperation {
     | "register"
     | "solo"
     | "train"
+    | "attune"
     | "upgrade"
     | "claim"
     | "defense"
@@ -90,7 +91,12 @@ export interface RunChallenge {
   skills: SkillId[];
   expiresAt: number;
   mode: "solo" | "duel";
-  equipment: { weaponLevel: number; armorLevel: number; weaponId?: import("../sim/weapons.ts").WeaponId };
+  equipment: {
+    core?: import("../sim/abilities.ts").CoreId | null;
+    weaponLevel: number;
+    armorLevel: number;
+    weaponId?: import("../sim/weapons.ts").WeaponId;
+  };
   challengerBuild?: CombatBuild;
   opponent?: DuelOpponent;
   duelId?: string;

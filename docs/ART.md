@@ -89,3 +89,9 @@ Guillotine Hymn and Acheron Needle are original Flow concepts in the same projec
 Fourteen packed models and five painted floors ship. `src/render/relics.ts` renders cached portraits from the same packed weapon meshes in a dark stone chamber; raw neutral-background concepts remain in `art/source/` for provenance, not in product cards. The mint preview uses the hero rig and actual action durations and never changes equipment, gameplay, rewards or audio.
 
 Blood textures and stone-chamber geometry are original procedural art. Directional clots, fragments, irregular stained-floor decals and existing death clips add weight without brighter lighting. Pools are capped and reused. Full anatomical dismemberment is not implemented.
+
+## Soul skill presentation (0.9)
+
+The same Meshy hero rig adds Charged Spell Cast (125), Mage Spell Cast 3 (132) and Sword Judgment (102), in `art/source/hero-soul-actions.glb`. Contact-sheet inspection selected cast 0.35–1.45 seconds, charged ultimate 1.25–2.10 and judgment 0.70–1.70. Runtime durations match deterministic windup/contact/recovery. No new character or third-party game art is used.
+
+`src/render/soul-fx.ts` draws original layered flame textures, seals, tapering orbit blades, lance streaks and ward facets. Effects use normal transparency and bounded lifetimes, with at most 32 motifs. Dash echoes copy the current posed hero and fade over 0.3 seconds. The skill-tree preview uses the same rig and effects; it has no gameplay, payment or audio side effects. The environment's new catacomb foundations and perimeter props are original procedural geometry. The ambient hooded figures are stylized scenery, not full new animated character assets.

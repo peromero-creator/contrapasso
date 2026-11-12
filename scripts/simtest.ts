@@ -152,9 +152,9 @@ for (const id of SKILL_IDS) {
 }
 for (const move of [-1, 0, 1023]) for (const aim of [0, 1023]) for (const choice of [0, 1, 2, 3]) {
   const input = { move, aim, choice, attack: true, dash: true };
-  assert.deepEqual(unpack(pack(input)), input);
+  assert.deepEqual(unpack(pack(input)), { ...input, cast: false, ultimate: false });
 }
-for (const n of [-1, 0.5, 2047, 0x2000000, NaN]) assert.throws(() => unpack(n));
+for (const n of [-1, 0.5, 2047, 0x8000000, NaN]) assert.throws(() => unpack(n));
 console.log("Powers and input codec: PASS (all eight powers, rank cap, choices, invalid inputs)");
 
 for (const seed of [1, 42, 20261112, 987654321]) {

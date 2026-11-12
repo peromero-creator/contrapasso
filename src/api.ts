@@ -39,6 +39,8 @@ export const api = {
       id,
       inputs,
     }),
+  attune: (core: import("./sim/abilities").CoreId) =>
+    request<Champion>("attune", { core }),
   train: (skill: SkillId) => request<Champion>("train", { skill }),
   upgrade: (slot: "weapon" | "armor") =>
     request<{ champion: Champion; upgrade: UpgradeOutcome }>("upgrade", {

@@ -1,0 +1,73 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "verifiedAt": "2026-11-12T20:59:17.399Z",
+  "championId": "5221ceac-7b90-442b-91d7-dbd45c656766",
+  "attuneTransaction": "5aCeTND1VZ4Mihi5xpKCzKEK72vmCxjtcVYJfVPssbPu",
+  "resultTransaction": "EpRYjHq57aZd7HXEfgMRKKwrNgRyvTkqSRM533W4AK5x",
+  "issuedCore": "ember",
+  "combat": {
+    "ticks": 5139,
+    "casts": 15,
+    "ultimates": 6,
+    "kills": 61,
+    "floor": 4,
+    "outcome": "dead"
+  },
+  "coinsBefore": 9,
+  "coinsAfter": 155,
+  "duplicateSafe": true,
+  "coreAfterReplay": "ember",
+  "originalOwnerCoin": 76,
+  "silentBrowser": {
+    "championId": "af515c79-d175-424b-a8c2-1d4b258684d9",
+    "training": {
+      "skill": "ember",
+      "cost": 45,
+      "transaction": "4xm72WuKRsunJWtDxSy6gupcLSNuGjjzx6smeuBMtsKe"
+    },
+    "attunement": {
+      "core": "ember",
+      "transaction": "BcYQCXRiRySszHGaBUcgYcVLai5FgGmz29TWpNo1XmwF",
+      "coins": 15
+    },
+    "staffMint": {
+      "tokenId": "relic:forge-demo-1:4",
+      "weaponId": "vesper-reed",
+      "reserveTransaction": "8faEMCDQKTNaQkEXPzB8vrTR8PmfM578nduYYkPKFy5t",
+      "mintTransaction": "FmDM7mSPR2tc4rfrMJbnd4k7phwuCoHYaiJZFtXqX3wE",
+      "coinCost": 10,
+      "nativeCost": "0.01 test NEAR"
+    },
+    "equipment": {
+      "weaponId": "vesper-reed",
+      "core": "ember",
+      "transaction": "Be3JXtFYUXrGA77CESudDPNpfBS97ukCTd1iKmBcMjKM"
+    },
+    "combat": {
+      "version": "0.8.0",
+      "runId": "0a0d0d40-493d-46ac-9779-d6877a235f33",
+      "championId": "af515c79-d175-424b-a8c2-1d4b258684d9",
+      "seed": 1839306787,
+      "outcome": "dead",
+      "floor": 3,
+      "ticks": 3471,
+      "kills": 46,
+      "earnedCoins": 166,
+      "awardedCoins": 0,
+      "powers": {
+        "haste": 1,
+        "ash": 1,
+        "afterimage": 1,
+        "ember": 3
+      },
+      "mode": "solo",
+      "coinDelta": 0
+    },
+    "resultTransaction": "DkAbQHn8uDfR7VMzf6WPPjziXCeie8VU4ffQpuDX2Ky3",
+    "nftKills": 46,
+    "coreAfterReplay": "ember",
+    "coinsAfter": 5,
+    "runsAfter": 6
+  }
+}

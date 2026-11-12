@@ -18,7 +18,7 @@ The last command compiles and tests WASM in a project-local NEAR sandbox. No glo
 
 - `src/sim/` is shared by client and referee. Keep it deterministic: no DOM, three.js, `Date`, `Math.random` or trigonometry; use seeded randomness and `DX`/`DZ` lookup tables.
 - Only `step(world, input)` advances simulation, at one tick per call / 60 Hz. Rendering reads state without mutating it.
-- Inputs use the versioned 25-bit codec in `src/sim/input.ts`. Bump `SIM_VERSION` for released rule or replay changes. Keep `.ts` extensions on sim imports so Node can run them directly.
+- Inputs use the versioned 27-bit codec in `src/sim/input.ts`. Bump `SIM_VERSION` for released rule or replay changes. Keep `.ts` extensions on sim imports so Node can run them directly.
 - Run the simulation/replay tests after combat changes.
 
 ## Repository and runtime

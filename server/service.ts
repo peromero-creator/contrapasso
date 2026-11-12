@@ -102,6 +102,14 @@ export class GameService {
         case "/api/results":
           result = this.referee.submit(owner, body.id, body.inputs);
           break;
+        case "/api/attune":
+          if (this.near.config && !this.near.supports("soul_core"))
+            throw new RefereeError(
+              "Core attunement opens after the testnet update.",
+              503,
+            );
+          result = this.referee.attune(owner, body.core);
+          break;
         case "/api/train":
           if (
             this.near.config &&
@@ -171,6 +179,7 @@ export class GameService {
       }
       if (
         path === "/api/train" ||
+        path === "/api/attune" ||
         path === "/api/defense" ||
         path === "/api/forfeit"
       )

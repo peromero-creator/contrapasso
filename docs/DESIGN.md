@@ -120,6 +120,16 @@ The mint catalog previews the hero's actual attack clips silently. Inventory and
 
 Blood uses directional clots, textured floor stains lasting up to 45 seconds, and short-lived bone/flesh fragments. Defeated actors play their death clip before sinking away. Pools are bounded (180 gore pieces, 100 stains, 10 falling actors) and clear between floors/runs. No bloom or white damage flash is added.
 
+## Soul skills and combat weaving (0.9)
+
+Ember Edge now unlocks **Q / Soul Lance**: a 0.70-second committed cast with release at 0.38 seconds, a cooldown of 5 seconds minus 0.4 per Restless rank, and 34 base damage at rank one. Vesper Reed releases three slightly spread lances, each piercing three distinct targets; other weapons cast one lance piercing two. Ember, Gravespan and Funeral Pyre affect the cast. After release, the first weapon attack within 2.5 seconds gains 25% damage, consumed once. This stacks with Last Rites' dash-follow-up bonus and weapon-specific third hits. The HUD announces the available follow-up.
+
+The champion has one **soul core**, attuned in the skill tree from already paid training. Attuning is free; ownership of the skill is required. Ember Edge opens Furnace Heart (three expanding, burning pulses, 3.5 / 4.5 / 5.5 reach); Ash Step opens Reaping Orbit (six cuts over three seconds, 4.5 reach, follows the caster); Iron Vow opens Sanguine Covenant (nearby siphon, then 45% damage reduction for five seconds). Pyre, Ashen Echo and Stolen Mercy strengthen their corresponding cores. Only one core can be equipped. R consumes a full 100% meter, with a 1.05-second committed animation and release at 0.65 seconds. Dealt damage charges the core, excluding overkill and the active ultimate's pulses. Every descent begins empty. Healing cannot revive a lethal retaliation.
+
+Core choice travels with the champion NFT and is included in referee-issued Solo/Duel builds. Duel rivals cast with the same timings and fixed aim. Q/R are part of simulation 0.8.0's 27-bit replay input; N now restarts Solo.
+
+The skill tree includes a silent hero-animation theatre, core descriptions and paid unlock paths. Cast, charged release and judgment clips use the existing hero rig. Layered flame silhouettes, inscribed seals, orbit cuts, siphon ribbons and a restrained ward distinguish abilities; Ashen Echo leaves brief frozen character silhouettes during dash. No bloom or full-screen flash is added. Surrounding catacomb foundations, rib niches, skull piles, hanging censers, stalactites and small hooded ambient figures enrich the five circles outside the combat boundary. Ambient figures use simple procedural geometry and gentle drift, not new enemies or full skeletal walking clips.
+
 ## Next steps
 
 1. Record the final demo and review the delivery checklist in `docs/SUBMISSION.md`.

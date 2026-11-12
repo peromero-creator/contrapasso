@@ -696,6 +696,24 @@ try {
   console.log(
     "NEAR WASM: PASS (actual local VM, Ed25519 receipts, NFT mint/transfer/approval/callback rollback, equipped gear, vault, Duel locks, native mint, raffle, refunds, prize callbacks, funding and royalties)",
   );
+  // Core attunement is authenticated NFT state, survives ownership changes and locks in Duel.
+  await apply("core-a", alice, "register", {...checkpoint, coins:300});
+  await apply("core-b", bob, "register", {...checkpoint, coins:300});
+  await assert.rejects(apply("core-a", alice, "attune", {core:"ember"}));
+  await assert.rejects(apply("core-a", alice, "attune", {core:"invented"}));
+  await apply("core-a", alice, "train", {skill:"ember"});
+  await apply("core-a", alice, "attune", {core:"ember"});
+  const coreA = await game.view("get_champion", {champion_id:"core-a"});
+  assert.equal(coreA.build.core,"ember"); assert.equal(coreA.coins,255);
+  await apply("core-b", bob, "defense", {enabled:true});
+  const coreB = await game.view("get_champion", {champion_id:"core-b"});
+  await apply("core-a", alice, "duel_open", {duelId:"core-lock-duel",opponentId:"core-b",opponentRevision:coreB.revision,expiresAt:Date.now()+120000});
+  await assert.rejects(apply("core-a", alice, "attune", {core:"ember"}));
+  await apply("core-a", alice, "duel_settle", {duelId:"core-lock-duel",won:true});
+  await alice.call(game,"nft_transfer",{receiver_id:charlie.accountId,token_id:"champion:core-a"},{gas:GAS,attachedDeposit:1n});
+  assert.equal((await game.view("get_champion",{champion_id:"core-a"})).build.core,"ember");
+  await assert.rejects(apply("core-a",alice,"attune",{core:"ember"}));
+  console.log("Soul core VM: PASS (paid unlock, attunement, Duel lock, transfer and stale owner)");
 } finally {
   await worker.tearDown();
 }

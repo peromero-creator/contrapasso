@@ -1,3 +1,11 @@
+import {
+  CORES,
+  CORE_IDS,
+  coreId,
+  spellCooldown,
+  type CoreId,
+  type AbilityId,
+} from "./sim/abilities";
 import { relicImage, paintRelics, RelicStage } from "./render/relics";
 import {
   WEAPONS,
@@ -80,7 +88,9 @@ let mouseX = window.innerWidth / 2,
   mouseY = window.innerHeight / 3;
 let mouseDown = false,
   dashQueued = 0,
-  attackQueued = 0;
+  attackQueued = 0,
+  castQueued = false,
+  coreQueued = false;
 let aim = Math.floor(DIRS * 0.75);
 const tmp = new THREE.Vector3();
 
@@ -92,6 +102,7 @@ function clearInput() {
   keys.clear();
   mouseDown = false;
   dashQueued = attackQueued = choiceQueued = 0;
+  castQueued = coreQueued = false;
 }
 function reflectSound() {
   const button = $<HTMLButtonElement>("sound-toggle");
@@ -181,7 +192,10 @@ function readInput(): Input {
       !dash && world.player.attackCd <= DT && world.player.dashT <= 0
         ? 0
         : attackQueued - 1;
-  return { move, aim, attack, dash };
+  const cast = castQueued,
+    ultimate = coreQueued;
+  castQueued = coreQueued = false;
+  return { move, aim, attack, dash, cast, ultimate };
 }
 function choose(choice: number) {
   if (world.phase !== "reward" || paused || choiceQueued) return;
@@ -200,7 +214,7 @@ window.addEventListener("keydown", (e) => {
   if (mode !== "run" || busy) return;
   if (
     !e.repeat &&
-    e.code === "KeyR" &&
+    e.code === "KeyN" &&
     !paused &&
     !verifying &&
     world.mode !== "duel"
@@ -223,6 +237,8 @@ window.addEventListener("keydown", (e) => {
   if (!e.repeat && ["Space", "ShiftLeft", "KeyK"].includes(e.code))
     dashQueued = 8;
   if (!e.repeat && e.code === "KeyJ") attackQueued = 8;
+  if (!e.repeat && e.code === "KeyQ") castQueued = true;
+  if (!e.repeat && e.code === "KeyR") coreQueued = true;
   keys.add(e.code);
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
@@ -315,6 +331,30 @@ function updateHud(dt: number) {
   dashPip.classList.toggle("ready", p.dashCd <= 0);
   $("dash-meter").style.width =
     `${Math.max(0, 1 - p.dashCd / (0.75 * (1 - 0.12 * rank(p.skills, "ash")))) * 100}%`;
+  $("cast-label").textContent = !rank(p.skills, "ember")
+    ? "UNLOCK EMBER EDGE"
+    : p.spellCd > 0
+      ? `SOUL LANCE · ${p.spellCd.toFixed(1)}s`
+      : "SOUL LANCE";
+  $("cast-meter").style.width =
+    `${rank(p.skills, "ember") ? Math.max(0, 1 - p.spellCd / spellCooldown(p.skills)) * 100 : 0}%`;
+  $("core-label").textContent = p.core
+    ? `${CORES[p.core].name} · ${Math.floor(p.charge)}%`
+    : "ATTUNE A CORE";
+  $("core-meter").style.width = `${p.charge}%`;
+  $("core-slot").classList.toggle("ready", p.charge >= 100);
+  $("cast-slot").classList.toggle(
+    "ready",
+    !!rank(p.skills, "ember") && p.spellCd <= 0,
+  );
+  $("combo-instruction").textContent =
+    p.weaveT > 0
+      ? "SOUL-WOVEN · +25%"
+      : p.comboT > 0 && rank(p.skills, "coup")
+        ? "LAST RITES · STRIKE NOW"
+        : p.swingN % 3 === 2
+          ? "NEXT · FINISHER"
+          : "I → II → III";
   $("coin-n").textContent = String(p.coins);
   $("circle").textContent =
     `${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`;
@@ -1054,6 +1094,12 @@ async function renderNft() {
             ["Solo", `${x.runs ?? 0} descents · ${x.victories ?? 0} victories`],
             ["Duel", `${x.duelWins ?? 0} won · ${x.duelLosses ?? 0} lost`],
             [
+              "Soul core",
+              coreId((x.build as { core?: unknown })?.core)
+                ? CORES[coreId((x.build as { core?: unknown }).core)!].name
+                : "Not attuned",
+            ],
+            [
               "Skills",
               `${Array.isArray(x.skills) ? x.skills.length : 0} unlocked`,
             ],
@@ -1213,9 +1259,51 @@ function renderGear() {
       }
     });
 }
+let skillStage: RelicStage | null = null;
+function showSkillPreview(id: AbilityId) {
+  skillStage ??= new RelicStage(
+    $<HTMLCanvasElement>("skill-stage"),
+    $("skill-preview-label"),
+  );
+  void skillStage.select(
+    id === "lance" ? "vesper-reed" : (champion?.build.weaponId ?? "starter"),
+  );
+  skillStage.preview(id);
+  $("skill-preview-name").textContent =
+    id === "lance" ? "Soul Lance" : CORES[id].name;
+  $("skill-preview-description").textContent =
+    id === "lance"
+      ? "Q · A piercing cast. Vesper Reed releases three lances. Burning targets detonate with Funeral Pyre. Your next weapon attack within 2.5 seconds deals 25% more damage. Train Ember Edge to use it."
+      : `${CORES[id].description} Deal damage to fill the core. R releases it; every descent starts empty.`;
+}
 function renderForge() {
   if (!champion) return;
   renderGear();
+  const cores = $("core-cards");
+  cores.innerHTML = CORE_IDS.map(
+    (id) =>
+      `<article class="core-card ${champion!.build.core === id ? "attuned" : ""}">${skillIcon(id)}<h3>${CORES[id].name}</h3><p>${CORES[id].description}</p><div><button class="btn ghost" data-preview="${id}">PREVIEW</button><button class="btn" data-core="${id}" ${!champion!.skills.includes(id) || busy || champion!.chain?.pending || champion!.build.core === id ? "disabled" : ""}>${champion!.build.core === id ? "ATTUNED" : champion!.skills.includes(id) ? "ATTUNE" : `LEARN ${SKILLS[id].name.toUpperCase()}`}</button></div></article>`,
+  ).join("");
+  for (const b of cores.querySelectorAll<HTMLButtonElement>("[data-preview]"))
+    b.onclick = () => showSkillPreview(b.dataset.preview as CoreId);
+  for (const b of cores.querySelectorAll<HTMLButtonElement>("[data-core]"))
+    b.onclick = async () => {
+      if (busy) return;
+      busy = true;
+      renderForge();
+      try {
+        champion = await api.attune(b.dataset.core as CoreId);
+        refreshChampion();
+        notice(
+          "Core attuned. Deal damage to charge it; press R to unleash it.",
+        );
+      } catch (e) {
+        notice((e as Error).message);
+      } finally {
+        busy = false;
+        renderForge();
+      }
+    };
   const grid = $("forge-cards");
   grid.innerHTML = SKILL_BRANCHES.map(
     (branch) =>
@@ -1249,6 +1337,7 @@ $("train").addEventListener("click", async () => {
   try {
     await loadChampion();
     renderForge();
+    showSkillPreview(champion?.build.core ?? "lance");
     $("modes").inert = true;
     $("forge").classList.remove("hidden");
     $("forge-close").focus();
@@ -1261,6 +1350,7 @@ $("forge-close").addEventListener("click", () => {
   $("modes").inert = false;
   $("train").focus();
 });
+$("preview-lance").onclick = () => showSkillPreview("lance");
 const embers = $("embers");
 for (let i = 0; i < 36; i++) {
   const e = document.createElement("i");
