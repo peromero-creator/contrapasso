@@ -254,7 +254,12 @@ export class NearBridge {
     } catch {
       /* An unfunded implicit guest account has no native balance yet. */
     }
-    return { ...market, onChain: true, nativeBalanceYocto };
+    const exchange = this.supports("exchange")
+      ? await this.view("exchange_view", {
+          owner_id: this.guest(profile.id).accountId,
+        })
+      : {};
+    return { ...market, ...exchange, onChain: true, nativeBalanceYocto };
   }
   status(profile: Champion): Champion {
     if (!this.config) return profile;
@@ -346,7 +351,7 @@ export class NearBridge {
           409,
         );
       }
-      if (event.operation === "mint") {
+      if (event.operation === "mint" || event.operation === "buy_gear") {
         let balance = 0n;
         try {
           balance = BigInt(
@@ -357,13 +362,21 @@ export class NearBridge {
             !["UnknownAccountError", "AccountDoesNotExistError"].includes(
               (error as Error).name,
             )
-          ) throw error;
+          )
+            throw error;
         }
-        if (balance < 150000000000000000000000n) {
+        if (
+          balance <
+          (event.operation === "mint"
+            ? 150000000000000000000000n
+            : BigInt(String(event.data.priceYocto)) + 10000000000000000000000n)
+        ) {
           this.referee.rejectChainOperation(
             event.id,
             { [event.championId]: current },
-            "Get demo test NEAR before minting. Your coin reservation is safe.",
+            event.operation === "mint"
+              ? "Get demo test NEAR before minting. Your coin reservation is safe."
+              : "Not enough test NEAR for this purchase and gas.",
           );
           return;
         }
@@ -411,7 +424,7 @@ export class NearBridge {
         data,
       });
       const signature = this.referee.signChainPayload(payload);
-      const paid = event.operation === "mint";
+      const paid = event.operation === "mint" || event.operation === "buy_gear";
       const signer = paid
         ? new Account(
             accountId,
@@ -425,7 +438,13 @@ export class NearBridge {
           methodName: "apply_receipt",
           args: { payload, signature },
           gas: paid ? 120000000000000n : 300000000000000n,
-          deposit: paid ? BigInt(MINT_PRICE_YOCTO) : 0n,
+          deposit: paid
+            ? BigInt(
+                event.operation === "mint"
+                  ? MINT_PRICE_YOCTO
+                  : String(event.data.priceYocto),
+              )
+            : 0n,
           waitUntil: "FINAL",
         });
         transaction = outcome.transaction.hash;
@@ -474,7 +493,8 @@ export class NearBridge {
     }
     if (
       (event.operation === "fund_guest" ||
-        event.operation === "withdraw_prize") &&
+        event.operation === "withdraw_prize" ||
+        event.operation === "withdraw_sales") &&
       !applied.nativeComplete
     )
       throw new RefereeError("The testnet transfer is still confirming.", 409);
@@ -485,7 +505,9 @@ export class NearBridge {
       this.referee.rejectChainOperation(
         event.id,
         { [event.championId]: state },
-        "The native transfer failed; your prize remains in the champion vault.",
+        event.operation === "withdraw_sales"
+          ? "The withdrawal failed; your sale proceeds are available again."
+          : "The native transfer failed; your prize remains in the champion vault.",
       );
       return;
     }

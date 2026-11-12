@@ -252,8 +252,12 @@ try {
     won: false,
     powers: { ash: 1, reach: 1 },
   });
-  if (upgradeIndex >= 0) {
+  if (upgradeIndex >= 0)
     await apply("alice", charlie, "draw_round", { roundId: "before-upgrade" });
+  if (
+    (await game.view("market_view", { champion_id: "alice" })).revenueMode ===
+    "raffle"
+  ) {
     // Full native testnet economy in the actual WASM, including asynchronous callbacks.
     const price = 10000000000000000000000n;
     await root.call(
@@ -469,6 +473,147 @@ try {
     (await game.view("get_champion", { champion_id: "smith" })).skills,
     ["ember", "reach", "verdict", "pyre"],
   );
+  // An upgraded, battle-used NFT must retain identity and history through a paid sale.
+  await apply("smith", bob, "solo", {
+    earnedCoins: 0,
+    floor: 1,
+    kills: 7,
+    won: false,
+    powers: {},
+  });
+  const offer = { tokenId: hammer, priceYocto: "15000000000000000000000" };
+  await assert.rejects(apply("smith", bob, "list_gear", offer));
+  await apply("smith", bob, "unequip_gear", { slot: "weapon" });
+  await apply("smith", bob, "list_gear", offer);
+  let listing = (await game.view("exchange_view", {})).listings[0];
+  const stale = { ...offer, listingId: listing.id };
+  await assert.rejects(
+    bob.call(
+      game,
+      "nft_transfer",
+      { token_id: hammer, receiver_id: alice.accountId },
+      { gas: GAS, attachedDeposit: 1n },
+    ),
+  );
+  await assert.rejects(
+    bob.call(
+      game,
+      "nft_approve",
+      { token_id: hammer, account_id: alice.accountId },
+      { gas: GAS, attachedDeposit: 10000000000000000000000n },
+    ),
+  );
+  await assert.rejects(
+    apply("smith", bob, "equip_gear", { slot: "weapon", gearId: hammer }),
+  );
+  await apply("smith", bob, "cancel_sale", stale);
+  await apply("smith", bob, "list_gear", offer);
+  listing = (await game.view("exchange_view", {})).listings[0];
+  await apply("buyer", alice, "register", checkpoint);
+  await assert.rejects(
+    apply(
+      "buyer",
+      alice,
+      "buy_gear",
+      stale,
+      {},
+      { sender: alice, deposit: BigInt(offer.priceYocto) },
+    ),
+  );
+  const quote = { ...offer, listingId: listing.id };
+  await assert.rejects(apply("buyer", alice, "buy_gear", quote));
+  const beforeSale = JSON.parse(
+    (await game.view("nft_token", { token_id: hammer })).metadata.extra,
+  );
+  const paidSale = "vm-paid-sale";
+  await apply(
+    "buyer",
+    alice,
+    "buy_gear",
+    quote,
+    { id: paidSale },
+    { sender: alice, deposit: BigInt(offer.priceYocto) },
+  );
+  await assert.rejects(
+    apply(
+      "buyer",
+      alice,
+      "buy_gear",
+      quote,
+      { id: paidSale },
+      { sender: alice, deposit: BigInt(offer.priceYocto) },
+    ),
+  );
+  const bought = await game.view("nft_token", { token_id: hammer });
+  const traits = JSON.parse(bought.metadata.extra);
+  assert.equal(bought.owner_id, alice.accountId);
+  for (const key of ["weaponId", "level", "kills", "damage", "reach"])
+    assert.equal(traits[key], beforeSale[key]);
+  assert.deepEqual(
+    traits.pastOwners,
+    [...beforeSale.pastOwners, bob.accountId].slice(-10),
+  );
+  assert.equal(traits.listing, null);
+  assert.equal(
+    (await game.view("exchange_view", { owner_id: bob.accountId }))
+      .proceedsYocto,
+    "13500000000000000000000",
+  );
+  await bob.call(
+    game,
+    "withdraw_sale_proceeds",
+    {},
+    { gas: GAS, attachedDeposit: 1n },
+  );
+  assert.equal(
+    (await game.view("exchange_view", { owner_id: bob.accountId }))
+      .proceedsYocto,
+    "0",
+  );
+  await assert.rejects(
+    bob.call(
+      game,
+      "withdraw_sale_proceeds",
+      {},
+      { gas: GAS, attachedDeposit: 1n },
+    ),
+  );
+  await assert.rejects(alice.call(game, "close_edition", {}, { gas: GAS }));
+  await root.call(game, "close_edition", {}, { gas: GAS });
+  await root.call(
+    game,
+    "open_round",
+    { id: "ranged", duration_seconds: 120 },
+    { gas: GAS },
+  );
+  for (const [championId, identity] of [
+    ["smith", "gravewhisper"],
+    ["buyer", "vesper-reed"],
+  ]) {
+    const who = championId === "smith" ? bob : alice;
+    await apply(championId, who, "reserve_mint", {
+      roundId: "ranged",
+      weaponId: identity,
+    });
+    await apply(
+      championId,
+      who,
+      "mint",
+      { roundId: "ranged" },
+      {},
+      { sender: who, deposit: 10000000000000000000000n },
+    );
+    const tokenId = `relic:ranged:${championId === "smith" ? 1 : 2}`;
+    await apply(championId, who, "equip_gear", {
+      slot: "weapon",
+      gearId: tokenId,
+    });
+    assert.equal(
+      (await game.view("get_champion", { champion_id: championId })).build
+        .weaponId,
+      identity,
+    );
+  }
   const funds = (await game.view("market_view", { champion_id: "smith" }))
     .treasuryYocto;
   await assert.rejects(

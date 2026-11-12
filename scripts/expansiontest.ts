@@ -49,12 +49,13 @@ for (const id of WEAPON_IDS) {
   w.spawnDelay = 10;
   w.enemies = [target(1.3)];
   step(w, { ...idle, attack: true });
+  assert.equal(w.player.swingT, weapon(id).swing);
+  if (weapon(id).ranged) for (let i = 0; i < 5; i++) step(w, idle);
   assert.equal(
     w.enemies[0].hp,
     1000 - weapon(id).damage - 4,
     `${id} authentic +2 damage`,
   );
-  assert.equal(w.player.swingT, weapon(id).swing);
 }
 const reach = (id: "cinder-requiem" | "widows-fang") => {
   const w = createWorld(1, [], { weaponId: id, weaponLevel: 0, armorLevel: 0 });

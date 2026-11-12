@@ -1,0 +1,153 @@
+{
+  "network": "testnet",
+  "contractId": "contrapasso-261112-a23809.testnet",
+  "round": "ranged-demo-1",
+  "transactions": {
+    "alice:reserve": "2WbRhWEvSVewT6AhQHRdnesSFATuAfnWNzvVy27n8TLE",
+    "alice:mint": "CiA1EEz3w3NNwUPSRVj6n87gZLMo82fvCgT3c8ApX2vw",
+    "alice:equip": "7m7TkBR2iYvgmeA578FgmXjxhveP9kjMKqtm43DwueKQ",
+    "bob:reserve": "EEEH28iDBdDy7VXzadquM14Hqneta9rA6XyHnpsGFix",
+    "bob:mint": "AFcYmjudVDG5wKLXFiYkumKtcRFH6gvfaYz21bRQxi8N",
+    "bob:equip": "DC9Y1U3QQk9ZEwBBM9fhFFp1Tf3qVR3mrbfnp9FzUgMg",
+    "alice:unequip": "5Cja9GjXb2aR7qqZiLrfKZW8CEYs7czkQNJ7Q75Y5nee",
+    "alice:list": "HoNUZ2JPWrj556Y9LpjFAgY3Kf5NJdEe95fv1Kkih3QU",
+    "bob:buy": "BYjZAWoJgrfXTuepqCB1VXShnJT9yzqcUyScpcAGBSnZ",
+    "alice:withdraw": "HYxu65PPAVZ8CAgoqg55vShdR1jZJtJncyg1Ecv4Ya2R",
+    "bob:browser-list": "34m9sHFup3yhxnbgpfm2in796r6AsCaHPSQNe6QeGdno",
+    "bob:staff-unequip": "4RJSWspp54U87Zke9jritWRk2hYchhz9jn3YtASVT8bP",
+    "bob:staff-list": "5P5q6HoQybpYxSZr1fxYZAJca851g6HFdmrox6LEDA7x"
+  },
+  "champions": {
+    "alice": {
+      "id": "5221ceac-7b90-442b-91d7-dbd45c656766",
+      "accountId": "de3829915fa04fb0d269613c48d86eb84441924b7d37374531f0298c13ffd3bf",
+      "tokenId": "relic:ranged-demo-1:1",
+      "traits": {
+        "kind": "weapon",
+        "championId": "5221ceac-7b90-442b-91d7-dbd45c656766",
+        "equippedTo": "5221ceac-7b90-442b-91d7-dbd45c656766",
+        "level": 1,
+        "bound": false,
+        "kills": 0,
+        "pastOwners": [],
+        "collection": "gravewhisper",
+        "weaponId": "gravewhisper",
+        "archetype": "Hand crossbow",
+        "listing": null,
+        "damage": 33,
+        "reach": 11,
+        "attackCooldown": 0.65
+      }
+    },
+    "bob": {
+      "id": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+      "accountId": "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad",
+      "tokenId": "relic:ranged-demo-1:2",
+      "traits": {
+        "kind": "weapon",
+        "championId": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "equippedTo": "d65a92d0-2ec9-4b6c-9a54-d5ca7ed6f34b",
+        "level": 1,
+        "bound": false,
+        "kills": 0,
+        "pastOwners": [],
+        "collection": "vesper-reed",
+        "weaponId": "vesper-reed",
+        "archetype": "Soul staff",
+        "listing": null,
+        "damage": 24,
+        "reach": 8.5,
+        "attackCooldown": 0.48
+      }
+    }
+  },
+  "sale": {
+    "tokenId": "relic:ranged-demo-1:1",
+    "priceYocto": "15000000000000000000000",
+    "seller": "de3829915fa04fb0d269613c48d86eb84441924b7d37374531f0298c13ffd3bf",
+    "buyer": "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad",
+    "traits": {
+      "kind": "weapon",
+      "championId": "5221ceac-7b90-442b-91d7-dbd45c656766",
+      "equippedTo": null,
+      "level": 1,
+      "bound": false,
+      "kills": 0,
+      "pastOwners": [
+        "de3829915fa04fb0d269613c48d86eb84441924b7d37374531f0298c13ffd3bf"
+      ],
+      "collection": "gravewhisper",
+      "weaponId": "gravewhisper",
+      "archetype": "Hand crossbow",
+      "listing": null,
+      "damage": 33,
+      "reach": 11,
+      "attackCooldown": 0.65
+    },
+    "proceedsYocto": "13500000000000000000000",
+    "withdrawn": true
+  },
+  "browserListing": {
+    "id": "relic:ranged-demo-1:1@2",
+    "tokenId": "relic:ranged-demo-1:1",
+    "seller": "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad",
+    "priceYocto": "18000000000000000000000",
+    "createdAt": 1794512210647,
+    "weaponId": "gravewhisper",
+    "level": 1,
+    "kills": 0,
+    "pastOwners": [
+      "de3829915fa04fb0d269613c48d86eb84441924b7d37374531f0298c13ffd3bf"
+    ]
+  },
+  "staffListing": {
+    "id": "relic:ranged-demo-1:2@3",
+    "tokenId": "relic:ranged-demo-1:2",
+    "seller": "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad",
+    "priceYocto": "20000000000000000000000",
+    "createdAt": 1794512534260,
+    "weaponId": "vesper-reed",
+    "level": 1,
+    "kills": 0,
+    "pastOwners": []
+  },
+  "originalVaultPreserved": 76,
+  "verifiedAt": "2026-11-12T19:42:26.686Z",
+  "silentBrowser": {
+    "championId": "af515c79-d175-424b-a8c2-1d4b258684d9",
+    "tokenId": "relic:ranged-demo-1:1",
+    "owner": "fe4a4f8e3ae44a59f1076499318aab0b8b4c630d4bfc66a166a72ba0d62f9242",
+    "level": 1,
+    "kills": 37,
+    "pastOwners": [
+      "de3829915fa04fb0d269613c48d86eb84441924b7d37374531f0298c13ffd3bf",
+      "b4bf1de14062c9a47d9f8a628c5496a10e9d22b65e7b9b59ff89843f69ed07ad"
+    ],
+    "runs": 4,
+    "coins": 70,
+    "equippedBuild": {
+      "skills": {
+        "haste": 2,
+        "ash": 2,
+        "afterimage": 2
+      },
+      "weaponLevel": 1,
+      "armorLevel": 0,
+      "weaponId": "gravewhisper"
+    },
+    "verifiedAt": "2026-11-12T19:47:40.290Z",
+    "purchaseTransaction": "D7YbWw7EM7tXxGdvFcKDx4o4roL772RK64XzQVj9jmh9"
+  },
+  "battleUsedSale": {
+    "tokenId": "relic:cinder-demo-1:1",
+    "priceYocto": "15000000000000000000000",
+    "killsPreserved": 27,
+    "levelPreserved": 0,
+    "previousOwner": "fe4a4f8e3ae44a59f1076499318aab0b8b4c630d4bfc66a166a72ba0d62f9242",
+    "buyer": "de3829915fa04fb0d269613c48d86eb84441924b7d37374531f0298c13ffd3bf",
+    "transaction": "5eakGpe79PP2fchBe8c8eQAP9AMoncY3UxePascV7JQh",
+    "withdrawalTransaction": "D9PDJWDwr9bfmyYYaTTgXiTKeGJ2KWemocbERbyPaCrL",
+    "sellerProceedsYocto": "13500000000000000000000",
+    "withdrawn": true
+  }
+}

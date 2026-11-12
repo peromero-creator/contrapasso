@@ -40,6 +40,13 @@ const CHARGE: Record<string, number> = {
 /** How the blade sits in the hero's right-hand bone (radians). */
 const GRIP: [number, number, number] = [0, -Math.PI / 2, 0];
 
+function orientWeapon(root: THREE.Group, spec: ReturnType<typeof weapon>) {
+  const bolt = spec.ranged === "bolt";
+  root.rotation.z = bolt ? 0 : -Math.PI / 2;
+  root.rotation.y = bolt ? Math.PI / 2 : 0;
+  root.position.set(bolt ? 0.22 : -0.15, bolt ? -0.12 : 0, 0);
+}
+
 function canvasTexture(
   size: number,
   draw: (g: CanvasRenderingContext2D) => void,
@@ -248,7 +255,7 @@ export class View {
       identity === "starter" || !this.relicBlades.has(identity);
     for (const [id, root] of this.relicBlades) root.visible = id === identity;
     this.weaponGlow.color.setHex(weapon(identity).color);
-    this.weaponGlow.intensity = level * 0.25;
+    this.weaponGlow.intensity = Math.min(0.3, level * 0.035);
   }
   private slash = new THREE.Group();
   private slashMat!: THREE.MeshBasicMaterial;
@@ -257,7 +264,10 @@ export class View {
 
   private enemies = new Map<number, EnemyView>();
   private shots = new Map<number, THREE.Mesh>();
-  private shotGeo = new THREE.SphereGeometry(0.24, 10, 8);
+  private shotGeo = new THREE.SphereGeometry(0.16, 10, 8);
+  private boltGeo = new THREE.BoxGeometry(0.8, 0.07, 0.07);
+  private boltMat = new THREE.MeshBasicMaterial({ color: 0xc4bba5 });
+  private soulMat = new THREE.MeshBasicMaterial({ color: 0x9eada9 });
   private shotMat = new THREE.MeshBasicMaterial({ color: 0xff6a3a });
   private portal = new THREE.Group();
   private particles: Particle[] = [];
@@ -268,22 +278,26 @@ export class View {
   private damageText(x: number, z: number, text: string, color: string, y = 2) {
     if (this.damageTexts.length >= 40) return;
     const canvas = document.createElement("canvas");
-    canvas.width = 128;
-    canvas.height = 64;
+    canvas.width = 256;
+    canvas.height = 128;
     const ctx = canvas.getContext("2d")!;
-    ctx.font = "bold 40px sans-serif";
+    ctx.font = "600 54px Cinzel, Georgia, serif";
     ctx.textAlign = "center";
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 4;
     ctx.strokeStyle = "#18110c";
-    ctx.strokeText(text, 64, 46);
+    ctx.strokeText(text, 128, 82);
     ctx.fillStyle = color;
-    ctx.fillText(text, 64, 46);
+    ctx.fillText(text, 128, 82);
     const texture = new THREE.CanvasTexture(canvas);
     const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: texture, depthTest: false }),
+      new THREE.SpriteMaterial({
+        map: texture,
+        depthTest: false,
+        toneMapped: false,
+      }),
     );
     sprite.position.set(x + (Math.random() - 0.5) * 0.5, y, z);
-    sprite.scale.set(1.7, 0.85, 1);
+    sprite.scale.set(1.5, 0.75, 1);
     sprite.renderOrder = 20;
     this.scene.add(sprite);
     this.damageTexts.push({ sprite, life: 0.65 });
@@ -299,7 +313,7 @@ export class View {
           transparent: true,
           opacity: 0,
           depthWrite: false,
-          blending: THREE.AdditiveBlending,
+          blending: THREE.NormalBlending,
         }),
       );
       mesh.rotation.x = -Math.PI / 2;
@@ -333,6 +347,7 @@ export class View {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.6, 0.92);
+    this.bloom.enabled = false;
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -395,7 +410,7 @@ export class View {
       color: 0xffffff,
       transparent: true,
       opacity: 0.5,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       depthWrite: false,
     });
     this.rimMats.push(edge);
@@ -408,7 +423,7 @@ export class View {
       color: 0xffffff,
       transparent: true,
       opacity: 0.16,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       depthWrite: false,
     });
     this.sigil = new THREE.Mesh(new THREE.RingGeometry(4.2, 4.5, 64), sigMat);
@@ -578,8 +593,7 @@ export class View {
       if (!spec.model) continue;
       void this.models.create(spec.model, spec.height).then((model) => {
         if (!model) return;
-        model.root.rotation.z = -Math.PI / 2;
-        model.root.position.x = -0.15;
+        orientWeapon(model.root, spec);
         this.relicBlades.set(id, model.root);
         this.swordGrip.add(model.root);
         this.useWeapon(this.equippedWeapon, this.weaponLevel);
@@ -590,7 +604,7 @@ export class View {
       color: 0xffb46a,
       transparent: true,
       opacity: 0,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
@@ -609,7 +623,7 @@ export class View {
       color: 0xffd27a,
       transparent: true,
       opacity: 0.9,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       depthWrite: false,
     });
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.5, 48), mat);
@@ -619,7 +633,7 @@ export class View {
       color: 0xffb040,
       transparent: true,
       opacity: 0.22,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
@@ -641,7 +655,7 @@ export class View {
     const c = CIRCLES[idx];
     (this.scene.background as THREE.Color).setHex(c.fog);
     (this.ground.material as THREE.MeshBasicMaterial).color.setHex(c.tint);
-    for (const m of this.rimMats) m.color.setHex(c.glow);
+    for (const m of this.rimMats) m.color.setHex(0x776856);
     this.key.color.setHex(c.light);
     (this.sigil.material as THREE.MeshBasicMaterial).color.setHex(c.glow);
     for (const l of this.torches) l.color.setHex(c.glow);
@@ -762,7 +776,7 @@ export class View {
           color: 0xff3020,
           transparent: true,
           opacity: 0,
-          blending: THREE.AdditiveBlending,
+          blending: THREE.NormalBlending,
           depthWrite: false,
         }),
       );
@@ -775,10 +789,14 @@ export class View {
       new THREE.SpriteMaterial({ color: 0x140808, depthTest: false }),
     );
     const hpFg = new THREE.Sprite(
-      new THREE.SpriteMaterial({ color: 0xff4a3a, depthTest: false }),
+      new THREE.SpriteMaterial({
+        color: 0xb77667,
+        depthTest: false,
+        toneMapped: false,
+      }),
     );
     const bw = kind === "warden" ? 4 : 1.3;
-    hpBg.scale.set(bw, 0.13, 1);
+    hpBg.scale.set(bw + 0.04, 0.16, 1);
     hpFg.scale.set(bw, 0.13, 1);
     hpBg.center.set(0, 0.5);
     hpFg.center.set(0, 0.5);
@@ -805,18 +823,18 @@ export class View {
     n: number,
     color: number,
     speed: number,
-    glow = true,
+    glow = false,
   ) {
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < Math.ceil(n * 0.4); i++) {
       let p = this.particles.find((q) => q.life <= 0);
       if (!p) {
-        if (this.particles.length > 220) return;
+        if (this.particles.length > 90) return;
         const mesh = new THREE.Mesh(
           this.pGeo,
           new THREE.MeshBasicMaterial({
             color,
             transparent: true,
-            blending: THREE.AdditiveBlending,
+            blending: THREE.NormalBlending,
             depthWrite: false,
           }),
         );
@@ -854,16 +872,16 @@ export class View {
           this.slash.scale.setScalar(e.amount === 2 ? 1.22 : 1);
           this.slashMat.color.setHex(e.amount === 2 ? 0xfff0d0 : 0xffb46a);
           break;
+        case "ranged":
+          break;
         case "hit":
-          this.damageText(e.x, e.z, String(e.amount ?? 0), "#fff0d4");
+          this.damageText(e.x, e.z, String(e.amount ?? 0), "#e8dcc5");
           this.burst(e.x, 1.1, e.z, 6, 0xffd9a0, 7);
           this.blood(e.x, e.z, 4, 0.7);
-          this.shake = Math.max(this.shake, (e.amount ?? 0) > 40 ? 0.28 : 0.14);
-          stop = Math.max(stop, (e.amount ?? 0) > 40 ? 0.055 : 0.028);
+          this.shake = Math.max(this.shake, (e.amount ?? 0) > 40 ? 0.08 : 0.04);
+          stop = Math.max(stop, (e.amount ?? 0) > 40 ? 0.03 : 0.015);
           break;
         case "kill":
-          if ((e.amount ?? 0) > 0)
-            this.damageText(e.x, e.z, `+${e.amount}`, "#e9b76e", 2.8);
           this.burst(
             e.x,
             1.0,
@@ -883,13 +901,13 @@ export class View {
             e.z + (Math.random() - 0.5) * 1.4,
             0.8,
           );
-          this.shake = Math.max(this.shake, e.kind === "warden" ? 0.9 : 0.25);
+          this.shake = Math.max(this.shake, e.kind === "warden" ? 0.18 : 0.06);
           stop = Math.max(stop, 0.05);
           break;
         case "hurt":
-          this.damageText(e.x, e.z, `−${e.amount ?? 0}`, "#ff795c", 2.5);
+          this.damageText(e.x, e.z, `−${e.amount ?? 0}`, "#d6a092", 2.5);
           this.burst(e.x, 1.2, e.z, 10, 0xff2a2a, 6);
-          this.shake = Math.max(this.shake, 0.5);
+          this.shake = Math.max(this.shake, 0.12);
           break;
         case "dash":
           this.burst(e.x, 0.6, e.z, 8, 0xffe0b0, 3);
@@ -952,8 +970,7 @@ export class View {
     this.hero.rotation.y = -dirAngle(p.aim);
     const dashing = p.dashT > 0;
     this.hero.scale.set(dashing ? 1.35 : 1, dashing ? 0.8 : 1, 1);
-    const blink =
-      p.invuln > 0 && !dashing && Math.floor(this.time * 22) % 2 === 0;
+    const blink = false;
     this.hero.visible = (w.phase !== "dead" || !!this.heroModel) && !blink;
     if (this.heroModel) {
       const moving =
@@ -966,23 +983,27 @@ export class View {
           : dashing
             ? "dash"
             : p.swingT > 0
-              ? p.weaponId === "tollkeeper"
-                ? "attack-hammer"
-                : p.weaponId === "widows-fang"
-                  ? "attack-dagger"
-                  : "attack"
+              ? p.weaponId === "gravewhisper"
+                ? "attack-crossbow"
+                : p.weaponId === "vesper-reed"
+                  ? "attack-staff"
+                  : p.weaponId === "tollkeeper"
+                    ? "attack-hammer"
+                    : p.weaponId === "widows-fang"
+                      ? "attack-dagger"
+                      : "attack"
               : moving
                 ? "run"
                 : "idle",
         p.swingT > 0 ? weapon(p.weaponId).swing : undefined,
       );
-      this.heroModel.flash(p.flash > 0 ? 0xff2222 : null);
+      this.heroModel.flash(p.flash > 0 ? 0x401b16 : null);
       this.heroModel.update(dt);
     }
     this.previousHero.set(p.x, p.z);
     for (let i = 0; i < this.heroMats.length; i++) {
       this.heroMats[i].emissive.copy(this.heroBase[i]);
-      if (p.flash > 0) this.heroMats[i].emissive.setHex(0xff2222);
+      if (p.flash > 0) this.heroMats[i].emissive.setHex(0x401b16);
     }
     if (p.swingT > 0) {
       const s = 1 - p.swingT / weapon(p.weaponId).swing;
@@ -1037,8 +1058,7 @@ export class View {
                   grip = new THREE.Group();
                 grip.scale.set(1 / scale.x, 1 / scale.y, 1 / scale.z);
                 grip.rotation.set(...GRIP);
-                blade.root.rotation.z = -Math.PI / 2;
-                blade.root.position.x = -0.15;
+                orientWeapon(blade.root, spec);
                 actor.weaponModel = blade;
                 grip.add(blade.root);
                 hand.add(grip);
@@ -1072,11 +1092,19 @@ export class View {
       live.add(s.id);
       let m = this.shots.get(s.id);
       if (!m) {
-        m = new THREE.Mesh(this.shotGeo, this.shotMat);
+        m = new THREE.Mesh(
+          s.style === "bolt" ? this.boltGeo : this.shotGeo,
+          s.side === "player"
+            ? s.style === "bolt"
+              ? this.boltMat
+              : this.soulMat
+            : this.shotMat,
+        );
         this.scene.add(m);
         this.shots.set(s.id, m);
       }
       m.position.set(s.x, 0.9, s.z);
+      m.rotation.y = -Math.atan2(s.vz, s.vx);
     }
     for (const [id, m] of this.shots) {
       if (live.has(id)) continue;
@@ -1091,12 +1119,12 @@ export class View {
       this.portal.scale.set(k, 1, k);
     }
     for (const m of this.torchMats)
-      m.emissiveIntensity = 1.4 + Math.sin(this.time * 9 + m.id) * 0.3;
+      m.emissiveIntensity = 0.4 + Math.sin(this.time * 1.2 + m.id) * 0.03;
 
     // particles
     for (const text of this.damageTexts) {
       text.life -= dt;
-      text.sprite.position.y += dt * 1.9;
+      text.sprite.position.y += dt * 1.1;
       text.sprite.material.opacity = Math.max(0, text.life / 0.4);
       if (text.life <= 0) {
         this.scene.remove(text.sprite);
@@ -1109,7 +1137,7 @@ export class View {
       if (p.life <= 0) continue;
       p.life -= dt;
       p.mesh.scale.setScalar(p.radius * (1 - p.life / 0.35));
-      p.mesh.material.opacity = Math.max(0, p.life / 0.35) * 0.65;
+      p.mesh.material.opacity = Math.max(0, p.life / 0.35) * 0.22;
       if (p.life <= 0) p.mesh.visible = false;
     }
     for (const q of this.particles) {
@@ -1136,8 +1164,8 @@ export class View {
     // fixed tilt; follow the hero but never look far past the arena
     const halfW = (this.viewH * this.aspect) / 2;
     const halfD = this.viewH / (2 * Math.sin(PITCH));
-    const limX = Math.max(0, ARENA_HX + 1.6 - halfW);
-    const limZ = Math.max(0, ARENA_HZ + 2.4 - halfD);
+    const limX = Math.max(0, ARENA_HX + 4.5 - halfW);
+    const limZ = Math.max(0, ARENA_HZ + 3.2 - halfD);
     const tx = Math.max(-limX, Math.min(limX, p.x));
     const tz = Math.max(-limZ, Math.min(limZ, p.z)) - 0.8;
     this.target.x += (tx - this.target.x) * Math.min(1, dt * 5);
@@ -1165,11 +1193,15 @@ export class View {
         e.state === "act"
           ? "dash"
           : wind
-            ? e.weaponId === "tollkeeper"
-              ? "attack-hammer"
-              : e.weaponId === "widows-fang"
-                ? "attack-dagger"
-                : "attack"
+            ? e.weaponId === "gravewhisper"
+              ? "attack-crossbow"
+              : e.weaponId === "vesper-reed"
+                ? "attack-staff"
+                : e.weaponId === "tollkeeper"
+                  ? "attack-hammer"
+                  : e.weaponId === "widows-fang"
+                    ? "attack-dagger"
+                    : "attack"
             : e.state === "seek"
               ? "run"
               : "idle";
@@ -1183,11 +1215,11 @@ export class View {
       );
       v.model.flash(
         e.flash > 0
-          ? 0xffffff
+          ? 0x302820
           : wind
-            ? 0xa55512
+            ? 0x3b2818
             : e.burnT > 0
-              ? 0xaa3310
+              ? 0x3b2010
               : null,
       );
     }
@@ -1195,16 +1227,13 @@ export class View {
       const m = v.mats[i];
       m.emissive.copy(v.base[i]);
       if (e.burnT > 0) m.emissive.lerp(new THREE.Color(0xff5a16), 0.45);
-      if (wind && i === 0)
-        m.emissive
-          .setRGB(0.9, 0.55, 0.1)
-          .multiplyScalar(0.5 + 0.5 * Math.sin(this.time * 40));
-      if (e.flash > 0) m.emissive.setRGB(1.6, 1.6, 1.6);
+      if (wind && i === 0) m.emissive.setRGB(0.15, 0.08, 0.02);
+      if (e.flash > 0) m.emissive.setRGB(0.12, 0.1, 0.08);
     }
     if (v.tele) {
       const charging = wind && !(e.kind === "warden" && e.pattern % 3 === 0);
       (v.tele.material as THREE.MeshBasicMaterial).opacity = charging
-        ? 0.22 + 0.12 * Math.sin(this.time * 30)
+        ? 0.24
         : 0;
       if (e.kind === "champion")
         v.tele.scale.x = e.attackKind === "swing" ? 0.5 : 1;

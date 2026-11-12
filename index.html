@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Barlow+Condensed:wght@500;600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/src/ui/style.css" />
@@ -24,7 +24,10 @@
             <span class="vital-mark">✦</span><span>VITALITY</span
             ><b id="hp-text">100 / 100</b>
           </div>
-          <div class="bar"><div id="hp-fill"></div></div>
+          <div class="bar">
+            <div id="hp-lag"></div>
+            <div id="hp-fill"></div>
+          </div>
         </div>
         <div class="combat-ready">
           <div id="dash-pip" class="ready">
@@ -283,39 +286,87 @@
         <div class="market-banner">
           TESTNET EDITION · Demo funds only · No real money
         </div>
-        <div id="arsenal-choices" aria-label="Choose a weapon"></div>
-        <div class="market-layout">
-          <div class="relic-art">
-            <img
-              id="relic-image"
-              src="/assets/ui/cinder-requiem.jpg"
-              alt="Cinder Requiem, a black iron blade with an ember fissure and bronze crescent guard"
-            /><span>LIMITED RELIC / 001</span>
+        <nav class="market-tabs" aria-label="Relic trading">
+          <button id="tab-mint" class="btn ghost" aria-pressed="true">
+            MINT EDITION
+          </button>
+          <button id="tab-exchange" class="btn ghost" aria-pressed="false">
+            PLAYER MARKET
+          </button>
+        </nav>
+        <div id="mint-panel">
+          <div id="arsenal-choices" aria-label="Choose a weapon"></div>
+          <div class="market-layout">
+            <div class="relic-art">
+              <img
+                id="relic-image"
+                src="/assets/ui/cinder-requiem.jpg"
+                alt="Cinder Requiem, a black iron blade with an ember fissure and bronze crescent guard"
+              /><span>LIMITED RELIC / 001</span>
+            </div>
+            <div class="relic-detail">
+              <span class="eyebrow">ONE RELIC. ANOTHER DESCENT.</span>
+              <h3 id="relic-title">CINDER REQUIEM</h3>
+              <p id="relic-description">
+                A free-trading blade forged from the first circle. Starts at +0;
+                your earned coin gives it power.
+              </p>
+              <div id="market-stats"></div>
+              <div id="market-actions" class="market-actions"></div>
+            </div>
           </div>
-          <div class="relic-detail">
-            <span class="eyebrow">ONE RELIC. ANOTHER DESCENT.</span>
-            <h3 id="relic-title">CINDER REQUIEM</h3>
-            <p id="relic-description">
-              A free-trading blade forged from the first circle. Starts at +0;
-              your earned coin gives it power.
-            </p>
-            <div id="market-stats"></div>
-            <div id="market-actions" class="market-actions"></div>
+          <div class="raffle-panel">
+            <div>
+              <span class="eyebrow">EVERY MINT SUPPORTS THE WORLD</span>
+              <h3>THE INFERNAL TREASURY</h3>
+              <p>
+                Native mint revenue stays in a transparent application fund,
+                controlled by the project owner for the game.
+              </p>
+            </div>
+            <div id="raffle-stats"></div>
+            <div id="raffle-actions" class="market-actions"></div>
+            <div id="raffle-winners"></div>
           </div>
         </div>
-        <div class="raffle-panel">
-          <div>
-            <span class="eyebrow">EVERY MINT SUPPORTS THE WORLD</span>
-            <h3>THE INFERNAL TREASURY</h3>
+        <section
+          id="exchange-panel"
+          class="hidden"
+          aria-label="Player marketplace"
+        >
+          <div class="exchange-intro">
+            <span class="eyebrow">RELICS WITH A HISTORY</span>
             <p>
-              Native mint revenue stays in a transparent application fund,
-              controlled by the project owner for the game.
+              Buy the actual weapon NFT. Its upgrades, kills and ownership
+              history travel with it.
             </p>
           </div>
-          <div id="raffle-stats"></div>
-          <div id="raffle-actions" class="market-actions"></div>
-          <div id="raffle-winners"></div>
-        </div>
+          <div id="exchange-balance"></div>
+          <div id="exchange-listings" class="exchange-grid"></div>
+          <form id="sale-form" class="sale-form">
+            <h3>OFFER A RELIC</h3>
+            <p>
+              Unequip a tradable weapon first. Listed gear stays locked until
+              sold or cancelled.
+            </p>
+            <label>Weapon<select id="sale-token" required></select></label>
+            <label
+              >Price · test NEAR<input
+                id="sale-price"
+                type="text"
+                inputmode="decimal"
+                value="0.015"
+                pattern="(0|1)([.][0-9]{1,3})?"
+                required
+            /></label>
+            <p id="sale-net">
+              90% to your sale balance · 10% to the game treasury.
+            </p>
+            <button id="sale-submit" class="btn" type="submit">
+              LIST WEAPON ↗
+            </button>
+          </form>
+        </section>
         <div id="prize-vault" class="claim-box"></div>
         <p id="market-result" role="status" aria-live="polite"></p>
         <button id="market-refresh" class="btn ghost">REFRESH TESTNET ↻</button>
@@ -360,6 +411,9 @@
         <button id="nft-open" class="btn ghost nft-open">
           WHAT YOU OWN <span>↗</span>
         </button>
+        <button id="exchange-open" class="btn ghost">
+          PLAYER MARKET <span>↗</span>
+        </button>
         <button id="market-open" class="btn ghost nft-open">
           THE RELIQUARY <span>↗</span>
         </button>
@@ -388,7 +442,9 @@
         <div class="training-link">
           <div>
             <span class="eyebrow">SKILL TREE</span>
-            <div id="trained-powers">No vows taken. Your story starts below.</div>
+            <div id="trained-powers">
+              No vows taken. Your story starts below.
+            </div>
           </div>
           <button id="train" class="btn ghost">
             TRAIN CHAMPION <span>↗</span>

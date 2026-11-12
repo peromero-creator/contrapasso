@@ -2,188 +2,168 @@ import * as THREE from "three";
 import type { ModelLibrary } from "./assets";
 import { ARENA_HX, ARENA_HZ, type World } from "../sim/world";
 
-/** Ambient inhabitants and scenery never write gameplay state or deal damage. */
+/** Five perimeter compositions. Everything stays outside the playable rectangle. */
 export class Underworld {
   private root = new THREE.Group();
-  private chains: THREE.Group[] = [];
+  private circles: THREE.Group[] = [];
   private boat = new THREE.Group();
   private spider = new THREE.Group();
-  private legs: THREE.Group[] = [];
   private drops = new Map<number, THREE.Group>();
+  private cloth: THREE.Mesh[] = [];
   private time = 0;
   private stone = new THREE.MeshStandardMaterial({
-    color: 0x494348,
+    color: 0x928a7e,
     roughness: 1,
-    metalness: 0,
   });
-  private iron = new THREE.MeshStandardMaterial({
-    color: 0x302624,
-    roughness: 0.9,
+  private dark = new THREE.MeshStandardMaterial({
+    color: 0x4c4840,
+    roughness: 1,
   });
   private bone = new THREE.MeshStandardMaterial({
-    color: 0xb8ad94,
+    color: 0xa39880,
     roughness: 1,
   });
-  private ember = new THREE.MeshBasicMaterial({ color: 0xe69a59 });
-  constructor(scene: THREE.Scene, models: ModelLibrary) {
+  private bronze = new THREE.MeshStandardMaterial({
+    color: 0x6e5740,
+    roughness: 0.9,
+    metalness: 0.12,
+  });
+  constructor(
+    scene: THREE.Scene,
+    private models: ModelLibrary,
+  ) {
     scene.add(this.root);
-    for (const side of [-1, 1])
-      for (let i = 0; i < 5; i++) {
-        const x = side * (ARENA_HX + 0.8),
-          z = -ARENA_HZ + 2 + i * 4;
-        const ruin = this.mesh(
-          new THREE.CylinderGeometry(0.52, 0.8, 1.2 + (i % 3) * 0.7, 6),
-          this.stone,
-          x,
-          0.8,
-          z,
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 128;
+    const ink = canvas.getContext("2d")!;
+    ink.fillStyle = "#b0a89b";
+    ink.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 1800; i++) {
+      const tone = 70 + Math.floor(Math.random() * 110);
+      ink.fillStyle = `rgba(${tone},${tone},${tone},0.28)`;
+      ink.fillRect(
+        Math.random() * 128,
+        Math.random() * 128,
+        1 + Math.random() * 5,
+        1 + Math.random() * 3,
+      );
+    }
+    const grain = new THREE.CanvasTexture(canvas);
+    grain.colorSpace = THREE.SRGBColorSpace;
+    grain.wrapS = grain.wrapT = THREE.RepeatWrapping;
+    grain.repeat.set(0.4, 0.4);
+    this.stone.map = grain;
+    this.dark.map = grain;
+    this.bone.map = grain;
+    this.bronze.map = grain;
+
+    for (let circle = 0; circle < 5; circle++) {
+      const g = new THREE.Group();
+      this.root.add(g);
+      this.circles.push(g);
+      // A low masonry shelf grounds scenery in the painted arena without covering combat.
+      for (const side of [-1, 1]) {
+        this.box(
+          g,
+          4.4,
+          0.45,
+          11,
+          side * (ARENA_HX + 2.4),
+          -0.23,
+          -2,
+          this.dark,
         );
-        ruin.rotation.z = side * 0.12;
-        this.mesh(
-          new THREE.BoxGeometry(1.6, 0.35, 1.4),
-          this.stone,
-          x,
-          0.12,
-          z,
-        );
-        if (i % 2 === 0) {
-          const chain = new THREE.Group();
-          chain.position.set(x, 7, z);
-          for (let k = 0; k < 9; k++) {
-            const link = new THREE.Mesh(
-              new THREE.TorusGeometry(0.18, 0.045, 5, 8),
-              this.iron,
-            );
-            link.position.y = -k * 0.29;
-            link.rotation.y = ((k % 2) * Math.PI) / 2;
-            chain.add(link);
-          }
-          const cage = new THREE.Mesh(
-            new THREE.OctahedronGeometry(0.45),
-            this.iron,
+        for (let i = 0; i < 4; i++) {
+          const slab = this.box(
+            g,
+            3.9 - (i % 2) * 0.3,
+            0.25,
+            2.65,
+            side * (ARENA_HX + 2.4),
+            0,
+            -6 + i * 2.5,
+            this.stone,
           );
-          cage.position.y = -3;
-          chain.add(cage);
-          this.root.add(chain);
-          this.chains.push(chain);
+          slab.rotation.y = side * (i % 2 ? 0.035 : -0.025);
         }
       }
-    // The ferryman circles the shore, outside the playable boundary.
-    const hull = new THREE.Mesh(
-      new THREE.BoxGeometry(1.5, 0.3, 4.6),
-      this.iron,
-    );
-    hull.position.y = 0.15;
-    this.boat.add(hull);
-    const bow = new THREE.Mesh(new THREE.ConeGeometry(0.75, 1.4, 4), this.iron);
-    bow.rotation.x = Math.PI / 2;
-    bow.position.z = -2.3;
-    this.boat.add(bow);
-    const cloak = new THREE.Mesh(
-      new THREE.ConeGeometry(0.48, 1.7, 7),
-      new THREE.MeshStandardMaterial({ color: 0x29282c, roughness: 1 }),
-    );
-    cloak.position.y = 1.15;
-    this.boat.add(cloak);
-    const hood = new THREE.Mesh(
-      new THREE.SphereGeometry(0.34, 8, 6),
-      this.iron,
-    );
-    hood.position.set(0, 2, 0);
-    this.boat.add(hood);
-    const face = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 7, 5),
-      this.bone,
-    );
-    face.position.set(0, 2, -0.18);
-    this.boat.add(face);
-    const oar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.055, 0.055, 3.6, 5),
-      this.iron,
-    );
-    oar.position.set(0.65, 1.4, 0);
-    oar.rotation.z = -0.3;
-    this.boat.add(oar);
-    this.boat.position.set(-ARENA_HX - 0.6, 0, 0);
-    this.root.add(this.boat);
-    const water = this.mesh(
-      new THREE.PlaneGeometry(4, ARENA_HZ * 2 + 4),
-      new THREE.MeshBasicMaterial({
-        color: 0x223234,
-        transparent: true,
-        opacity: 0.7,
-      }),
-      -ARENA_HX - 2,
-      -0.08,
-      0,
-    );
-    water.rotation.x = -Math.PI / 2;
-    // A many-faced shore spider. The faces watch; this creature is not a target.
-    const abdomen = new THREE.Mesh(
-      new THREE.SphereGeometry(0.85, 10, 8),
-      this.iron,
-    );
-    abdomen.scale.set(1, 0.6, 1.3);
-    abdomen.position.y = 0.8;
-    this.spider.add(abdomen);
-    for (let i = 0; i < 5; i++) {
-      const face = new THREE.Mesh(
-        new THREE.SphereGeometry(0.23, 7, 5),
-        this.bone,
-      );
-      face.scale.set(0.8, 1, 0.6);
-      face.position.set((i - 2) * 0.27, 1.02, -0.6 + Math.abs(i - 2) * 0.08);
-      this.spider.add(face);
-      for (const offset of [-0.06, 0.06]) {
-        const eye = new THREE.Mesh(
-          new THREE.SphereGeometry(0.035, 5, 4),
-          this.ember,
-        );
-        eye.position
-          .copy(face.position)
-          .add(new THREE.Vector3(offset, 0.04, -0.14));
-        this.spider.add(eye);
+      const x = ARENA_HX + 2.4;
+      if (circle === 0) {
+        // Limbo: a quiet landing opposite a funerary colonnade.
+        this.dock(g, -x, 0);
+        this.arch(g, x, -4, 3.3, false);
+        this.tomb(g, x, -1, 0.2);
+        this.tomb(g, x, 2, -0.15);
+        this.urn(g, x - 0.9, -6);
+        this.urn(g, x + 0.8, -6);
+      } else if (circle === 1) {
+        // Lust: two broken thresholds and torn, wind-worn cloth.
+        this.arch(g, -x, -3, 4.2, true);
+        this.arch(g, x, 1, 3.7, true);
+        this.banner(g, -x, -3, 3.7);
+        this.banner(g, x, 1, 3.2);
+        this.tomb(g, -x, 3, 0.35);
+        this.urn(g, x, -5);
+      } else if (circle === 2) {
+        // Gluttony: a drained cistern and the spider's recessed ossuary.
+        this.basin(g, -x, -1, 1.6);
+        this.arch(g, x, -3, 3.8, true);
+
+        for (let i = 0; i < 8; i++)
+          this.urn(
+            g,
+            x + (i % 2 ? 1.3 : -1.3),
+            -6 + Math.floor(i / 2) * 1.7,
+            0.55,
+          );
+      } else if (circle === 3) {
+        // Greed: abandoned counting tables, sealed coffers and a watching idol.
+        this.arch(g, x, -3, 3.8, false);
+
+        for (let i = 0; i < 3; i++) {
+          this.box(g, 1.9, 0.85, 1.05, -x, 0.55, -4 + i * 2.6, this.dark);
+          this.box(g, 2, 0.12, 1.15, -x, 1.02, -4 + i * 2.6, this.bronze);
+          this.box(g, 0.12, 0.6, 1.18, -x, 0.7, -4 + i * 2.6, this.bronze);
+        }
+        this.urn(g, x, 2, 1.3);
+      } else {
+        // Wrath: the river returns beneath a fractured basalt shrine.
+        this.dock(g, -x, 0);
+        for (let i = 0; i < 5; i++) {
+          const h = [2.7, 4, 3.2, 1.4, 2][i];
+          const p = this.mesh(
+            g,
+            new THREE.CylinderGeometry(0.45, 0.65, h, 5),
+            this.dark,
+            x + (i % 2) * 0.6,
+            h / 2,
+            -6 + i * 1.8,
+          );
+          p.rotation.z = i % 2 ? 0.09 : -0.08;
+        }
+        this.basin(g, x, 3, 1.1);
       }
+      // Broken reliefs at the far wall form a backdrop, not a row of obstacles.
+      this.box(g, 7, 0.4, 1.6, -8, 0.1, -ARENA_HZ - 1.1, this.dark);
+      this.box(g, 3.5, 0.9, 0.8, -9, 0.55, -ARENA_HZ - 1.4, this.stone);
+      this.box(g, 4, 0.35, 1.3, 9, 0.1, -ARENA_HZ - 1, this.stone);
     }
-    for (const side of [-1, 1])
-      for (let i = 0; i < 4; i++) {
-        const leg = new THREE.Group();
-        leg.position.set(side * 0.5, 0.75, (i - 1.5) * 0.4);
-        const a = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.06, 0.035, 1.25, 5),
-          this.iron,
-        );
-        a.rotation.z = side * 1;
-        a.position.x = side * 0.5;
-        leg.add(a);
-        const b = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.04, 0.018, 1.15, 5),
-          this.iron,
-        );
-        b.rotation.z = -side * 0.25;
-        b.position.set(side * 1, 0.1, 0);
-        leg.add(b);
-        this.spider.add(leg);
-        this.legs.push(leg);
-      }
-    this.spider.position.set(ARENA_HX + 0.9, 0, -4);
-    this.root.add(this.spider);
+    this.root.add(this.boat, this.spider);
+    this.boat.position.set(-ARENA_HX - 2.1, 0, 0);
+    this.boat.rotation.y = 0;
+    this.spider.position.set(ARENA_HX + 2.4, 0.4, -2.2);
+    this.spider.rotation.y = -Math.PI / 5;
     for (const [kind, group, height] of [
-      ["shore-spider", this.spider, 1.6],
+      ["shore-spider", this.spider, 1.35],
       ["ferryman", this.boat, 2.7],
     ] as const) {
       void models.create(kind, height).then((model) => {
-        if (!model) return;
-        group.traverse((object) => {
-          if (object instanceof THREE.Mesh) object.geometry.dispose();
-        });
-        group.clear();
-        group.add(model.root);
-        if (kind === "shore-spider") this.legs = [];
+        if (model) group.add(model.root);
       });
     }
   }
   private mesh(
+    g: THREE.Group,
     geo: THREE.BufferGeometry,
     mat: THREE.Material,
     x: number,
@@ -192,22 +172,171 @@ export class Underworld {
   ) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
-    this.root.add(m);
+    g.add(m);
     return m;
+  }
+  private box(
+    g: THREE.Group,
+    w: number,
+    h: number,
+    d: number,
+    x: number,
+    y: number,
+    z: number,
+    mat = this.stone,
+  ) {
+    const shape = new THREE.Shape();
+    shape.moveTo(-w / 2, -h / 2);
+    shape.lineTo(w / 2, -h / 2);
+    shape.lineTo(w / 2, h / 2);
+    shape.lineTo(-w / 2, h / 2);
+    shape.closePath();
+    const bevel = Math.min(0.09, h * 0.18, w * 0.08, d * 0.08);
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: d - bevel * 2,
+      bevelEnabled: true,
+      bevelSize: bevel,
+      bevelThickness: bevel,
+      bevelSegments: 1,
+      steps: 1,
+    });
+    geo.translate(0, 0, -d / 2 + bevel);
+    return this.mesh(g, geo, mat, x, y, z);
+  }
+  private arch(
+    g: THREE.Group,
+    x: number,
+    z: number,
+    height: number,
+    broken: boolean,
+  ) {
+    const niche = new THREE.Group();
+    niche.position.set(x, 0.1, z);
+    niche.rotation.y = x > 0 ? -0.25 : 0.25;
+    g.add(niche);
+    const fallback = new THREE.Group();
+    niche.add(fallback);
+    for (const side of [-1, 1]) {
+      const h = broken && side === 1 ? height * 0.55 : height;
+      this.box(fallback, 0.65, h, 0.8, side * 1.4, h / 2, 0, this.stone);
+    }
+    void this.models.create("funerary-arch", height).then((model) => {
+      if (!model) return;
+      niche.remove(fallback);
+      fallback.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry.dispose();
+      });
+      niche.add(model.root);
+    });
+  }
+  private tomb(g: THREE.Group, x: number, z: number, angle: number) {
+    const t = new THREE.Group();
+    t.position.set(x, 0.15, z);
+    t.rotation.y = angle;
+    g.add(t);
+    this.box(t, 1.1, 0.6, 2, 0, 0.3, 0, this.dark);
+    this.box(t, 1.3, 0.2, 2.2, 0, 0.7, 0, this.stone);
+    this.box(t, 0.55, 0.08, 1.3, 0, 0.84, 0, this.bone);
+  }
+  private urn(g: THREE.Group, x: number, z: number, scale = 1) {
+    this.mesh(
+      g,
+      new THREE.CylinderGeometry(0.28 * scale, 0.38 * scale, 0.7 * scale, 8),
+      this.bone,
+      x,
+      0.2 + 0.35 * scale,
+      z,
+    );
+    this.mesh(
+      g,
+      new THREE.CylinderGeometry(0.34 * scale, 0.3 * scale, 0.1, 8),
+      this.dark,
+      x,
+      0.25 + 0.7 * scale,
+      z,
+    );
+  }
+  private basin(g: THREE.Group, x: number, z: number, radius: number) {
+    this.mesh(
+      g,
+      new THREE.CylinderGeometry(radius, radius + 0.15, 0.6, 12),
+      this.stone,
+      x,
+      0.3,
+      z,
+    );
+    this.mesh(
+      g,
+      new THREE.CylinderGeometry(radius - 0.16, radius - 0.16, 0.02, 12),
+      this.dark,
+      x,
+      0.61,
+      z,
+    );
+    this.urn(g, x, z, 0.6);
+  }
+  private dock(g: THREE.Group, x: number, z: number) {
+    this.box(
+      g,
+      4.2,
+      0.08,
+      10,
+      x,
+      0.19,
+      z,
+      new THREE.MeshStandardMaterial({ color: 0x273334, roughness: 0.82 }),
+    );
+    for (let i = 0; i < 4; i++)
+      this.box(
+        g,
+        0.38,
+        0.16,
+        3.8,
+        x + 0.2 + i * 0.45,
+        0.31,
+        z + 3.1,
+        this.dark,
+      );
+    this.urn(g, x + 1.5, z + 4.8, 0.8);
+  }
+  private banner(g: THREE.Group, x: number, z: number, y: number) {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.9, 0);
+    shape.lineTo(0.9, 0);
+    shape.lineTo(0.8, -1.8);
+    shape.lineTo(0.25, -1.5);
+    shape.lineTo(-0.2, -2.2);
+    shape.lineTo(-0.85, -1.9);
+    shape.closePath();
+    const cloth = this.mesh(
+      g,
+      new THREE.ShapeGeometry(shape),
+      new THREE.MeshStandardMaterial({
+        color: 0x583635,
+        roughness: 1,
+        side: THREE.DoubleSide,
+      }),
+      x,
+      y,
+      z,
+    );
+    this.cloth.push(cloth);
   }
   sync(w: World, dt: number) {
     this.time += dt;
     this.root.visible = w.mode === "solo";
-    this.chains.forEach(
-      (g, i) => (g.rotation.z = Math.sin(this.time * 0.5 + i) * 0.06),
-    );
-    this.boat.position.z = Math.sin(this.time * 0.09) * 5;
-    this.boat.position.y = Math.sin(this.time * 0.8) * 0.06;
-    this.spider.position.y = Math.sin(this.time * 0.7) * 0.025;
-    this.spider.rotation.y = Math.sin(this.time * 0.16) * 0.12;
-    this.legs.forEach(
-      (g, i) => (g.rotation.x = Math.sin(this.time * 1.6 + i) * 0.16),
-    );
+    const circle = Math.max(0, Math.min(4, w.floor - 1));
+    this.circles.forEach((g, i) => {
+      g.visible = i === circle;
+    });
+    this.boat.visible = circle === 0 || circle === 4;
+    this.spider.visible = circle === 2 || circle === 3;
+    this.boat.position.y = 0.25 + Math.sin(this.time * 0.7) * 0.025;
+    this.boat.position.z = Math.sin(this.time * 0.12) * 0.18;
+    this.spider.position.y = 0.45 + Math.sin(this.time * 0.7) * 0.018;
+    this.cloth.forEach((m, i) => {
+      m.rotation.x = Math.sin(this.time * 0.5 + i) * 0.035;
+    });
     const live = new Set(w.pickups.map((p) => p.id));
     for (const [id, g] of this.drops)
       if (!live.has(id)) {
@@ -224,34 +353,37 @@ export class Underworld {
       let g = this.drops.get(item.id);
       if (!g) {
         g = new THREE.Group();
-        const vessel = new THREE.Mesh(
+        this.mesh(
+          g,
           new THREE.IcosahedronGeometry(0.3, 1),
-          new THREE.MeshStandardMaterial({
-            color: 0x9b172c,
-            emissive: 0x95172c,
-            emissiveIntensity: 0.6,
-            roughness: 0.5,
-          }),
+          new THREE.MeshStandardMaterial({ color: 0x9b3948, roughness: 0.75 }),
+          0,
+          0.5,
+          0,
         );
-        vessel.position.y = 0.5;
-        g.add(vessel);
-        const ring = new THREE.Mesh(
-          new THREE.RingGeometry(0.4, 0.52, 24),
+        const ring = this.mesh(
+          g,
+          new THREE.RingGeometry(0.4, 0.48, 24),
           new THREE.MeshBasicMaterial({
-            color: 0xff7f89,
+            color: 0xb6878c,
             side: THREE.DoubleSide,
             transparent: true,
-            opacity: 0.7,
+            opacity: 0.55,
           }),
+          0,
+          0.05,
+          0,
         );
         ring.rotation.x = -Math.PI / 2;
-        ring.position.y = 0.05;
-        g.add(ring);
         this.root.add(g);
         this.drops.set(item.id, g);
       }
-      g.position.set(item.x, Math.sin(this.time * 3 + item.id) * 0.07, item.z);
-      g.rotation.y = this.time * 0.6;
+      g.position.set(
+        item.x,
+        Math.sin(this.time * 1.5 + item.id) * 0.035,
+        item.z,
+      );
+      g.rotation.y = this.time * 0.3;
     }
   }
 }

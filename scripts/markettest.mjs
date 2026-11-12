@@ -15,6 +15,7 @@ import {
   pendingNative,
   selectWinners,
   retireRaffles,
+  closeTreasuryRound,
   beginTreasuryTransfer,
   resolveTreasuryTransfer,
 } from "../contracts/market.js";
@@ -244,6 +245,11 @@ try {
     "Known final failure",
   );
   assert.equal(referee.profile(session.owner).coins, 0);
+  const saleId = randomUUID(), quote = {tokenId:"relic:edition:1",priceYocto:"015000000000000000000000"};
+  const listing = referee.queueMarket(session.owner,saleId,"list_gear",quote);
+  assert.equal(listing.data.priceYocto,"15000000000000000000000","native prices are canonical before signing");
+  assert.equal(referee.queueMarket(session.owner,saleId,"list_gear",{...quote,priceYocto:"15000000000000000000000"}).id,saleId);
+
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
@@ -284,3 +290,9 @@ assert.equal(store.reservations.get("arsenal:p0").weaponId, "tollkeeper");
 console.log(
   "Treasury: PASS (retirement refunds, liabilities isolated, failure restoration, duplicate payout lock, no tickets, reserved weapon identity)",
 );
+
+const beforeClosing = maps.champions.get("p0").coins;
+closeTreasuryRound(store);
+assert.equal(maps.champions.get("p0").coins, beforeClosing + 10);
+closeTreasuryRound(store);
+assert.equal(maps.champions.get("p0").coins, beforeClosing + 10, "closing twice never refunds twice");

@@ -308,6 +308,7 @@ function showReward() {
 function updateHud(dt: number) {
   const p = world.player;
   hpFill.style.width = `${(p.hp / p.maxHp) * 100}%`;
+  $("hp-lag").style.width = hpFill.style.width;
   $("vital").classList.toggle("critical", p.hp > 0 && p.hp <= p.maxHp * 0.25);
   hpText.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
   dashPip.classList.toggle("ready", p.dashCd <= 0);
@@ -647,6 +648,71 @@ const nearAmount = (yocto: string) => {
 };
 let marketState: MarketView | null = null;
 let renderedMarketOpen = false;
+let exchangeOpen = false;
+let saleInventory: import("./shared/protocol").NftToken[] = [];
+function showMarketTab(exchange: boolean) {
+  exchangeOpen = exchange;
+  $("mint-panel").classList.toggle("hidden", exchange);
+  $("exchange-panel").classList.toggle("hidden", !exchange);
+  $("tab-mint").setAttribute("aria-pressed", String(!exchange));
+  $("tab-exchange").setAttribute("aria-pressed", String(exchange));
+  $("market-title").textContent = exchange
+    ? "THE ASH EXCHANGE."
+    : "THE RELIQUARY.";
+  document.querySelector<HTMLElement>(".market-fine")!.textContent = exchange
+    ? "Prices are in free test NEAR. A sale transfers the same weapon NFT and records its previous owner. Seller proceeds remain withdrawable to the seller’s account; 10% supports the game treasury."
+    : "Earn access with 10 Solo coin, then pay 0.01 test NEAR to mint. Unpaid reservations can be cancelled for a full coin refund.";
+}
+function renderExchange() {
+  if (!marketState || !champion) return;
+  const state = marketState;
+  const ready = champion.chain?.features?.includes("exchange"),
+    owner = champion.chain?.accountId;
+  const entries = marketState.listings ?? [];
+  $("exchange-listings").innerHTML = !ready
+    ? "<p>The marketplace opens after the testnet update.</p>"
+    : entries.length
+      ? entries
+          .map((l) => {
+            const spec = weapon(l.weaponId),
+              mine = l.seller === owner;
+            return `<article class="exchange-card"><img src="/assets/ui/${weaponId(l.weaponId)}.jpg" alt="${escapeHtml(spec.name)}"/><div><span class="eyebrow">${escapeHtml(spec.className)} · +${l.level}</span><h3>${escapeHtml(spec.name)}</h3><p>${l.kills} kills · ${l.pastOwners.length} previous owner${l.pastOwners.length === 1 ? "" : "s"}</p><dl><dt>Damage</dt><dd>${spec.damage + l.level * 2}</dd><dt>Range</dt><dd>${spec.reach} m</dd><dt>Seller</dt><dd>${escapeHtml(shortAccount(l.seller))}</dd></dl><p class="listing-price">${nearAmount(l.priceYocto)} <small>test NEAR</small></p><button class="btn ${mine ? "ghost" : ""}" data-sale="${escapeHtml(l.id)}" data-sale-action="${mine ? "cancel_sale" : "buy_gear"}" ${busy || pendingMarket || (!mine && BigInt(state.nativeBalanceYocto ?? "0") < BigInt(l.priceYocto) + 10n ** 22n) ? "disabled" : ""}>${mine ? "CANCEL LISTING" : "BUY THIS NFT ↗"}</button></div></article>`;
+          })
+          .join("")
+      : '<p class="exchange-empty">No relics are listed yet. Offer an unequipped weapon below.</p>';
+  $("exchange-balance").innerHTML =
+    `<div><span class="eyebrow">YOUR SALE PROCEEDS</span><b>${nearAmount(marketState.proceedsYocto ?? "0")} <small>test NEAR</small></b></div>${marketButton("withdraw_sales", marketState.proceedsPending ? "WITHDRAWAL PENDING" : "WITHDRAW PROCEEDS ↗", !ready || !!marketState.proceedsPending || BigInt(marketState.proceedsYocto ?? "0") === 0n)}<p>Guest wallet: ${nearAmount(state.nativeBalanceYocto ?? "0")} test NEAR</p>`;
+  if (!state.sponsored && state.fundingAvailable && champion.runs > 0)
+    $("exchange-balance").insertAdjacentHTML(
+      "beforeend",
+      marketButton("fund_guest", "GET DEMO TEST NEAR ↗", !ready),
+    );
+  if (pendingMarket)
+    $("exchange-balance").insertAdjacentHTML(
+      "beforeend",
+      '<button class="btn ghost" data-market-retry="1">CHECK PENDING ACTION ↻</button>',
+    );
+  const select = $<HTMLSelectElement>("sale-token"),
+    selected = select.value;
+  const available = saleInventory.filter(
+    (t) =>
+      t.extra.kind === "weapon" &&
+      !t.extra.bound &&
+      !t.extra.equippedTo &&
+      !entries.some((l) => l.tokenId === t.tokenId),
+  );
+  select.innerHTML = available.length
+    ? available
+        .map(
+          (t) =>
+            `<option value="${escapeHtml(t.tokenId)}">${escapeHtml(t.title)} · +${Number(t.extra.level)} · ${Number(t.extra.kills)} kills</option>`,
+        )
+        .join("")
+    : '<option value="">No unequipped tradable weapons</option>';
+  if (available.some((t) => t.tokenId === selected)) select.value = selected;
+  $<HTMLButtonElement>("sale-submit").disabled =
+    !ready || !available.length || busy || !!pendingMarket;
+}
 let selectedRelic: WeaponId = "cinder-requiem";
 let pendingMarket: {
   championId: string;
@@ -665,6 +731,7 @@ const marketButton = (op: MarketOperation, text: string, disabled = false) =>
   `<button class="btn" data-market="${op}" ${disabled || busy || !!pendingMarket ? "disabled" : ""}>${text}</button>`;
 function renderMarket() {
   if (!marketState || !champion) return;
+  renderExchange();
   const { round, reservation, prizeYocto } = marketState;
   const open = !!round && !round.drawn && round.endsAt > Date.now();
   renderedMarketOpen = open;
@@ -810,6 +877,7 @@ async function doMarket(
         ? escapeHtml(response.intent.error)
         : `Confirmed on testnet.${response.intent.transaction ? ` <a href="${EXPLORER}/txns/${encodeURIComponent(response.intent.transaction)}" target="_blank" rel="noopener noreferrer">View transaction ↗</a>` : ""}`;
       if (nft) await renderNft();
+      else saleInventory = (await api.nft()).tokens;
     } else
       out.textContent =
         "Still confirming. Check the same pending action to continue; it will not charge twice.";
@@ -820,10 +888,12 @@ async function doMarket(
     renderMarket();
   }
 }
-async function openMarket() {
+async function openMarket(exchange = false) {
   try {
     await loadChampion();
     marketState = await api.market();
+    saleInventory = (await api.nft()).tokens;
+    showMarketTab(exchange);
     if (pendingMarket?.championId !== champion?.id) pendingMarket = null;
     renderMarket();
     $("modes").inert = true;
@@ -833,11 +903,52 @@ async function openMarket() {
     notice((e as Error).message);
   }
 }
+$("tab-mint").addEventListener("click", () => showMarketTab(false));
+$("tab-exchange").addEventListener("click", () => showMarketTab(true));
+$("exchange-open").addEventListener("click", () => void openMarket(true));
+$("sale-price").addEventListener("input", () => {
+  const v = $<HTMLInputElement>("sale-price").value;
+  if (!/^(0|1)(\.[0-9]{1,3})?$/.test(v)) return;
+  const [whole, fraction = ""] = v.split(".");
+  const amount = BigInt(whole) * 10n ** 24n + BigInt(fraction.padEnd(24, "0"));
+  $("sale-net").textContent =
+    `${nearAmount((amount - amount / 10n).toString())} test NEAR to you · ${nearAmount((amount / 10n).toString())} to the game treasury.`;
+});
+$("sale-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = $<HTMLInputElement>("sale-price").value;
+  if (!/^(0|1)(\.[0-9]{1,3})?$/.test(v)) return;
+  const [whole, fraction = ""] = v.split(".");
+  const amount = BigInt(whole) * 10n ** 24n + BigInt(fraction.padEnd(24, "0"));
+  if (amount < 10n ** 21n || amount > 10n ** 24n) {
+    $("market-result").textContent = "Choose 0.001 to 1 test NEAR.";
+    return;
+  }
+  void doMarket("list_gear", {
+    tokenId: $<HTMLSelectElement>("sale-token").value,
+    priceYocto: amount.toString(),
+  });
+});
+$("exchange-listings").addEventListener("click", (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>(
+    "button[data-sale]",
+  );
+  if (!button || button.disabled) return;
+  const l = marketState?.listings?.find((l) => l.id === button.dataset.sale);
+  if (!l) return;
+  void doMarket(button.dataset.saleAction as MarketOperation, {
+    tokenId: l.tokenId,
+    listingId: l.id,
+    ...(button.dataset.saleAction === "buy_gear"
+      ? { priceYocto: l.priceYocto }
+      : {}),
+  });
+});
 $("market-open").addEventListener("click", () => void openMarket());
 $("market-close").addEventListener("click", () => {
   $("market").classList.add("hidden");
   $("modes").inert = false;
-  $("market-open").focus();
+  $(exchangeOpen ? "exchange-open" : "market-open").focus();
 });
 $("market-refresh").addEventListener("click", async () => {
   if (busy) return;
@@ -845,6 +956,7 @@ $("market-refresh").addEventListener("click", async () => {
     return void doMarket(pendingMarket.operation, pendingMarket.data);
   try {
     marketState = await api.market();
+    saleInventory = (await api.nft()).tokens;
     await loadChampion();
     renderMarket();
   } catch (e) {
@@ -954,7 +1066,7 @@ async function renderNft() {
       const available = !x.bound || x.championId === champion?.id;
       const gearButton =
         !isChampion && view.features?.includes("market") && available
-          ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${equipped ? "UNEQUIP" : "EQUIP"}</button>`
+          ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || x.listing || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${x.listing ? "LISTED · CANCEL IN MARKET" : equipped ? "UNEQUIP" : "EQUIP"}</button>`
           : "";
       return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${!isChampion && identity !== "starter" ? `<img src="/assets/ui/${identity}.jpg" alt="${weapon(identity).name}"/>` : ""}<strong>${escapeHtml(token.title)}</strong><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${gearButton}</article>`;
     })

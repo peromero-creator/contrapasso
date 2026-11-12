@@ -39,7 +39,7 @@ Keep source files outside the web build, for example under `art/source/`. Config
 }
 ```
 
-A clip specification can also select a named or indexed animation: `{ "file": "art/source/actions.glb", "clip": "Run" }`. Runtime model keys are `hero`, `imp`, `archer`, `brute`, `warden`, `sword`, `hammer`, `dagger`, `shore-spider` and `ferryman`. Additional packed props require explicit placement.
+A clip specification can also select a named or indexed animation: `{ "file": "art/source/actions.glb", "clip": "Run" }`. Runtime model keys are `hero`, `imp`, `archer`, `brute`, `warden`, `sword`, `hammer`, `dagger`, `shore-spider`, `ferryman`, `crossbow`, `staff` and `funerary-arch`. Additional packed props require explicit placement.
 
 Painted floors cover one complete 34 × 22 arena. Supported circle keys are `LIMBO`, `LUST`, `GLUTTONY`, `GREED`, and `WRATH`; supported images are PNG, JPG and WebP. Keep perspective out of the painted image because the game camera supplies it.
 
@@ -70,6 +70,14 @@ Raw duplicate exports and unused generation attempts stay outside Git under `art
 
 Tollkeeper (war hammer) and Widow’s Fang (dagger) use original Flow concepts and Meshy props, alongside Cinder Requiem. The existing hero rig has two additional Meshy animations: Heavy Hammer Swing and Thrust Slash. They are merged only after matching bone rest poses, trimmed locally, and played at the deterministic weapon's swing duration. NFT class selects the in-hand model; + level adds a restrained light, with embers from +3. Unowned preview artwork does not alter combat.
 
-`src/render/dressing.ts` adds original low-poly ruins, suspended chains, a ferryman and a many-faced shore spider. The ferryman and spider use original Flow concepts converted through Meshy, packed with 512-pixel textures. They sway and drift as ambient props outside combat boundaries; they have no combat AI or skeletal walking animation. Blood vessels are real deterministic drops, rendered separately from their healing rules.
+`src/render/dressing.ts` adds original low-poly ruins, a ferryman and a many-faced shore spider. The ferryman and spider use original Flow concepts converted through Meshy, packed with 512-pixel textures. They sway and drift as ambient props outside combat boundaries; they have no combat AI or skeletal walking animation. Blood vessels are real deterministic drops, rendered separately from their healing rules.
 
 The original title composition is retained. Flow's available 2K enhancement produced `art/source/cover-enhanced-2k.jpg` (2752×1536); `public/assets/ui/cover-4k.jpg` is the 3840-pixel-wide display export, preserving aspect ratio. This is a Flow-enhanced 2K image resampled for a 4K display, not native 4K generation. Flow's 4K option required a subscription upgrade and was not purchased.
+
+## Ranged and environment revision (0.7)
+
+Gravewhisper and Vesper Reed use original Flow concepts converted into Meshy props. The hero rig adds Cowboy Quick Draw Shooting and Mage Spell Cast clips, trimmed to the weapon action windows. Crossbow source geometry is horizontal, so its height normalization and hand orientation differ from upright blades; the same transform applies to a Duel rival. The shared NFT identity selects the visible model and deterministic projectile rules.
+
+The original carved funerary arch was generated in the same Flow project and converted through Meshy (8,000 target polygons, 1024-pixel packed texture). It frames the shore-spider and circle shrines. Five perimeter layouts use the arch, matte weathered stone, tombs, cloth, urns, cisterns, coffers and basalt. The ferryman stays at his landing; the spider stays within its niche. Ambient props never overlap intended combat rules or become attackable targets.
+
+Bloom and rapid model blinking are disabled. Warm bone damage text uses Cinzel; the vitality bar has a delayed loss trail. Hit particles and camera impulses are reduced, with no full-white damage flash. The source concepts, model inputs and packed assets retain actual provenance in `art.config.json` and the manifest.

@@ -29,6 +29,7 @@ if (!process.argv.includes("--execute")) {
         contractId: config.contractId,
         method: "open_round",
         args: request,
+        closePrevious: process.argv.includes("--close-previous"),
       },
       null,
       2,
@@ -42,6 +43,26 @@ if (!process.argv.includes("--execute")) {
     provider,
     KeyPairSigner.fromSecretKey(plan.secretKey),
   );
+  let closeTransaction: string | undefined;
+  if (process.argv.includes("--close-previous")) {
+    const current = await provider.callFunction<any>({
+      contractId: config.contractId,
+      method: "market_view",
+      args: { champion_id: "" },
+    });
+    if (current.round && !current.round.drawn && current.round.id !== id) {
+      if (current.revenueMode !== "treasury")
+        throw new Error("Only treasury editions can be closed early");
+      const closed = await account.callFunctionRaw({
+        contractId: config.contractId,
+        methodName: "close_edition",
+        args: {},
+        gas: 100000000000000n,
+        waitUntil: "FINAL",
+      });
+      closeTransaction = closed.transaction.hash;
+    }
+  }
   const outcome = await account.callFunctionRaw({
     contractId: config.contractId,
     methodName: "open_round",
@@ -58,6 +79,7 @@ if (!process.argv.includes("--execute")) {
     network: "testnet",
     contractId: config.contractId,
     transaction: outcome.transaction.hash,
+    closeTransaction,
     round: view.round,
     verifiedAt: new Date().toISOString(),
   };

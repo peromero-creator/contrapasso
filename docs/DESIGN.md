@@ -100,7 +100,15 @@ All new permanent skill unlocks cost earned coin, with shared prerequisite rules
 
 Mint access and native payment remain separate. The owner chose to remove raffle sales and hold revenue in the application treasury. Existing round liabilities are honored when retiring the prior round; unallocated revenue moves to the treasury. No new fungible token or mainnet deployment is part of this revision.
 
-The arena expands from 30×19 to 34×22, with healing pickups and perimeter ruins, hanging chains and ambient inhabitants outside the combat boundary. Every seventh Solo kill drops a blood vessel restoring 18 life (boosted by Stolen Mercy); full-health players do not consume it. Further ranged weapons, larger arenas and additional animation sets follow the verified first set.
+The arena expands from 30×19 to 34×22, with healing pickups and perimeter ruins, hanging chains and ambient inhabitants outside the combat boundary. Every seventh Solo kill drops a blood vessel restoring 18 life (boosted by Stolen Mercy); full-health players do not consume it. The ranged and marketplace expansion is documented below.
+
+## Ranged weapons, exchange and map direction (0.7)
+
+Gravewhisper is a deliberate hand crossbow (31 base damage, 11-unit range, 0.65-second cooldown); every third bolt pierces two distinct targets. Vesper Reed is a soul staff (22 damage, 8.5-unit range, 0.48-second cooldown); every third cast fires a three-way fan. Shots travel, expire and respect target sides. Upgrades add two damage per level and trained skills apply to hits. Ranged Duel defenders use the same weapons and fixed-aim, dodgeable projectiles. Simulation version is 0.6.0.
+
+The Ash Exchange sells existing, unequipped tradable gear for 0.001–1 test NEAR. Listings lock equipment/transfer until cancellation or sale. A purchase requires the exact quoted price and listing revision, transfers the same NFT atomically, preserves its identity, level and kills, and appends the seller to its recent owner history. The seller receives a withdrawable 90% balance and the application treasury receives 10%. A failed withdrawal restores the balance; sale proceeds belong to the selling account, not its champion. Champion sales and auctions are outside this marketplace UI.
+
+Each circle now has a deliberate perimeter composition: Limbo’s ferry landing and tombs, Lust’s broken thresholds and cloth, Gluttony’s cistern and spider ossuary, Greed’s coffers and shrine, and Wrath’s basalt riverbank. Ambient creatures occupy fixed niches outside combat. The carved arch shares the existing Flow/Meshy art direction. Combat bloom and rapid blinking are disabled; subdued particles, serif damage numbers and a delayed vitality-loss trail keep hits readable without bright bursts.
 
 ## Next steps
 

@@ -26,9 +26,18 @@ export function bot(w: World): Input {
   if (!target) return { move: -1, aim: p.aim, attack: false, dash: false };
   const aim = dirIndex(target.x - p.x, target.z - p.z);
   const dodge = w.tick % 90 < 12;
-  const close = target.d < weapon(p.weaponId).reach - 0.1;
+  const spec = weapon(p.weaponId);
+  const close = target.d < spec.reach - 0.5;
+  const retreat =
+    !!spec.ranged && target.d < 4 && Math.abs(p.x) < 15 && Math.abs(p.z) < 9;
   return {
-    move: dodge ? (aim + 256) % 1024 : close ? -1 : aim,
+    move: dodge
+      ? (aim + 256) % 1024
+      : retreat
+        ? (aim + 512) % 1024
+        : close
+          ? -1
+          : aim,
     aim,
     attack: close,
     dash: dodge && w.tick % 90 === 0,

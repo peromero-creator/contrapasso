@@ -97,7 +97,7 @@ export function applyAction(store, context, action) {
     return { ...old, duplicate: true };
   }
   requireThat(
-    action.operation === "mint" ||
+    (action.operation === "mint" || action.operation === "buy_gear") ||
       !context.depositYocto ||
       context.depositYocto === "0",
     "Unexpected native payment",

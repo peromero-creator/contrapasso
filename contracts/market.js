@@ -1,3 +1,4 @@
+import { listGear, cancelSale, buyGear, beginSaleWithdrawal, resolveSaleWithdrawal } from "./exchange.js";
 import { WEAPONS } from "../src/sim/weapons.ts";
 import {
   MINT_ENTRY_COIN,
@@ -129,6 +130,14 @@ export function marketAction(store, ctx, c, action) {
   const data = action.data,
     config = economy(store),
     key = `${data.roundId}:${c.id}`;
+  if (action.operation === "list_gear") return listGear(store, ctx, action.ownerId, data);
+  if (action.operation === "cancel_sale") return cancelSale(store, action.ownerId, data);
+  if (action.operation === "buy_gear") return buyGear(store, ctx, action.ownerId, data);
+  if (action.operation === "withdraw_sales") {
+    const amount = beginSaleWithdrawal(store, action.ownerId);
+    store.market.set(`native:${c.id}`, { kind: "sale", receiptId: action.id, championId: c.id, receiver: action.ownerId, amountYocto: amount });
+    return;
+  }
   if (action.operation === "fund_guest") {
     check(c.runs > 0, "Finish Solo before using demo funds");
     check(
@@ -237,7 +246,7 @@ export function marketAction(store, ctx, c, action) {
   if (action.operation === "reserve_mint") {
     check(c.runs > 0, "Earn mint access in Solo");
     const choice = data.weaponId ?? "cinder-requiem";
-    check(choice !== "starter" && WEAPONS[choice], "Unknown relic");
+    check(choice !== "starter" && Object.prototype.hasOwnProperty.call(WEAPONS, choice), "Unknown relic");
     check(round.revenueMode === "treasury" || choice === "cinder-requiem", "Legacy edition is Cinder Requiem only");
     const old = reservation(store, round.id, c.id);
     check(
@@ -309,6 +318,13 @@ export function resolveNative(store, championId, success) {
   const p = pendingNative(store, championId);
   check(p, "No pending native transfer");
   const config = economy(store);
+  if (p.kind === "sale") {
+    resolveSaleWithdrawal(store, p.receiver, success);
+    store.market.remove(`native:${championId}`);
+    const receipt = store.used.get(p.receiptId);
+    if (receipt) store.used.set(p.receiptId, { ...receipt, nativeComplete: true, nativeSuccess: success });
+    return p;
+  }
   if (p.kind === "fund") {
     if (success) store.market.set(`funded:${championId}`, true);
     else config.sponsored--;
@@ -388,4 +404,14 @@ export function resolveTreasuryTransfer(store, success) {
   store.market.remove("treasury:pending");
   store.market.set("config", config);
   return { ...pending, success };
+}
+
+export function closeTreasuryRound(store) {
+  const config = economy(store), round = config.currentRound ? store.rounds.get(config.currentRound) : null;
+  check(config.mode === "treasury" && round?.revenueMode === "treasury", "Treasury edition required");
+  if (round.drawn) return round;
+  for (const id of round.reservationIds) { const r = reservation(store, round.id, id); if (r?.status === "reserved") refund(store, round, r); }
+  round.drawn = true;
+  store.rounds.set(round.id, round);
+  return round;
 }

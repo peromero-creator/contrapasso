@@ -890,12 +890,42 @@ export class Referee {
     }
     if (operation === "reserve_mint" && body.weaponId !== undefined) {
       demand(
-        ["cinder-requiem", "tollkeeper", "widows-fang"].includes(
-          String(body.weaponId),
-        ),
+        [
+          "cinder-requiem",
+          "tollkeeper",
+          "widows-fang",
+          "gravewhisper",
+          "vesper-reed",
+        ].includes(String(body.weaponId)),
         "Unknown relic.",
       );
       data.weaponId = body.weaponId;
+    }
+    if (["list_gear", "cancel_sale", "buy_gear"].includes(operation)) {
+      demand(
+        typeof body.tokenId === "string" &&
+          /^relic:[a-z0-9-]+:[0-9]+$/.test(body.tokenId) &&
+          body.tokenId.length <= 160,
+        "Choose a tradable gear NFT.",
+      );
+      data.tokenId = body.tokenId;
+      if (operation !== "list_gear") {
+        demand(
+          typeof body.listingId === "string" && body.listingId.length <= 190,
+          "Choose a listing.",
+        );
+        data.listingId = body.listingId;
+      }
+      if (operation !== "cancel_sale") {
+        demand(
+          typeof body.priceYocto === "string" &&
+            /^[0-9]{1,25}$/.test(body.priceYocto) &&
+            BigInt(body.priceYocto) >= 10n ** 21n &&
+            BigInt(body.priceYocto) <= 10n ** 24n,
+          "Price must be 0.001 to 1 test NEAR.",
+        );
+        data.priceYocto = BigInt(body.priceYocto).toString();
+      }
     }
     if (operation === "equip_gear" || operation === "unequip_gear") {
       demand(

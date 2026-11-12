@@ -1,7 +1,7 @@
 import { weapon, weaponId, type WeaponId } from "./weapons.ts";
 // Deterministic combat simulation. No DOM, no three.js, no Math.random, no trig:
 // the same inputs and seed always give the same run, so a server can replay it.
-import { DX, DZ, DIRS } from "./dirs.ts";
+import { DX, DZ, DIRS, dirIndex } from "./dirs.ts";
 import {
   SKILL_IDS,
   MAX_SKILL_RANK,
@@ -72,6 +72,12 @@ export interface Shot {
   vz: number;
   life: number;
   dmg: number;
+  side?: "player" | "enemy";
+  style?: "bolt" | "soul";
+  pierce?: number;
+  hitIds?: number[];
+  skills?: Skills;
+  heavy?: boolean;
 }
 
 export interface Player {
@@ -119,7 +125,8 @@ export interface SimEvent {
     | "nova"
     | "burn"
     | "heal"
-    | "echo";
+    | "echo"
+    | "ranged";
   x: number;
   z: number;
   kind?: EnemyKind;
@@ -402,7 +409,11 @@ function nova(w: World, x: number, z: number, radius: number, dmg: number) {
     }
   }
   for (const s of w.shots)
-    if ((s.x - x) ** 2 + (s.z - z) ** 2 <= radius * radius) s.life = 0;
+    if (
+      s.side !== "player" &&
+      (s.x - x) ** 2 + (s.z - z) ** 2 <= radius * radius
+    )
+      s.life = 0;
   w.events.push({ type: "nova", x, z, amount: radius });
 }
 
@@ -473,6 +484,46 @@ function fireShot(
 }
 
 const KNOCK_TIME = 0.1;
+
+function fireWeapon(
+  w: World,
+  x: number,
+  z: number,
+  aim: number,
+  identity: WeaponId,
+  level: number,
+  skills: Skills,
+  heavy: boolean,
+  combo: boolean,
+  side: "player" | "enemy",
+) {
+  const blade = weapon(identity),
+    speed = blade.projectileSpeed!;
+  const damage = Math.round(
+    (blade.damage + level * 2) *
+      (heavy ? blade.heavy + 0.6 * rank(skills, "verdict") : 1) *
+      (combo ? 1 + 0.25 * rank(skills, "coup") : 1),
+  );
+  const spread = heavy && blade.ranged === "soul" ? [-32, 0, 32] : [0];
+  for (const offset of spread) {
+    const dir = (aim + offset + DIRS) % DIRS;
+    w.shots.push({
+      id: w.nextId++,
+      x: x + DX[dir] * 0.7,
+      z: z + DZ[dir] * 0.7,
+      vx: DX[dir] * speed,
+      vz: DZ[dir] * speed,
+      life: (blade.reach + 0.6 * rank(skills, "reach")) / speed,
+      dmg: damage,
+      side,
+      style: blade.ranged,
+      pierce: heavy && blade.ranged === "bolt" ? 2 : 1,
+      hitIds: [],
+      skills: { ...skills },
+      heavy,
+    });
+  }
+}
 
 function melee(w: World) {
   const p = w.player;
@@ -566,13 +617,27 @@ function stepPlayer(w: World, input: Input) {
       p.x += DX[p.aim] * blade.lunge;
       p.z += DZ[p.aim] * blade.lunge;
       w.events.push({
-        type: "swing",
+        type: blade.ranged ? "ranged" : "swing",
         x: p.x,
         z: p.z,
         dir: p.aim,
         amount: p.swingN % 3 === 0 ? 2 : 1,
       });
-      melee(w);
+      if (blade.ranged) {
+        fireWeapon(
+          w,
+          p.x,
+          p.z,
+          p.aim,
+          p.weaponId,
+          p.weaponLevel,
+          p.skills,
+          p.swingN % 3 === 0,
+          p.comboT > 0,
+          "player",
+        );
+        p.comboT = 0;
+      } else melee(w);
     }
     if (input.move >= 0) {
       const slow = p.swingT > 0 ? 0.55 : 1;
@@ -626,15 +691,24 @@ function stepEnemy(w: World, e: Enemy) {
         e.dx = ex;
         e.dz = ez;
         const speed = s.speed * (1 + 0.08 * rank(skills, "haste"));
-        if (d > attackReach - 0.3) {
+        if (
+          blade.ranged &&
+          d < 4 &&
+          Math.abs(e.x) < ARENA_HX - 1 &&
+          Math.abs(e.z) < ARENA_HZ - 1
+        ) {
+          e.x -= ex * speed * 0.6 * DT;
+          e.z -= ez * speed * 0.6 * DT;
+        } else if (d > (blade.ranged ? attackReach * 0.7 : attackReach - 0.3)) {
           e.x += ex * speed * DT;
           e.z += ez * speed * DT;
         }
-        if (e.cd <= 0 && d < 9) {
+        if (e.cd <= 0 && d < (blade.ranged ? attackReach : 9)) {
           e.pattern++;
           e.hitDone = false;
           e.state = "windup";
-          e.attackKind = d > attackReach + 0.5 ? "dash" : "swing";
+          e.attackKind =
+            !blade.ranged && d > attackReach + 0.5 ? "dash" : "swing";
           e.t =
             (d > attackReach + 0.5 ? 0.5 : 0.34) *
             (1 - 0.08 * rank(skills, "haste"));
@@ -653,6 +727,25 @@ function stepEnemy(w: World, e: Enemy) {
             }
           } else {
             const heavy = e.pattern % 3 === 0;
+            if (blade.ranged) {
+              fireWeapon(
+                w,
+                e.x,
+                e.z,
+                dirIndex(e.dx, e.dz),
+                weaponId(e.weaponId),
+                e.weaponLevel ?? 0,
+                skills,
+                heavy,
+                (e.comboT ?? 0) > 0,
+                "enemy",
+              );
+              e.state = "recover";
+              e.comboT = 0;
+              e.t = blade.swing;
+              e.cd = blade.cooldown * (1 - 0.08 * rank(skills, "haste"));
+              break;
+            }
             const facing = d < 0.001 ? 1 : ex * e.dx + ez * e.dz;
             const damage = Math.round(
               (blade.damage + (e.weaponLevel ?? 0) * 2) *
@@ -911,11 +1004,42 @@ export function step(w: World, input: Input): void {
     s.x += s.vx * DT;
     s.z += s.vz * DT;
     s.life -= DT;
+    if (s.side === "player") {
+      for (const e of w.enemies) {
+        if (e.hp <= 0 || e.spawn > 0 || s.hitIds?.includes(e.id)) continue;
+        if ((s.x - e.x) ** 2 + (s.z - e.z) ** 2 > (e.r + 0.2) ** 2) continue;
+        const burning = e.burnT > 0;
+        hurtEnemy(w, e, s.dmg);
+        if (rank(s.skills ?? {}, "ember")) e.burnT = 3;
+        if (s.heavy && burning && rank(s.skills ?? {}, "pyre"))
+          nova(w, e.x, e.z, 2.5, 12 * rank(s.skills ?? {}, "pyre"));
+        (s.hitIds ??= []).push(e.id);
+        s.pierce = (s.pierce ?? 1) - 1;
+        if (s.pierce <= 0) {
+          s.life = 0;
+          break;
+        }
+      }
+    }
     const dx = s.x - p.x;
     const dz = s.z - p.z;
-    if (dx * dx + dz * dz < (P_R + 0.28) * (P_R + 0.28)) {
+    if (
+      s.side !== "player" &&
+      dx * dx + dz * dz < (P_R + 0.28) * (P_R + 0.28)
+    ) {
       if (p.invuln <= 0) {
-        hurtPlayer(w, s.dmg);
+        const burning = p.burnT > 0;
+        if (
+          hurtPlayer(
+            w,
+            s.dmg +
+              (s.heavy && burning ? 12 * rank(s.skills ?? {}, "pyre") : 0),
+          ) &&
+          rank(s.skills ?? {}, "ember")
+        ) {
+          p.burnT = 3;
+          p.burnCd = 0.5;
+        }
         s.life = 0;
       }
     }

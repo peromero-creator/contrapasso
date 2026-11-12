@@ -38,6 +38,16 @@ export class GameService {
         if (!existing) await this.near.checkOwner(owner);
         if (!this.near.config || !this.near.supports("market"))
           throw new RefereeError("The Reliquary is not connected yet.", 503);
+        if (
+          ["list_gear", "cancel_sale", "buy_gear", "withdraw_sales"].includes(
+            String(body.operation),
+          ) &&
+          !this.near.supports("exchange")
+        )
+          throw new RefereeError(
+            "The marketplace opens after the testnet update.",
+            503,
+          );
         const marketData = body.data as Record<string, unknown> | undefined;
         if (
           body.operation === "reserve_mint" &&
@@ -47,6 +57,17 @@ export class GameService {
         )
           throw new RefereeError(
             "The arsenal opens after the testnet update.",
+            503,
+          );
+        if (
+          body.operation === "reserve_mint" &&
+          ["gravewhisper", "vesper-reed"].includes(
+            String(marketData?.weaponId),
+          ) &&
+          !this.near.supports("ranged")
+        )
+          throw new RefereeError(
+            "Ranged relics open after the testnet update.",
             503,
           );
         this.referee.queueMarket(owner, body.id, body.operation, body.data);

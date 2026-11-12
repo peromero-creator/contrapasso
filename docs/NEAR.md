@@ -6,8 +6,8 @@ Deployed and verified on public NEAR testnet on 2026-11-12. No mainnet assets ar
 
 - Contract: [contrapasso-261112-a23809.testnet](https://testnet.nearblocks.io/address/contrapasso-261112-a23809.testnet)
 - Deployment: [5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5](https://testnet.nearblocks.io/txns/5yUzP5M6VCMMH8x25tMvSNKLue7STeB271QvXwxmVqw5)
-- WASM SHA-256: `97ab33a3aa47991af0f15e602bf456fd85eba067b0225a769b559a5dfee34c9e`
-- Latest code-only update: [GfDJxz1R86KffVq1Qx3BCGVmNpf6am9QzB3ocH2bmMF4](https://testnet.nearblocks.io/txns/GfDJxz1R86KffVq1Qx3BCGVmNpf6am9QzB3ocH2bmMF4), version 0.6.0. Existing state and 26 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
+- WASM SHA-256: `04528a87127db2e6b0fc4ad1c300c318d76eea7a47dfd57d32cf669533ebd198`
+- Latest code-only update: [4Um6yKCLJQgdCtguPQpPo38uKiRawRcsXBJDYueMjvM5](https://testnet.nearblocks.io/txns/4Um6yKCLJQgdCtguPQpPo38uKiRawRcsXBJDYueMjvM5), version 0.7.0. Existing state and 29 NFTs were preserved; [upgrade proof](testnet-upgrade-proof.json).
 - Published code and referee public key were read back and matched. The local server is connected through a restricted relay key.
 - Live verification passed: two guest champions played verified Solo, a permanent power was bought, defense was enabled, both Duel stakes were locked, and the winning replay paid the pool and updated both NFTs. Repeating a result did not award twice.
 - A separate silent browser run earned 165 coin, then won its Duel and finished with 175 coin and a 1–0 record, confirmed directly from NFT metadata.
@@ -50,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.5.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.6.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -90,6 +90,18 @@ The owner retired the ticket-free `cinder-demo-1` round and moved its unallocate
 `near:update` verifies the complete raw state at fixed finalized blocks, paging large snapshots before and after a code-only deployment. It never reinitializes the contract. Actual VM tests cover fresh 0.6 deployment and in-place upgrade from 0.5, including legacy prize rights and treasury callback failures. The live arsenal proof uses separate test champions; the original owner's 76-coin champion is preserved.
 
 Within an authorized testnet scope: `npm run near:treasury -- --execute` retires the old edition, `npm run near:round -- --id <unique-edition> --seconds 86400 --execute` opens a new one, and `npm run near:arsenal-smoke -- --execute` resumes the saved arsenal proof. It must remain on the edition recorded in its private session.
+
+## Native gear marketplace (0.7)
+
+The built-in exchange pays royalties atomically; external NEP-199 quotes still require the external market to pay. Signed `list_gear`, `cancel_sale` and `buy_gear` operations bind ownership and a unique listing version. Buyers attach the exact native price from their own account. Listed gear cannot equip, transfer, enter a transfer callback or receive approvals. A completed purchase removes the listing, transfers the existing token and clears approvals, retaining level/kills and appending owner history.
+
+`exchange_view({owner_id})` returns active listings and that account’s sale balance. Ninety percent belongs to the seller and ten percent credits the treasury. Native liability records the entire received amount until a successful withdrawal. `withdraw_sales` uses the guest receipt flow; `withdraw_sale_proceeds()` lets a wallet owner withdraw directly with one yoctoNEAR. Both share an account-level pending lock. Failed transfers restore proceeds, including any new credits arriving while the transfer is pending. Champion transfer does not transfer the selling account’s proceeds.
+
+`close_edition()` lets the offline owner close a treasury edition early, refunding every unpaid coin reservation. It cannot close a legacy raffle. `near:round -- --id ranged-demo-1 --seconds 86400 --close-previous --execute` was used to start the ranged edition within the existing authorized testnet budget. Runtime servers cannot invoke these owner methods.
+
+Both ranged weapons were minted and upgraded on public testnet. A real native purchase and seller withdrawal passed, including a same-intent retry with no second payment. [Exchange proof](testnet-exchange-proof.json). Fresh WASM and in-place 0.6→0.7 VM tests verify listing locks, stale quotes, paid replay protection, preserved nonzero kill history, royalties and withdrawals. The deployment preserves the serialized root and uses the existing market map prefix for exchange state.
+
+Reproduce within authorized testnet scope with `npm run near:exchange-smoke -- --execute`. It resumes its private saved intents and edition; it is not a generic load test. Free testnet balances only; guest custody and external wallet gameplay limitations still apply.
 
 ## Historical mint and native prize accounting (0.5)
 

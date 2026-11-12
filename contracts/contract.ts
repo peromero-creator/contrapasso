@@ -1,3 +1,5 @@
+import { sale, listings, saleBalance, salePending, beginSaleWithdrawal, resolveSaleWithdrawal } from "./exchange.js";
+import { closeTreasuryRound } from "./market.js";
 import { WEAPONS, weaponId } from "../src/sim/weapons.ts";
 import {
   NearBindgen,
@@ -158,6 +160,15 @@ class Contrapasso {
       rounds: new LookupMap<any>("R"),
       champions: this.champions,
       used: this.used,
+      gearInfo: (id: string) => this.gear.get(id),
+      gearOwner: (id: string) => this.tokens.owner_by_id.get(id),
+      gearPending: (id: string) => !!this.pending.get(id),
+      transferGear: (id: string, previous: string, receiver: string) => {
+        this.tokens.internal_transfer_unguarded(id, previous, receiver);
+        this.tokens.approvals_by_id?.remove(id);
+        this.syncEquipment(id, previous);
+        NonFungibleToken.emit_transfer(previous, receiver, id, undefined, "Marketplace sale");
+      },
       mintGear: (c: any, id: string, owner: string, identity = "cinder-requiem") => {
         const spec = WEAPONS[weaponId(identity)];
         const metadata = new TokenMetadata(
@@ -205,6 +216,7 @@ class Contrapasso {
           gear.kind === data.slot &&
           this.tokens.owner_by_id.get(data.gearId) === owner &&
           !this.pending.get(data.gearId) &&
+          !sale(this.marketStorage(), data.gearId) &&
           (!gear.bound || gear.championId === c.id) &&
           (!gear.equippedTo || gear.equippedTo === c.id),
         "Gear unavailable or already equipped",
@@ -312,7 +324,7 @@ class Contrapasso {
     if (
       !result.duplicate &&
       (action.operation === "fund_guest" ||
-        action.operation === "withdraw_prize")
+        action.operation === "withdraw_prize" || action.operation === "withdraw_sales")
     ) {
       const pending = pendingNative(this.marketStorage(), action.championId);
       NearPromise.new(pending.receiver)
@@ -397,6 +409,28 @@ class Contrapasso {
     );
   }
   @call({})
+  close_edition() {
+    assert(near.predecessorAccountId() === this.ownerId, "Owner only");
+    return closeTreasuryRound(this.marketStorage());
+  }
+  @view({})
+  exchange_view({ owner_id = "" }: { owner_id?: string }) {
+    const s = this.marketStorage();
+    return { listings: listings(s), proceedsYocto: saleBalance(s, owner_id), proceedsPending: !!salePending(s, owner_id) };
+  }
+  @call({ payableFunction: true })
+  withdraw_sale_proceeds() {
+    assert(near.attachedDeposit() === 1n, "Attach one yoctoNEAR");
+    const owner = near.predecessorAccountId(), amount = beginSaleWithdrawal(this.marketStorage(), owner);
+    NearPromise.new(owner).transfer(BigInt(amount)).then(NearPromise.new(near.currentAccountId()).functionCall("resolve_sale_proceeds", json({ owner_id: owner }), 0n, 50000000000000n)).build();
+  }
+  @call({ privateFunction: true })
+  resolve_sale_proceeds({ owner_id }: { owner_id: string }) {
+    assert(near.promiseResultsCount() === 1n, "Expected one transfer");
+    let success = true; try { near.promiseResult(0); } catch { success = false; }
+    resolveSaleWithdrawal(this.marketStorage(), owner_id, success);
+  }
+  @call({})
   retire_raffles() {
     assert(near.predecessorAccountId() === this.ownerId, "Owner only");
     return retireRaffles(this.marketStorage());
@@ -441,8 +475,8 @@ class Contrapasso {
   game_config() {
     return {
       network: "testnet",
-      version: "0.6.0",
-      features: ["upgrade", "claim", "market", "royalties", "arsenal", "skill_tree", "treasury"],
+      version: "0.7.0",
+      features: ["upgrade", "claim", "market", "royalties", "arsenal", "skill_tree", "treasury", "ranged", "exchange"],
       referee_public_key: this.refereeKey,
       coin_daily_cap: 300,
       duel_stake: 10,
@@ -472,6 +506,7 @@ class Contrapasso {
       token.metadata.extra = json({
         kind: id.startsWith("champion:") ? "champion" : "gear",
         ...info,
+        listing: sale(this.marketStorage(), id) ?? null,
         ...(blade ? { archetype: blade.className, damage: blade.damage + info.level * 2, reach: blade.reach, attackCooldown: blade.cooldown } : {}),
       });
     }
@@ -479,6 +514,7 @@ class Contrapasso {
   }
   private guardTransfer(id: string) {
     assert(!this.pending.get(id), "NFT transfer is pending");
+    assert(!sale(this.marketStorage(), id), "Cancel the listing before transferring");
     if (id.startsWith("champion:")) {
       const c = this.champions.get(id.slice(9));
       assert(c && !c.lockedBy, "Champion is in a duel");

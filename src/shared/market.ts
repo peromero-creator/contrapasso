@@ -6,6 +6,10 @@ export const SPONSOR_LIMIT = 6;
 export const MINT_CAP = 12;
 export const TICKET_LIMIT = 10;
 export const MARKET_OPERATIONS = [
+  "list_gear",
+  "cancel_sale",
+  "buy_gear",
+  "withdraw_sales",
   "reserve_mint",
   "cancel_mint",
   "mint",
@@ -50,7 +54,14 @@ export interface MintRound {
   drawBlock?: number;
   carriedYocto?: string;
 }
+export interface SaleListing {
+  id: string; tokenId: string; seller: string; priceYocto: string; createdAt: number;
+  weaponId: import("../sim/weapons.ts").WeaponId; level: number; kills: number; pastOwners: string[];
+}
 export interface MarketView {
+  listings?: SaleListing[];
+  proceedsYocto?: string;
+  proceedsPending?: boolean;
   onChain: boolean;
   revenueMode?: "treasury" | "raffle";
   treasuryYocto?: string;

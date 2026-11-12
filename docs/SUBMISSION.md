@@ -14,8 +14,8 @@ Tracks: `games` and `nfts`.
 2. Clear a circle, choose a rank for an unlocked power and descend through the lit gate. At the end, show replay verification and the confirmed coin save.
 3. Open Train Champion, show the connected skill paths, unlock a permanent skill with coin, or temper an equipped item. Show its updated dynamic NFT metadata in What You Own.
 4. Open Duel, choose a matched funded defender and show the rival health bar. Explain the 10+10 coin escrow and saved-build opponent. A completed or forfeited match settles the record and existing coin pool.
-5. Open the Reliquary. Show limited supply, a coin reservation, demo funding, a native paid mint, three distinct weapon identities and the transparent application treasury. Equip a relic in What You Own and show it in combat.
-6. Show the treasury balance and explain owner-controlled application funding. There are no raffle tickets or automatic investment rewards. Historical prize rights remain claimable.
+5. Open the Reliquary. Show limited supply, a coin reservation, demo funding, a native paid mint, five distinct tradable weapon identities and the transparent application treasury. Equip a relic in What You Own and show it in combat.
+6. Open Player Market, show a listed relic’s level and kill history, buy it with test NEAR and equip the same NFT. Show seller proceeds and the 10% treasury share. There are no raffle tickets.
 7. Show the wallet-claim form and explain that the equipped inventory and both vaults move with the champion. Use a disposable test champion for an actual claim.
 
 Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1`) is a test aid, not evidence of human difficulty balance; it waits for manual power choices. Available demo defenders are verified bot-built test champions.
@@ -27,6 +27,7 @@ Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1
 - [Code update with state preservation](testnet-upgrade-proof.json).
 - [Upgrade / wallet claim proof](testnet-features-proof.json).
 - [Weapon mint / upgrades / skill paths](testnet-arsenal-proof.json).
+- [Ranged weapons and native resale](testnet-exchange-proof.json).
 - [Treasury transition](testnet-treasury-proof.json).
 - [Historical mint / raffle proof](testnet-market-proof.json).
 - `npm ci`, `npm test`, `npm run build`, `npm run contract:test`.
@@ -39,7 +40,8 @@ Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1
 - [x] Dynamic NFTs, vaults, upgrades, inventory and wallet claiming.
 - [x] Asynchronous Duel, escrow, records and transfer locks.
 - [x] Testnet limited mint and application treasury, with legacy prize rights preserved.
-- [x] Three weapon archetypes with in-hand models and attack animations.
+- [x] Five tradable weapon archetypes, including two ranged classes, with in-hand models and attack animations.
+- [x] Native player marketplace, retained NFT traits and seller withdrawals.
 - [x] Twelve coin-unlocked skills, healing pickups and ambient inhabitants.
 - [x] Original project art, optimized models and painted floors.
 - [x] MIT code license and dependency/art credits.
@@ -50,4 +52,4 @@ Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1
 
 ## Limits to explain
 
-The server holds guest keys and is the trusted gameplay referee. Claiming sends a champion to a wallet; playing through an external wallet, recovery and production identity are future work. Royalty quotations require a marketplace to honor and pay them. This is a testnet demo with no real-money economy.
+The server holds guest keys and is the trusted gameplay referee. Claiming sends a champion to a wallet; playing through an external wallet, recovery and production identity are future work. The built-in exchange pays the 10% royalty atomically; external royalty quotations still require their marketplace to honor and pay them. This is a testnet demo with no real-money economy.
