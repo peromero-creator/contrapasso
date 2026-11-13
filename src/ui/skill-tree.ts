@@ -4,6 +4,8 @@ import { SKILLS, SKILL_BRANCHES, PREREQUISITES, canLearn, type SkillId } from '.
 import type { Champion } from '../shared/protocol';
 import { skillIcon } from './icons';
 import type { WeaponId } from '../sim/weapons';
+import { weapon } from '../sim/weapons';
+import type { LoadoutWeapon } from './loadout';
 type Branch = Family | 'spells' | 'cores' | 'vows';
 type Page = Branch | 'all';
 type Node = { page: Branch; skill: SkillId; title: string; x: number; y: number; key: string; ability?: AbilityId; parents: SkillId[] };
@@ -12,6 +14,9 @@ export interface TreeActions {
   spell(id: SpellId): Promise<void>;
   core(id: CoreId): Promise<void>;
   preview(id: AbilityId, weapon?: WeaponId): void;
+  inventory(): Promise<LoadoutWeapon[]>;
+  equip(tokenId: string): Promise<string>;
+  market(): void;
 }
 const HOLD_MS = 1100;
 const PAGES: Branch[] = [...FAMILIES, 'spells', 'cores', 'vows'];
@@ -71,6 +76,14 @@ export class SkillTree {
       ${nodes.map(n=>`<button class="tree-node ${n.page==='vows'?'vow-node':''} ${champion.skills.includes(n.skill)?'learned':canLearn(champion.skills,n.skill)?(champion.coins>=SKILLS[n.skill].cost?'reachable':'reachable costly'):'sealed'}${fresh.has(n.skill)?' fresh':''}" data-node="${nodeKey(n)}" title="${n.title} · ${owned(n.skill)?'Learned':SKILLS[n.skill].cost+' coin'} · ${SKILLS[n.skill].description}" style="left:${n.x}%;top:${n.y}%;--path-color:${colors[PAGES.indexOf(n.page)]}" aria-label="${n.title}${champion.skills.includes(n.skill)?', learned':', '+SKILLS[n.skill].cost+' coin'}" aria-pressed="${this.selected===nodeKey(n)}"><span class="node-orb">${skillIcon(n.skill)}<em>${n.key}</em></span><strong>${n.title}</strong><small>${n.skill===next?.skill?'NEXT · ':''}${champion.skills.includes(n.skill)?'LEARNED':SKILLS[n.skill].cost+' COIN'}</small></button>`).join('')}
       </div></div><p class="tree-map-hint">Drag to explore · Scroll to zoom · Select a skill, then hold to learn it</p></div><div class="tree-side"><aside id="tree-detail" class="tree-detail" aria-live="polite"></aside></div></div>`;
     if (theatre) this.root.querySelector('.tree-side')!.prepend(theatre);
+    const overview = document.createElement('nav');
+    overview.className = 'tree-minimap';
+    overview.setAttribute('aria-label', 'Jump to a skill region');
+    overview.innerHTML = `<div class="minimap-title"><span>ATLAS</span><span>${FAMILY_NAMES[inHand]}</span><button class="minimap-toggle" aria-label="Fold atlas" aria-expanded="true">−</button></div><div class="minimap-map">${regions.map(r=>`<button data-region="${r.page}" title="${pageName(r.page)}${r.page===inHand?' · In hand':''}" aria-label="${pageName(r.page)}${r.page===inHand?', in hand':''}" class="${r.page===inHand?'in-hand':''}" style="left:${r.x/width*100}%;top:${r.y/height*100}%;width:${r.width/width*100}%;--path-color:${r.color}">${skillIcon(this.branchNodes(r.page)[0].skill)}</button>`).join('')}<svg viewBox="0 0 ${width} ${height}" aria-hidden="true"><rect class="minimap-view"/></svg></div>`;
+    this.root.querySelector('.tree-explorer')!.append(overview);
+    const toggle=overview.querySelector<HTMLButtonElement>('.minimap-toggle')!, mini=overview.querySelector<HTMLElement>('.minimap-map')!;
+    toggle.onclick=()=>{mini.hidden=!mini.hidden;toggle.textContent=mini.hidden?'+':'−';toggle.setAttribute('aria-expanded',String(!mini.hidden));toggle.setAttribute('aria-label',mini.hidden?'Expand atlas':'Fold atlas');};
+    this.root.querySelectorAll<HTMLElement>('.atlas-region')[PAGES.indexOf(inHand)].classList.add('in-hand');
     const choosePage=(page:Page)=>{
       this.page=page;
       for(const b of this.root.querySelectorAll('[data-page]'))b.setAttribute('aria-pressed',String((b as HTMLElement).dataset.page===page));
@@ -101,6 +114,7 @@ export class SkillTree {
       if(picker&&!picker.contains(target)&&!target.closest('[data-jump]'))picker.remove();
     };
     for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-page]')) b.onclick=()=>choosePage(b.dataset.page as Page);
+    for(const b of overview.querySelectorAll<HTMLButtonElement>('[data-region]')) b.onclick=()=>choosePage(b.dataset.region as Page);
     for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-node]')) {
       b.onclick=()=>{this.cancelHold();this.selected=b.dataset.node!;for(const el of this.root.querySelectorAll('[data-node]'))el.setAttribute('aria-pressed',String(el===b));const n=nodes.find(n=>nodeKey(n)===this.selected)!;this.detail(n);this.previewNode(n);};
       b.onfocus=()=>this.reveal(b);
@@ -143,14 +157,19 @@ export class SkillTree {
   private paintCamera(glide = false) {
     const map=this.root.querySelector<HTMLElement>('.tree-map')!;
     map.classList.toggle("glide",glide);
-    map.classList.toggle("atlas-overview",this.page==='all' && this.camera.scale<.65);
+    map.classList.toggle("atlas-overview",this.camera.scale<.65);
     map.style.setProperty("--label-scale",String(Math.min(1.3,Math.max(1,1/this.camera.scale))));
     map.style.transform=`translate(${this.camera.x}px,${this.camera.y}px) scale(${this.camera.scale})`;
     this.root.querySelector('output')!.textContent=`${Math.round(this.camera.scale*100)}%`;
+    const vp=this.root.querySelector<HTMLElement>('.tree-viewport')!, rect=this.root.querySelector('.minimap-view')!;
+    const x=Math.max(0,Math.min(2160,-this.camera.x/this.camera.scale)), y=Math.max(0,Math.min(1320,-this.camera.y/this.camera.scale));
+    const right=Math.max(x,Math.min(2160,(vp.clientWidth-this.camera.x)/this.camera.scale)), bottom=Math.max(y,Math.min(1320,(vp.clientHeight-this.camera.y)/this.camera.scale));
+    for(const [key,value] of Object.entries({x,y,width:right-x,height:bottom-y}))rect.setAttribute(key,String(value));
+    for(const b of this.root.querySelectorAll<HTMLElement>('[data-region]'))b.setAttribute('aria-current',String(b.dataset.region===this.page));
   }
   private navigation() {
     const viewport=this.root.querySelector<HTMLElement>('.tree-viewport')!,map=this.root.querySelector<HTMLElement>('.tree-map')!;
-    const fit=(glide=false)=>{if(!viewport.clientWidth)return;const scale=Math.max(.12,Math.min((viewport.clientWidth-28)/map.offsetWidth,(viewport.clientHeight-28)/map.offsetHeight,1));this.camera={scale,x:(viewport.clientWidth-map.offsetWidth*scale)/2,y:(viewport.clientHeight-map.offsetHeight*scale)/2};this.paintCamera(glide);};
+    const fit=(glide=false)=>{if(!viewport.clientWidth)return;this.page='all';for(const b of this.root.querySelectorAll<HTMLElement>('[data-page]'))b.setAttribute('aria-pressed',String(b.dataset.page==='all'));const scale=Math.max(.12,Math.min((viewport.clientWidth-28)/map.offsetWidth,(viewport.clientHeight-28)/map.offsetHeight,1));this.camera={scale,x:(viewport.clientWidth-map.offsetWidth*scale)/2,y:(viewport.clientHeight-map.offsetHeight*scale)/2};this.paintCamera(glide);};
     const zoom=(factor:number,x=viewport.clientWidth/2,y=viewport.clientHeight/2,glide=false)=>{const old=this.camera.scale,next=Math.max(.12,Math.min(2,old*factor));this.camera={scale:next,x:x-(x-this.camera.x)*next/old,y:y-(y-this.camera.y)*next/old};this.paintCamera(glide);};
     // Start with every region visible; category buttons focus a readable cluster.
     const open=()=>{ if(this.page==='all')fit(); else this.focusRegion(false); };
@@ -193,6 +212,29 @@ export class SkillTree {
       ${n.ability?'<button class="tree-preview">↻ Replay animation</button>':''}
       <details class="tree-extra"><summary>Progression details</summary><p>${spec ? `Damage shown at weapon +${level}, circle rank 1. Each weapon level adds 2 damage; each additional circle rank adds 15%.` : SKILLS[n.skill].rank}${n.title!==SKILLS[n.skill].name?` Unlocks with ${SKILLS[n.skill].name}.`:''}</p></details><span class="hold-status" role="status"></span>`;
     const preview = () => this.previewNode(n);
+    if (t && !inHand) {
+      const change=document.createElement('button');change.className='btn ghost tree-weapon';change.textContent=`EQUIP ${FAMILY_NAMES[page as Family].toUpperCase()} ↗`;change.disabled=blocked;
+      const picker=document.createElement('div');picker.className='tree-weapon-picker';picker.setAttribute('aria-live','polite');
+      detail.querySelector('.tree-extra')!.before(change,picker);
+      change.onclick=async()=>{
+        change.disabled=true;picker.textContent='Finding your weapons…';
+        try {
+          const choices=(await this.actions.inventory()).filter(w=>familyOf(w.identity)===page);
+          if(!change.isConnected)return;
+          picker.replaceChildren();
+          if(!choices.length){const empty=document.createElement('p');empty.textContent='You do not own this weapon family yet.';const market=document.createElement('button');market.className='tree-preview';market.textContent='Explore weapons ↗';market.onclick=()=>this.actions.market();picker.append(empty,market);}
+          for(const w of choices){
+            const option=document.createElement('button');option.className='tree-owned-weapon';option.disabled=w.blocked;
+            const duplicate=choices.filter(v=>v.identity===w.identity&&v.level===w.level).length>1;
+            option.textContent=`${weapon(w.identity).name} +${w.level}${duplicate?' · #'+w.tokenId.slice(-6):''}${w.blocked?' · Unavailable':' · Equip'}`;
+            option.title=`${w.kills} kills · ${w.tokenId}${w.blocked?' · Listed or equipped on another champion':''}`;
+            option.onclick=async()=>{for(const b of picker.querySelectorAll('button'))b.disabled=true;detail.querySelector('.hold-status')!.textContent='Equipping weapon…';try{const message=await this.actions.equip(w.tokenId);const status=this.root.querySelector('.hold-status');if(status)status.textContent=message;}catch(e){if(picker.isConnected){picker.textContent=(e as Error).message;detail.querySelector('.hold-status')!.textContent='';}}finally{if(change.isConnected)change.disabled=false;}};
+            picker.append(option);
+          }
+        } catch(e){if(picker.isConnected)picker.textContent=(e as Error).message;}
+        finally{if(change.isConnected)change.disabled=false;}
+      };
+    }
     detail.querySelector<HTMLButtonElement>('.tree-preview')?.addEventListener('click',preview);
     detail.querySelector<HTMLButtonElement>('.tree-select')?.addEventListener('click',()=>{ void (page === 'spells' ? this.actions.spell(n.ability as SpellId) : this.actions.core(n.ability as CoreId)); });
     const button = detail.querySelector<HTMLButtonElement>('.hold-learn');

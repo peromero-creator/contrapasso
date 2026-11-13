@@ -2123,3 +2123,23 @@ details.claim-box[open] summary {
 #camp .vow-node strong{top:58px;font-size:calc(16px * var(--label-scale,1));line-height:1.1;margin:0}
 #camp .vow-node small{top:86px;font-size:calc(13px * var(--label-scale,1));line-height:1.1;margin:0}
 #camp .vow-row-title{max-width:140px}
+
+/* A corner navigator can be folded away while inspecting the full map. */
+#camp .tree-explorer { position:relative; }
+#camp .tree-minimap { position:absolute; z-index:4; right:10px; bottom:42px; width:170px; padding:8px; border: 1px solid #554b3d; border-radius: 8px; background: #171513; }
+.minimap-title { display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; color:#bcb09b; font:11px var(--body); letter-spacing:.04em; }
+.minimap-map { position:relative; aspect-ratio:2160/1320; }
+.minimap-map > button { position:absolute; height:31%; border:1px solid color-mix(in srgb,var(--path-color) 45%,transparent); border-radius:5px; background:color-mix(in srgb,var(--path-color) 12%,#171513); color:var(--path-color); cursor:pointer; }
+.minimap-map > button svg { width:22px; height:22px; }
+.minimap-map > button.in-hand { border:2px solid var(--path-color); background:color-mix(in srgb,var(--path-color) 28%,#171513); }
+.minimap-map > button:hover,.minimap-map > button:focus-visible { outline:2px solid #e4d1ad; outline-offset:1px; }
+.minimap-map > svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; }
+.minimap-view { fill:#ead9bb0c; stroke:#f2e4ce; stroke-width:16; rx:12; }
+#camp .atlas-region.in-hand { box-shadow:inset 3px 0 var(--path-color); }
+.tree-weapon-picker { display:grid; gap:8px; margin:10px 0; }
+.tree-owned-weapon { border:1px solid #726044; border-radius:7px; padding:12px; background:#29231d; color:#f0dfc1; text-align:left; font:14px var(--body); cursor:pointer; }
+.tree-owned-weapon:disabled { opacity:.5; cursor:default; }
+
+.minimap-title button { margin-left:auto; border:0; background:none; color:#d2c6b1; font:14px var(--body); cursor:pointer; padding:0 4px; }
+.minimap-map[hidden] { display:none; }
+#camp .tree-map.atlas-overview .tree-node.sealed { opacity:.78; }

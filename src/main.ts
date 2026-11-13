@@ -1505,6 +1505,18 @@ const skillTree = new SkillTree($("forge-cards"), {
   spell: id => changeSkill(()=>api.selectSpell(id), `${SPELLS[id].name} equipped on Q.`),
   core: id => changeSkill(()=>api.attune(id), `${CORES[id].name} equipped on R.`),
   preview: showSkillPreview,
+  inventory: async () => loadoutWeapons((await api.nft()).tokens, champion!.id),
+  equip: async tokenId => {
+    if (busy || !champion) return 'Another action is still confirming.';
+    if (pendingMarket?.championId === champion.id || champion.chain?.pending) return 'Check your pending action in Market before changing weapons.';
+    await doMarket('equip_gear', { slot: 'weapon', gearId: tokenId });
+    const result = $('market-result').cloneNode(true) as HTMLElement;
+    for (const link of result.querySelectorAll('a')) link.remove();
+    const message = result.textContent?.trim() ?? '';
+    renderForge();
+    return message;
+  },
+  market: () => { void navigate('market'); },
 });
 function renderForge() {
   if (!champion) return;
