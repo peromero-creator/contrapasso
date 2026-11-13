@@ -163,3 +163,7 @@ Final Absolution has an aerial descent, Cathedral Fall a raised ground strike, A
 ## Combat input continuity
 
 Q, R and weapon techniques have a single 14-tick input buffer (about 233 ms). A press near the end of an attack or cast starts at the next legal opening, including while basic attack is held. The most recent skill press replaces the previous one. Dash and pause/menu transitions clear the buffer; expired, unlearned and uncharged requests do not fire later. This is client input handling: the referee still receives ordinary versioned inputs and enforces the existing recovery, ownership and cooldown rules.
+
+Space jumps; attacking during the jump commits a plunge in the aimed direction. The HUD shows jump recovery and the airborne attack opportunity. These actions use simulation 0.10.0's existing 30-bit input. Arena transitions clear transient spell, damage-text and ghost effects while keeping shared actor geometry; new runs clear the cosmetic hit chain. Hit flares use subdued warm tones, and reduced-motion mode uses a static low-health tint.
+
+The result screen distinguishes a locally verified replay from a confirmed testnet save. Pending saves are checked again using the same run ID, with a manual retry after connection failures. Confirmation never awards the same replay twice.

@@ -27,6 +27,7 @@ import {
   createDuelWorld,
   step,
   DT,
+  JUMP_CD,
   FLOORS,
   type Input,
   type World,
@@ -70,6 +71,7 @@ let ended = false,
   paused = false,
   busy = false,
   verifying = false;
+let resultPending = false;
 let champion: Champion | null = null;
 let championRequest: Promise<void> | null = null;
 let challenge: RunChallenge | null = null;
@@ -341,6 +343,9 @@ function updateHud(dt: number) {
   dashPip.classList.toggle("ready", p.dashCd <= 0);
   $("dash-meter").style.width =
     `${Math.max(0, 1 - p.dashCd / (0.75 * (1 - 0.12 * rank(p.skills, "ash")))) * 100}%`;
+  $("jump-pip").classList.toggle("ready", p.jumpCd <= 0 && p.jumpT <= 0);
+  $("jump-label").textContent = p.plunge ? "PLUNGE" : p.jumpT > 0 ? "ATTACK ↓" : "JUMP";
+  $("jump-meter").style.width = `${p.jumpT > 0 ? 0 : Math.max(0, 1 - p.jumpCd / JUMP_CD) * 100}%`;
   $("cast-label").textContent = !availableSpell(p.spell, p.skills)
     ? "LEARN A Q SPELL"
     : p.spellCd > 0
@@ -418,10 +423,12 @@ function updateHud(dt: number) {
     if (bannerT <= 0) banner.classList.remove("show");
   }
 }
-async function verifyRun() {
+async function verifyRun(checkingPending = false) {
   if (!challenge || verifying) return;
   verifying = true;
-  $("receipt-status").textContent = "Verifying your descent…";
+  resultPending = false;
+  if (!checkingPending) $("receipt-status").textContent = "Verifying your descent…";
+  $("receipt-status").classList.remove("verified");
   $("retry-verification").classList.add("hidden");
   for (const id of ["again", "same-seed", "to-menu"])
     $<HTMLButtonElement>(id).disabled = true;
@@ -434,7 +441,8 @@ async function verifyRun() {
       response.receipt.result.awardedCoins < world.player.coins
         ? `${response.receipt.result.awardedCoins} coin saved · Daily limit reached`
         : `${response.receipt.result.awardedCoins} coin saved to your champion`;
-    $("receipt-status").classList.add("verified");
+    resultPending = !!champion.chain?.pending;
+    $("receipt-status").classList.toggle("verified", !resultPending);
     if (world.mode === "duel")
       $("receipt-status").textContent =
         `${response.receipt.result.coinDelta > 0 ? "+" : ""}${response.receipt.result.coinDelta} coin · ${champion.duelWins} wins / ${champion.duelLosses} losses`;
@@ -442,8 +450,13 @@ async function verifyRun() {
       $("receipt-status").textContent += champion.chain.pending
         ? " · Testnet save pending"
         : " · Confirmed on NEAR testnet";
+    if (resultPending) {
+      $("retry-verification").textContent = "CHECK SAVE ↻";
+      $("retry-verification").classList.remove("hidden");
+    }
   } catch (e) {
     $("receipt-status").textContent = (e as Error).message;
+    $("retry-verification").textContent = "RETRY VERIFICATION ↻";
     $("retry-verification").classList.remove("hidden");
   } finally {
     verifying = false;
@@ -503,6 +516,7 @@ async function startRun(retry?: string) {
 function enterRun(next: RunChallenge) {
   if (next.version !== SIM_VERSION)
     throw new Error("The game has updated. Reload to continue.");
+  resultPending = false;
   challenge = next;
   view.useWeapon(
     next.equipment.weaponId ?? "starter",
@@ -527,6 +541,7 @@ function enterRun(next: RunChallenge) {
   }
   clearInput();
   aim = world.player.aim;
+  resetCombatFeedback();
   shownPowers = "";
   acc = freeze = slow = 0;
   ended = paused = false;
@@ -558,7 +573,9 @@ function enterRun(next: RunChallenge) {
 }
 function toMenu() {
   if (verifying) return;
+  resultPending = false;
   clearInput();
+  resetCombatFeedback();
   paused = false;
   mode = "menu";
   sound.setPaused(true);
@@ -1502,6 +1519,14 @@ reflectSound();
 /** Unbroken hits in a row: cosmetic, cleared by a pause in the assault or by being struck. */
 let chain = 0,
   chainT = 0;
+function resetCombatFeedback() {
+  chain = chainT = 0;
+  $("chain").classList.remove("show");
+  for (const animation of $("chain-count").getAnimations()) animation.cancel();
+  $("chain-count").textContent = "0";
+  $("chain-rank").textContent = "";
+  $("hurt-veil").classList.remove("on", "low");
+}
 function paintChain(pop: boolean) {
   $("chain").classList.toggle("show", chain >= 3);
   if (chain < 3) return;
@@ -1605,6 +1630,8 @@ $("hurt-veil").addEventListener("animationend", (e) => {
 });
 requestAnimationFrame(frame);
 setInterval(() => {
+  if (mode === "run" && ended && resultPending && !verifying && !busy)
+    void verifyRun(true);
   if (mode === "menu" && champion?.chain?.pending && !busy)
     void loadChampion().catch(() => {});
 }, 5000);

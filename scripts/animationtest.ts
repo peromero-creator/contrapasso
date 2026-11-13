@@ -208,3 +208,23 @@ assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(recovering)<1e-7,'actual 
 continuous.update(.13);assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(new THREE.Quaternion())<1e-7);
 continuous.dispose();
 console.log('Mixer continuity: PASS (same clip restart and recovery preserve the displayed wrist, then settle to the target)');
+
+// Floor/restart cleanup releases only transient resources, never shared actor geometry.
+const { clearTransientEffects } = await import('../src/render/arena-reset.ts');
+const cleanup: any = {};
+cleanup.scene = new THREE.Scene();
+let disposedTexture = 0, disposedText = 0, disposedEcho = 0, disposedGeometry = 0;
+for (const key of ['cracks','splats','pulses','particles']) cleanup[key] = [{life:1,mesh:new THREE.Object3D()}];
+const damageMap = new THREE.Texture(), damageMaterial = new THREE.SpriteMaterial({map:damageMap}), damageSprite = new THREE.Sprite(damageMaterial);
+damageMap.addEventListener('dispose',()=>disposedTexture++);damageMaterial.addEventListener('dispose',()=>disposedText++);
+cleanup.scene.add(damageSprite);cleanup.damageTexts=[{sprite:damageSprite,life:.5}];
+const echoGeometry=new THREE.BoxGeometry(),echoMaterial=new THREE.MeshBasicMaterial(),echo=new THREE.Mesh(echoGeometry,echoMaterial);
+echoGeometry.addEventListener('dispose',()=>disposedGeometry++);echoMaterial.addEventListener('dispose',()=>disposedEcho++);
+cleanup.scene.add(echo);cleanup.echoes=[{root:echo,life:.2}];cleanup.fallen=[];
+for(let i=0;i<2;i++) clearTransientEffects(cleanup.scene,[cleanup.cracks,cleanup.splats,cleanup.pulses,cleanup.particles],cleanup.damageTexts,cleanup.echoes);
+assert.equal(disposedTexture,1);assert.equal(disposedText,1);assert.equal(disposedEcho,1);
+assert.equal(disposedGeometry,0,'ghosts share the live actor geometry');
+assert.equal(cleanup.scene.children.length,0);assert.equal(cleanup.damageTexts.length,0);assert.equal(cleanup.echoes.length,0);
+for(const key of ['cracks','splats','pulses','particles']) {assert.equal(cleanup[key][0].life,0);assert.equal(cleanup[key][0].mesh.visible,false);}
+echoGeometry.dispose();
+console.log('Arena cleanup: PASS (restart/floor transient reset, one-time disposal, shared geometry retained)');

@@ -7,6 +7,7 @@ import { attackClip, orientWeapon, mountGrip, starterWeapon } from "./weapon-pos
 import { Gore } from "./gore";
 import { ImpactFx, softTexture } from "./impact";
 import { combatLift, type CombatMotion } from "./combat-motion";
+import { clearTransientEffects } from "./arena-reset.ts";
 import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
 import { Underworld } from "./dressing";
 // Everything visual. Reads the simulation state, never changes it.
@@ -750,17 +751,23 @@ export class View {
     this.scene.add(this.portal);
   }
 
+  private clearArenaEffects() {
+    this.gore.clear();
+    this.impact.clear();
+    this.soul.clear();
+    clearTransientEffects(this.scene,
+      [this.cracks, this.splats, this.pulses, this.particles],
+      this.damageTexts, this.echoes);
+    this.squashT = this.squashAmp = this.dustCd = this.echoCd = 0;
+    for (const c of this.fallen) this.disposeEnemy(c.view);
+    this.fallen = [];
+  }
+
   setCircle(i: number) {
     const idx = Math.max(0, Math.min(CIRCLES.length - 1, i));
     if (idx === this.circle) return;
     this.circle = idx;
-    this.gore.clear();
-    for (const c of this.fallen) this.disposeEnemy(c.view);
-    this.fallen = [];
-    for (const s of this.splats) {
-      s.life = 0;
-      s.mesh.visible = false;
-    }
+    this.clearArenaEffects();
     const c = CIRCLES[idx];
     (this.scene.background as THREE.Color).setHex(c.fog);
     (this.ground.material as THREE.MeshBasicMaterial).color.setHex(c.tint);
@@ -1103,20 +1110,11 @@ export class View {
     const battlefieldChanged =
       w.tick < this.lastWorldTick || w.floor - 1 !== this.circle;
     if (w.tick < this.lastWorldTick) {
-      this.gore.clear();
-      this.impact.clear();
-      for (const c of this.cracks) { c.life = 0; c.mesh.visible = false; }
+      this.clearArenaEffects();
       this.stride.set(0, 0);
       this.liftPeak = this.finisherT = this.airY = this.diveFrom = this.plungeT = 0;
       this.kick.set(0, 0);
       this.shake = this.punch = 0;
-      this.soul.clear();
-      for (const c of this.fallen) this.disposeEnemy(c.view);
-      this.fallen = [];
-      for (const s of this.splats) {
-        s.life = 0;
-        s.mesh.visible = false;
-      }
     }
     this.lastWorldTick = w.tick;
     this.time += dt;
@@ -1369,7 +1367,7 @@ export class View {
         const fz = v.group.position.z - this.hero.position.z;
         const fl = Math.hypot(fx, fz) || 1;
         const throwSpeed = v.h > 2.6 ? 2.2 : 6.5;
-        v.model.flash(0xb4a48c);
+        v.model.flash(0x594638);
         v.model.play("death", 0.9);
         this.fallen.push({ view: v, life: 2.2, vx: (fx / fl) * throwSpeed, vz: (fz / fl) * throwSpeed, lit: true });
         if (this.fallen.length > 10)
@@ -1602,7 +1600,7 @@ export class View {
       );
       v.model.flash(
         e.flash > 0.09
-          ? 0xb4a48c
+          ? 0x503a28
           : e.flash > 0
           ? 0x302820
           : wind

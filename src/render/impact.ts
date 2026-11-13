@@ -84,7 +84,7 @@ export class ImpactFx {
   private geo = new THREE.PlaneGeometry(1, 0.085);
   constructor(private scene: THREE.Scene) {}
 
-  hit(x: number, z: number, dx: number, dz: number, power: number, color: number, white = 0.55) {
+  hit(x: number, z: number, dx: number, dz: number, power: number, color: number, white = 0.18) {
     let f = this.flares.find((q) => q.life <= 0);
     if (!f && this.flares.length < 14) {
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -204,7 +204,7 @@ export class ImpactFx {
       const k = Math.max(0, f.life / FLARE_TIME);
       const grow = 0.45 + 0.55 * (1 - k * k);
       f.sprite.scale.setScalar(f.size * grow);
-      f.sprite.material.opacity = k;
+      f.sprite.material.opacity = k * 0.72;
       if (f.life <= 0) f.sprite.visible = false;
     }
     for (const s of this.streaks) {

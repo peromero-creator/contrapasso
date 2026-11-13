@@ -559,7 +559,8 @@ h1 {
   align-items: center;
   gap: 17px;
 }
-#dash-pip {
+#dash-pip,
+#jump-pip {
   position: relative;
   display: flex;
   align-items: center;
@@ -569,7 +570,8 @@ h1 {
   letter-spacing: 0.1em;
   color: var(--muted);
 }
-#dash-pip > i {
+#dash-pip > i,
+#jump-pip > i {
   position: absolute;
   left: 0;
   right: 0;
@@ -577,12 +579,14 @@ h1 {
   height: 2px;
   background: #4c4030;
 }
-#dash-meter {
+#dash-meter,
+#jump-meter {
   display: block;
   height: 100%;
   background: var(--gold);
 }
-#dash-pip.ready {
+#dash-pip.ready,
+#jump-pip.ready {
   color: var(--gold);
 }
 .combo {
@@ -2126,11 +2130,13 @@ h1 {
   background: #a34840;
   box-shadow: none;
 }
-#dash-meter {
+#dash-meter,
+#jump-meter {
   background: #b7a17e;
   box-shadow: none;
 }
 #dash-pip,
+#jump-pip,
 #coin-n,
 #duel-boss > span {
   font-family: "Cinzel", Georgia, serif;
@@ -2651,6 +2657,9 @@ h1 {
 @keyframes hurt-veil { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #hurt-veil.on { animation-duration: 0.2s; } }
 #hurt-veil.low:not(.on) { animation: hurt-low 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  #hurt-veil.low:not(.on) { animation: none; opacity: 0.32; }
+}
 @keyframes hurt-low { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.5; } }
 #chain {
   position: absolute;

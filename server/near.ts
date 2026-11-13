@@ -173,6 +173,9 @@ export class NearBridge {
             title: "Cinder / Starter Blade",
             extra: {
               kind: "weapon",
+              championId: profile.id,
+              weaponId: profile.build.weaponId ?? "starter",
+              equippedTo: profile.equipped?.weapon === ids[1] ? profile.id : null,
               level: profile.build.weaponLevel,
               bound: true,
             },
@@ -183,6 +186,8 @@ export class NearBridge {
             title: "Ash / Starter Armor",
             extra: {
               kind: "armor",
+              championId: profile.id,
+              equippedTo: profile.equipped?.armor === ids[2] ? profile.id : null,
               level: profile.build.armorLevel,
               bound: true,
             },

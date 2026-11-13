@@ -14,9 +14,9 @@ npm run dev
 Open [localhost:5173](http://127.0.0.1:5173/). This starts the game and local referee together. A fresh checkout runs Solo locally; testnet writes require your own configured server credentials. See [NEAR setup](docs/NEAR.md).
 
 1. **Take the Descent → Solo** starts a server-issued run. WASD moves, mouse aims, hold click attacks, Space jumps, Shift (or right click) dashes. Attacking in the air dives along the aim and breaks the ground on landing. Every third attack has a weapon-specific finisher.
-2. Unlock skills with Solo coin in the three-path skill tree. Clear a circle → choose a rank for one of your unlocked powers with the mouse or **1 / 2 / 3** → enter the lit gate. Powers stack to rank 3.
-3. Finish → the referee verifies the replay and saves earned coin. **Train Champion** opens the coin-funded skill tree. **Try Same Descent** repeats the seed and loadout.
-4. **Train Champion** also tempers equipped gear from +0 to +9 with earned coin. **What You Own** lists dynamic NFTs, equips relics and claims a champion into an existing testnet wallet.
+2. Unlock skills with Solo coin in the weapon, spell and soul-vow skill tree. Clear a circle → choose a rank for one of your unlocked powers with the mouse or **1 / 2 / 3** → enter the lit gate. Powers stack to rank 3.
+3. Finish → the referee verifies the replay and saves earned coin. **Skill Tree** opens the coin-funded skill tree. **Try Same Descent** repeats the seed with your currently owned gear and training.
+4. The skill-tree forge also tempers equipped gear from +0 to +9 with earned coin. **Inventory** lists dynamic NFTs, equips relics and claims a champion into an existing testnet wallet.
 5. **The Reliquary** reserves a chosen long sword, war hammer, dagger, hand crossbow, soul staff, executioner axe or war spear with 10 coin, then mints it for 0.01 test NEAR. The current edition has 100 pieces; repeated mints each require fresh coin access and native payment. A bounded demo grant covers guest testnet gas. Mint revenue stays in the owner-controlled application treasury; there are no new tickets or raffle distributions.
 6. **Player Market** lists unequipped tradable weapon NFTs for 0.001–1 test NEAR. Purchases preserve the token’s upgrades and history; 90% becomes seller proceeds and 10% enters the treasury. Withdraw proceeds from the same screen.
 7. With testnet connected, **Duel** lists matched defenders. Both vaults stake 10 coin; the winner takes 20. Fights last up to 90 seconds. Forfeit or abandonment loses the challenger stake. Enable defense to let others challenge your build.
@@ -26,7 +26,7 @@ Escape pauses; losing focus also pauses. 1–4 trigger learned techniques for th
 ## Features and status
 
 - Deterministic 60 Hz combat, five circles, enemy waves and Warden.
-- Twelve ranked skills in three prerequisite paths, paid unlocks, staff casting and a three-choice soul core carried by the champion NFT. Bounded coin earning and replay verification remain in place.
+- Forty-two coin-funded unlocks: 28 weapon techniques, 12 soul vows and two additional Q spells, plus three core attunements unlocked by those vows. The atlas supports pan, zoom, all-paths overview and silent in-hand previews. Bounded coin earning and replay verification remain in place.
 - Replay-verifying referee, Ed25519 receipts and durable transaction retries.
 - Dynamic champion/gear NFTs, coin-funded + upgrades, transfer-aware inventory, wallet claiming, coin and native prize vaults.
 - Limited native testnet mints, refundable coin reservations, transparent application treasury and NEP-199 royalty quotations. Legacy prize withdrawals remain available to their owners.

@@ -12,9 +12,9 @@ Tracks: `games` and `nfts`.
 
 1. Open the title screen, take the descent, and show movement, aiming, a heavy third swing, dash and the vitality bar.
 2. Clear a circle, choose a rank for an unlocked power and descend through the lit gate. At the end, show replay verification and the confirmed coin save.
-3. Open Train Champion and show the branching weapon atlas. Hold to learn a technique with earned coin; release early once to show cancellation. Preview its animation. Choose a Q spell and an R ultimate, then demonstrate 1–4 weapon techniques, Q-to-weapon weaving and a charged R. Skills require no separate mint.
+3. Open Skill Tree and show the branching weapon atlas. Hold to learn a technique with earned coin; release early once to show cancellation. Preview its animation. Choose a Q spell and an R ultimate, then demonstrate 1–4 weapon techniques, Q-to-weapon weaving and a charged R. Skills require no separate mint.
 4. Open Duel, choose a matched funded defender and show the rival health bar. Explain the 10+10 coin escrow and saved-build opponent. A completed or forfeited match settles the record and existing coin pool.
-5. Open the Reliquary. Show limited supply, a coin reservation, demo funding, a native paid mint, seven distinct tradable weapon identities, repeatable earned mints, a silent attack preview and the transparent application treasury. Equip a relic in What You Own and show it in combat.
+5. Open the Reliquary. Show limited supply, a coin reservation, demo funding, a native paid mint, seven distinct tradable weapon identities, repeatable earned mints, a silent attack preview and the transparent application treasury. Equip a relic in Inventory and show it in combat.
 6. Open Player Market, show a listed relic’s level and kill history, buy it with test NEAR and equip the same NFT. Show seller proceeds and the 10% treasury share. There are no raffle tickets.
 7. Show the wallet-claim form and explain that the equipped inventory and both vaults move with the champion. Use a disposable test champion for an actual claim.
 
@@ -36,6 +36,16 @@ Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1
 - `npm run dev`; open `http://127.0.0.1:5173/?silent=1`.
 - A fresh clone runs Solo locally. Live writes need the operator’s private testnet configuration; no keys are distributed in the repository. See [NEAR setup](NEAR.md).
 
+## Confirmed submission requirements
+
+Checked against the [organizer’s live rules](https://nearhackathon.com/HACKATHON.md) on 2026-11-13. Recheck before submission.
+
+- Deadline: **2026-11-14 23:59 UTC** (2026-11-15 02:59 in Istanbul). The repository must be public by then and remain public through judging.
+- Testnet-only is eligible for `games` and `nfts`. A hosted demo is optional. A local-only demo requires a public repository, reproducible instructions and an X post containing a **video**, not screenshots alone.
+- The owner publishes the X post with **@NEARProtocol** and **#NEARHackathon**, stating it was built at NEAR HACKATHON. A hosted demo should remain available through November 18, ideally November 25.
+- Submission also needs the team lead’s chosen name, contact email, team size and their own **mainnet prize-receiving address**. This address is for the organizer’s payout; the game remains on testnet. Do not substitute the game’s testnet contract address.
+- Obtain consent to the organizer’s exact contact notice and review the complete payload before submission. Submit the project only once. Keep personal details and the payload outside the repository.
+
 ## Delivery checklist
 
 - [x] Local game and referee, deterministic replays and silent mode.
@@ -44,14 +54,17 @@ Use `?silent=1` when recording silent footage. The development bot (`&autoplay=1
 - [x] Testnet limited mint and application treasury, with legacy prize rights preserved.
 - [x] Seven tradable weapon archetypes, including two ranged classes, with in-hand models and attack animations.
 - [x] Native player marketplace, retained NFT traits and seller withdrawals.
-- [x] Twelve coin-unlocked skills, staff casting, three NFT-carried core attunements and weapon weaving.
+- [x] 42 coin-funded unlocks, 28 weapon techniques, three Q choices, three core attunements and weapon weaving.
 - [x] Healing pickups, ambient inhabitants and dressed catacomb perimeters.
 - [x] Original project art, optimized models and painted floors.
 - [x] MIT code license and dependency/art credits.
 - [ ] Record and upload the final video.
 - [ ] Select hosting or provide local demo instructions with the video.
 - [ ] Publish the repository and add its actual URL.
-- [ ] Review the organizer’s current form and publish/submit only when the owner is ready.
+- [x] Review the organizer’s current requirements (2026-11-13); recheck immediately before submitting.
+- [ ] Collect owner-provided team/contact details, prize address and contact consent privately.
+- [ ] Obtain the public X demo-post URL and review the final submission payload with the owner.
+- [ ] Submit once after final approval and save the acknowledgment privately.
 
 ## Limits to explain
 
