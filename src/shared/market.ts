@@ -73,7 +73,19 @@ export interface MarketView {
   fundingAvailable: boolean;
   pendingNative: boolean;
   nativeBalanceYocto?: string;
+  nativeGasReserveYocto?: string;
   history: MintRound[];
+}
+/** 120 Tgas paid call with headroom for transaction overhead. */
+export function nativeGasReserve(gasPriceYocto: string): bigint {
+  return BigInt(gasPriceYocto) * 150_000_000_000_000n;
+}
+export function canPayNative(
+  quote: Pick<MarketView, "nativeBalanceYocto" | "nativeGasReserveYocto">,
+  depositYocto: string,
+): boolean {
+  if (quote.nativeBalanceYocto === undefined || quote.nativeGasReserveYocto === undefined) return false;
+  return BigInt(quote.nativeBalanceYocto) >= BigInt(depositYocto) + BigInt(quote.nativeGasReserveYocto);
 }
 export interface MarketIntent {
   id: string;

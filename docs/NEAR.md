@@ -50,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.8.0` inputs. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.10.0` inputs, including jump and plunge actions. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -148,3 +148,18 @@ The `weapon_skills` feature adds 28 paid weapon techniques and two additional Q 
 Fresh VM and in-place 0.9→0.10 verification cover coin deductions, rejected duplicate training, both capstone prerequisites, unlearned spell rejection and selected-spell retention after champion transfer. The code-only deployment preserved all 38 existing NFTs and the complete raw state hash. Previous proof: [0.9 deployment](testnet-soul-upgrade-proof.json). Live progression and combat proof: [weapon skills](testnet-weapon-skills-proof.json). Reproduce only within authorized testnet scope with `npm run near:weapon-skills-smoke -- --execute`.
 
 The live API replay used all four blade techniques (25 technique activations), 11 Q casts and three ultimates, with duplicate rewards rejected. Browser QA earned 123 coin first, cancelled a short hold without spending, learned the first technique by pointer hold and the second by keyboard hold, then learned and equipped Cinder Circle. A subsequent silent browser replay recorded 46 kills and 165 additional earned coin. The same profile then completed both blade branches and the capstone and equipped Sanguine Covenant. Direct chain read-back confirmed all six learned skills, both selected slots, 43 remaining coin and an unchanged supply of 38 NFTs.
+
+
+## Recovery and current client checks
+
+The client advances combat from the same packed input it records for the referee. Jump occupies the technique code 5, so simultaneous jump/skill input is resolved before playback; airborne skill presses cannot disappear into an action the simulation cannot perform.
+
+Solo challenges bind the champion and equipped NFT IDs. Results refuse changed equipment rather than crediting kills to another weapon. Replaying a seed uses the current authenticated gear and training. Historical receipts still retain their original loadout and signature.
+
+Upgrade requests carry an action ID retained in session storage and durably stored by the referee with their outcome. Retrying a pending or acknowledged request does not roll again or deduct more coin. Final chain rejections restore confirmed state and return an error; uncertain transport failures remain pending. The UI distinguishes a pending upgrade from a confirmed result. Chain synchronization resets the displayed daily allowance according to the contract's UTC day.
+
+Paid mint/purchase preflight checks the account's available balance after storage locking, plus the exact deposit and a 150-Tgas reserve at the current gas price for the 120-Tgas call. The same live quote controls mint and purchase buttons; it no longer requires an arbitrary 0.15 test NEAR to mint a 0.01 edition. An unfunded implicit account is treated as zero only when every RPC fallback confirms that it does not exist; transport failures remain errors.
+
+`npm run near:audit -- --execute` is a resumable live test for the existing Alice/Bob test guests. It records real-paced Solo replays with jumps/plunges, then checks mint, upgrade retry, paid resale, retained traits, royalty accounting, withdrawal, purchased-weapon equip, cancellation/refund and Duel settlement. It spends those guests' earned coin and existing test funds; it creates no new funding and does not touch the original owner's champion. Private action IDs, sessions and reports stay under `.data/`. Run it only within the owner's authorized testnet scope.
+
+The current verification passed the full application suite, production build and real NEAR WASM sandbox suite. The live testnet audit confirmed mint → +1 upgrade → paid resale with retained traits → proceeds withdrawal, cancellation/refund, purchased-gear equip and a Duel with the same total coin before and after settlement. Repeated requests did not charge or reward twice. This is a tested guest-account demo, not a production security audit or a mainnet release.

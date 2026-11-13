@@ -63,8 +63,11 @@ type Run = RunChallenge & {
   cancelled?: boolean;
   rejection?: string;
   progress?: number[];
+  championId?: string;
+  equipped?: Champion["equipped"];
 };
 interface State {
+  upgrades?: Record<string, { owner: string; championId: string; slot: string; outcome: UpgradeOutcome }>;
   schema: number;
   accounts: Record<string, Account>;
   runs: Record<string, Run>;
@@ -343,8 +346,8 @@ export class Referee {
         404,
       );
       seed = old.seed;
-      skills = [...old.skills];
-      equipment = { ...old.equipment };
+      // Retry the seed with currently owned gear and training. Sold gear cannot be borrowed.
+      // The original receipt retains its exact historical loadout.
     }
     const run: Run = {
       id: randomUUID(),
@@ -355,6 +358,8 @@ export class Referee {
       equipment,
       expiresAt: now + 30 * 60000,
       owner,
+      championId: a.id,
+      equipped: structuredClone(a.equipped),
       createdAt: now,
     };
     this.storeRun(run);
@@ -384,6 +389,8 @@ export class Referee {
       cancelled: _cancelled,
       rejection: _rejection,
       progress,
+      championId: _champion,
+      equipped: _equipped,
       ...challenge
     } = run;
     return structuredClone({
@@ -504,7 +511,15 @@ export class Referee {
     return this.state.accounts[`claimed:${championId}`]?.chain?.lastTransaction;
   }
   /** One "+" attempt on equipped gear: burns coin, may raise the level. */
-  upgrade(owner: string, slot: unknown): UpgradeOutcome {
+  upgrade(owner: string, slot: unknown, intentId?: unknown): UpgradeOutcome {
+    if (intentId !== undefined) {
+      demand(typeof intentId === "string" && /^[A-Za-z0-9_-]{8,100}$/.test(intentId), "Invalid upgrade action id.");
+      const existing = this.state.upgrades?.[intentId];
+      if (existing) {
+        demand(existing.owner === owner && existing.championId === this.account(owner).id && existing.slot === slot, "Upgrade action id was used for different choices.", 409);
+        return structuredClone(existing.outcome);
+      }
+    }
     const a = this.account(owner, true);
     demand(!a.lockedBy, "Finish your Duel first.");
     demand(slot === "weapon" || slot === "armor", "Unknown gear.");
@@ -519,13 +534,17 @@ export class Referee {
     a.coins -= cost;
     if (success) a.build[key] = level + 1;
     this.enqueue({
-      id: `upgrade:${randomUUID()}`,
+      id: `upgrade:${intentId ?? randomUUID()}`,
       operation: "upgrade",
       championId: a.id,
       data: { slot, roll, fromLevel: level, gearId: a.equipped![slot] },
     });
+    const outcome: UpgradeOutcome = { slot, success, level: a.build[key], cost };
+    if (typeof intentId === "string") {
+      (this.state.upgrades ??= {})[intentId] = { owner, championId: a.id, slot, outcome };
+    }
     this.save();
-    return { slot, success, level: a.build[key], cost };
+    return outcome;
   }
   defense(owner: string, enabled: unknown): Champion {
     const a = this.account(owner, true);
@@ -728,6 +747,12 @@ export class Referee {
       "The game has updated. Start a new descent.",
       409,
     );
+    if (run.mode === "solo") {
+      const current = this.account(owner);
+      demand(run.championId && run.equipped, "This descent predates NFT binding. Start a new descent.", 409);
+      demand(run.championId === current.id, "This descent belongs to another champion.", 409);
+      demand(run.equipped.weapon === current.equipped?.weapon && run.equipped.armor === current.equipped?.armor, "Equipped NFTs changed during this descent. Start a new descent.", 409);
+    }
     const world =
       run.mode === "duel"
         ? createDuelWorld(run.seed, run.challengerBuild!, run.opponent!.build)
@@ -788,6 +813,7 @@ export class Referee {
         operation: "solo",
         championId: a.id,
         data: {
+          gearIds: structuredClone(run.equipped),
           earnedCoins: world.player.coins,
           floor: world.floor,
           kills: world.player.kills,
@@ -1072,8 +1098,12 @@ export class Referee {
       intent.error = reason;
       intent.transaction = event.transactionHash;
     }
+    if (event.operation === "upgrade") {
+      const upgrade = this.state.upgrades?.[id.replace(/^upgrade:/, "")];
+      if (upgrade) upgrade.outcome.error = reason;
+    }
     const runId =
-      event.operation === "duel_open" ? event.data.duelId : undefined;
+      event.operation === "duel_open" ? event.data.duelId : event.operation === "solo" ? event.id.replace(/^solo:/, "") : undefined;
     this.state.outbox = this.state.outbox.filter(
       (e) => e.id !== id && (!runId || e.data.duelId !== runId),
     );
@@ -1120,7 +1150,8 @@ export class Referee {
       "prizeYocto",
     ] as const)
       (a as any)[key] = structuredClone(state[key]);
-    a.earnedToday = state.earnedToday;
+    const today = Math.floor(this.now() / 86400000);
+    a.earnedToday = state.day === today ? state.earnedToday : 0;
     a.day = new Date(this.now()).toISOString().slice(0, 10);
     if (a.chain) a.chain.revision = state.revision;
   }

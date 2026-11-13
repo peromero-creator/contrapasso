@@ -19,7 +19,7 @@ import {
   weaponId,
   type WeaponId,
 } from "./sim/weapons";
-import type { MarketOperation, MarketView } from "./shared/market";
+import { canPayNative, type MarketOperation, type MarketView } from "./shared/market";
 import * as THREE from "three";
 import { View, CIRCLES } from "./render/view";
 import {
@@ -51,7 +51,7 @@ import {
   type SkillId,
 } from "./sim/skills";
 import { Sound } from "./audio/sound";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import type { Champion, RunChallenge, DuelOpponent } from "./shared/protocol";
 import { bot } from "./dev/bot";
 import { skillIcon } from "./ui/icons";
@@ -87,12 +87,14 @@ let choiceQueued = 0;
 let shownPowers = "";
 let acc = 0,
   freeze = 0,
+  slow = 0,
   last = performance.now();
 const keys = new Set<string>();
 let mouseX = window.innerWidth / 2,
   mouseY = window.innerHeight / 3;
 let mouseDown = false,
   dashQueued = 0,
+  jumpQueued = 0,
   attackQueued = 0;
 const skillInput = new SkillInputBuffer();
 let aim = Math.floor(DIRS * 0.75);
@@ -105,7 +107,7 @@ function notice(text: string) {
 function clearInput() {
   keys.clear();
   mouseDown = false;
-  dashQueued = attackQueued = choiceQueued = 0;
+  dashQueued = jumpQueued = attackQueued = choiceQueued = 0;
   skillInput.clear();
 }
 function reflectSound() {
@@ -196,7 +198,11 @@ function readInput(): Input {
       !dash && world.player.attackCd <= DT && world.player.dashT <= 0
         ? 0
         : attackQueued - 1;
-  return { move, aim, attack, dash, ...skillInput.take(world.player, dash) };
+  const jump = jumpQueued > 0 && !dash;
+  if (jumpQueued > 0)
+    jumpQueued =
+      world.player.jumpCd <= DT && world.player.jumpT <= 0 && world.player.castT <= 0 ? 0 : jumpQueued - 1;
+  return { move, aim, attack, dash, ...skillInput.take(world.player, dash || jump), jump };
 }
 function choose(choice: number) {
   if (world.phase !== "reward" || paused || choiceQueued) return;
@@ -235,8 +241,9 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
-  if (!e.repeat && ["Space", "ShiftLeft", "KeyK"].includes(e.code))
+  if (!e.repeat && ["ShiftLeft", "ShiftRight", "KeyK"].includes(e.code))
     dashQueued = 8;
+  if (!e.repeat && ["Space", "KeyF", "KeyL"].includes(e.code)) jumpQueued = 8;
   if (!e.repeat && e.code === "KeyJ") attackQueued = 8;
   if (!e.repeat && /^Digit[1-4]$/.test(e.code)) skillInput.press(Number(e.code.slice(-1)));
   if (!e.repeat && e.code === "KeyQ") skillInput.press("cast");
@@ -282,7 +289,7 @@ function setPaused(value: boolean) {
   clearInput();
   if (mode !== "run" || ended || paused === value) return;
   paused = value;
-  acc = freeze = 0;
+  acc = freeze = slow = 0;
   if (world.phase === "reward")
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       ".power-choice",
@@ -304,7 +311,7 @@ function setPaused(value: boolean) {
 function showReward() {
   if (world.phase !== "reward" || !world.offers.length) return;
   clearInput();
-  acc = freeze = 0;
+  acc = freeze = slow = 0;
   $("hud").inert = true;
   $("reward-circle").textContent = `CIRCLE ${ROMAN[world.floor - 1]} CLEARED`;
   $("reward-sub").textContent =
@@ -521,7 +528,7 @@ function enterRun(next: RunChallenge) {
   clearInput();
   aim = world.player.aim;
   shownPowers = "";
-  acc = freeze = 0;
+  acc = freeze = slow = 0;
   ended = paused = false;
   mode = "run";
   sound.setPaused(false);
@@ -733,12 +740,12 @@ function renderExchange() {
           .map((l) => {
             const spec = weapon(l.weaponId),
               mine = l.seller === owner;
-            return `<article class="exchange-card">${relicImage(weaponId(l.weaponId), escapeHtml(spec.name))}<div><span class="eyebrow">${escapeHtml(spec.className)} · +${l.level}</span><h3>${escapeHtml(spec.name)}</h3><p>${l.kills} kills · ${l.pastOwners.length} previous owner${l.pastOwners.length === 1 ? "" : "s"}</p><dl><dt>Damage</dt><dd>${spec.damage + l.level * 2}</dd><dt>Range</dt><dd>${spec.reach} m</dd><dt>Seller</dt><dd>${escapeHtml(shortAccount(l.seller))}</dd></dl><p class="listing-price">${nearAmount(l.priceYocto)} <small>test NEAR</small></p><button class="btn ${mine ? "ghost" : ""}" data-sale="${escapeHtml(l.id)}" data-sale-action="${mine ? "cancel_sale" : "buy_gear"}" ${busy || pendingMarket || (!mine && BigInt(state.nativeBalanceYocto ?? "0") < BigInt(l.priceYocto) + 10n ** 22n) ? "disabled" : ""}>${mine ? "CANCEL LISTING" : "BUY THIS NFT ↗"}</button></div></article>`;
+            return `<article class="exchange-card">${relicImage(weaponId(l.weaponId), escapeHtml(spec.name))}<div><span class="eyebrow">${escapeHtml(spec.className)} · +${l.level}</span><h3>${escapeHtml(spec.name)}</h3><p>${l.kills} kills · ${l.pastOwners.length} previous owner${l.pastOwners.length === 1 ? "" : "s"}</p><dl><dt>Damage</dt><dd>${spec.damage + l.level * 2}</dd><dt>Range</dt><dd>${spec.reach} m</dd><dt>Seller</dt><dd>${escapeHtml(shortAccount(l.seller))}</dd></dl><p class="listing-price">${nearAmount(l.priceYocto)} <small>test NEAR</small></p><button class="btn ${mine ? "ghost" : ""}" data-sale="${escapeHtml(l.id)}" data-sale-action="${mine ? "cancel_sale" : "buy_gear"}" ${busy || pendingMarket || (!mine && !canPayNative(state, l.priceYocto)) ? "disabled" : ""}>${mine ? "CANCEL LISTING" : "BUY THIS NFT ↗"}</button></div></article>`;
           })
           .join("")
       : '<p class="exchange-empty">No relics are listed yet. Offer an unequipped weapon below.</p>';
   $("exchange-balance").innerHTML =
-    `<div><span class="eyebrow">YOUR SALE PROCEEDS</span><b>${nearAmount(marketState.proceedsYocto ?? "0")} <small>test NEAR</small></b></div>${marketButton("withdraw_sales", marketState.proceedsPending ? "WITHDRAWAL PENDING" : "WITHDRAW PROCEEDS ↗", !ready || !!marketState.proceedsPending || BigInt(marketState.proceedsYocto ?? "0") === 0n)}<p>Guest wallet: ${nearAmount(state.nativeBalanceYocto ?? "0")} test NEAR</p>`;
+    `<div><span class="eyebrow">YOUR SALE PROCEEDS</span><b>${nearAmount(marketState.proceedsYocto ?? "0")} <small>test NEAR</small></b></div>${marketButton("withdraw_sales", marketState.proceedsPending ? "WITHDRAWAL PENDING" : "WITHDRAW PROCEEDS ↗", !ready || !!marketState.proceedsPending || BigInt(marketState.proceedsYocto ?? "0") === 0n)}<p>Available test NEAR: ${nearAmount(state.nativeBalanceYocto ?? "0")}. Gas reserve: ${nearAmount(state.nativeGasReserveYocto ?? "0")}.</p>`;
   if (!state.sponsored && state.fundingAvailable && champion.runs > 0)
     $("exchange-balance").insertAdjacentHTML(
       "beforeend",
@@ -840,9 +847,7 @@ function renderMarket() {
       marketButton(
         "mint",
         "MINT RESERVED WEAPON ↗",
-        !open ||
-          BigInt(marketState.nativeBalanceYocto ?? "0") <
-            150000000000000000000000n,
+        !open || !canPayNative(marketState, round.priceYocto),
       ) + marketButton("cancel_mint", "CANCEL · REFUND 10 COIN");
   } else if (open)
     actions = marketButton(
@@ -860,7 +865,7 @@ function renderMarket() {
   if (
     open &&
     !marketState.sponsored &&
-    BigInt(marketState.nativeBalanceYocto ?? "0") < 150000000000000000000000n
+    round && !canPayNative(marketState, round.priceYocto)
   )
     actions += marketButton(
       "fund_guest",
@@ -967,6 +972,7 @@ async function doMarket(
 }
 async function openMarket(exchange = false) {
   try {
+    notice("");
     await loadChampion();
     marketState = await api.market();
     saleInventory = (await api.nft()).tokens;
@@ -1235,6 +1241,14 @@ const GEAR: Record<
   weapon: { name: "Cinder Blade", effect: (level) => `+${level * 2} damage` },
   armor: { name: "Ash Armor", effect: (level) => `+${level * 3} life` },
 };
+let pendingUpgrade: { id: string; championId: string; slot: GearSlot } | null = null;
+try { pendingUpgrade = JSON.parse(sessionStorage.getItem("contrapasso-upgrade") ?? "null"); } catch { /* Optional storage. */ }
+function saveUpgradeIntent() {
+  try {
+    if (pendingUpgrade) sessionStorage.setItem("contrapasso-upgrade", JSON.stringify(pendingUpgrade));
+    else sessionStorage.removeItem("contrapasso-upgrade");
+  } catch { /* The server still retains the action id. */ }
+}
 function renderGear() {
   if (!champion) return;
   const grid = $("gear-cards");
@@ -1248,8 +1262,10 @@ function renderGear() {
       const available =
         (!champion!.chain || champion!.chain.features?.includes("upgrade")) &&
         !!champion!.equipped?.[slot];
-      const blocked = max || champion!.coins < cost || busy || !available;
-      return `<button class="training-card gear-card${max ? " learned" : ""}" data-slot="${slot}" ${blocked ? "disabled" : ""}><span class="gear-level">+${level}</span><strong>${gearName(slot)}</strong><span>${GEAR[slot].effect(level)}${max ? "" : ` → ${GEAR[slot].effect(level + 1)}`}</span><span>${max ? "Nothing left to temper." : odds === 100 ? "Always holds." : `${odds}% to hold. A failure burns only the coin.`}</span><b>${!available ? "NOT AVAILABLE" : max ? "AT ITS LIMIT" : `TEMPER · ${cost} COIN`}</b></button>`;
+      const confirming = pendingUpgrade?.championId === champion!.id && pendingUpgrade.slot === slot;
+      const otherPending = pendingUpgrade?.championId === champion!.id && !confirming;
+      const blocked = busy || otherPending || (!confirming && (max || champion!.coins < cost || !available));
+      return `<button class="training-card gear-card${max ? " learned" : ""}" data-slot="${slot}" ${blocked ? "disabled" : ""}><span class="gear-level">+${level}</span><strong>${gearName(slot)}</strong><span>${GEAR[slot].effect(level)}${max ? "" : ` → ${GEAR[slot].effect(level + 1)}`}</span><span>${max ? "Nothing left to temper." : odds === 100 ? "Always holds." : `${odds}% to hold. A failure burns only the coin.`}</span><b>${confirming ? "CONFIRM UPGRADE" : !available ? "NOT AVAILABLE" : max ? "AT ITS LIMIT" : `TEMPER · ${cost} COIN`}</b></button>`;
     })
     .join("");
   for (const button of grid.querySelectorAll<HTMLButtonElement>("button"))
@@ -1260,15 +1276,29 @@ function renderGear() {
       notice("");
       try {
         const slot = button.dataset.slot as GearSlot;
-        const response = await api.upgrade(slot);
+        if (!pendingUpgrade || pendingUpgrade.championId !== champion!.id)
+          pendingUpgrade = { id: crypto.randomUUID(), championId: champion!.id, slot };
+        saveUpgradeIntent();
+        const response = await api.upgrade(slot, pendingUpgrade.id);
         champion = response.champion;
         refreshChampion();
-        notice(
+        if (champion.chain?.pending) {
+          notice("Upgrade sent. Confirm it before tempering again.");
+          return;
+        }
+        pendingUpgrade = null;
+        saveUpgradeIntent();
+        notice(response.upgrade.error ?? (
           response.upgrade.success
             ? `The ${gearName(slot)} holds. It is now +${response.upgrade.level}.`
-            : `The coin burns. The ${gearName(slot)} stays +${response.upgrade.level}.`,
+            : `The coin burns. The ${gearName(slot)} stays +${response.upgrade.level}.`),
         );
       } catch (e) {
+        // Validation refused the action before enqueueing it. Transport/relay uncertainty keeps the ID.
+        if (e instanceof ApiError && e.status === 400) {
+          pendingUpgrade = null;
+          saveUpgradeIntent();
+        }
         notice((e as Error).message);
       } finally {
         busy = false;
@@ -1469,13 +1499,33 @@ $("sound-toggle").addEventListener("click", () => {
 });
 reflectSound();
 
+/** Unbroken hits in a row: cosmetic, cleared by a pause in the assault or by being struck. */
+let chain = 0,
+  chainT = 0;
+function paintChain(pop: boolean) {
+  $("chain").classList.toggle("show", chain >= 3);
+  if (chain < 3) return;
+  const count = $("chain-count");
+  count.textContent = String(chain);
+  $("chain-rank").textContent = chain >= 40 ? "DAMNATION" : chain >= 25 ? "MERCILESS" : chain >= 12 ? "RELENTLESS" : "";
+  if (pop)
+    count.animate(
+      [{ transform: "scale(1.5)", color: "#fff6e0" }, { transform: "scale(1)" }],
+      { duration: 170, easing: "ease-out" },
+    );
+}
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (mode === "run" && !paused && !ended && !busy) {
     if (world.phase === "reward" && !choiceQueued) acc = 0;
     else if (freeze > 0) freeze -= dt;
-    else acc += dt;
+    else acc += dt * (slow > 0 ? 0.3 : 1);
+    if (chainT > 0 && (chainT -= dt) <= 0) {
+      chain = 0;
+      paintChain(false);
+    }
+    if (slow > 0) slow -= dt;
     let n = 0;
     while (acc >= DT && n < 6 && freeze <= 0) {
       const input =
@@ -1491,8 +1541,10 @@ function frame(now: number) {
             ? bot(world)
             : readInput();
       choiceQueued = 0;
-      replay.push(packInput(input));
-      step(world, input);
+      const packed = packInput(input);
+      replay.push(packed);
+      // Play exactly the input recorded for the referee (jump shares the technique bits).
+      step(world, unpackInput(packed));
       acc -= DT;
       n++;
       for (const e of world.events) {
@@ -1500,6 +1552,23 @@ function frame(now: number) {
           showBanner(
             `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
           );
+        if (e.type === "hit") {
+          chain += 1;
+          chainT = 3;
+          paintChain(true);
+        }
+        if (e.type === "hurt" && chain) {
+          chain = 0;
+          paintChain(false);
+        }
+        if (e.type === "hurt") {
+          const veil = $("hurt-veil");
+          veil.classList.remove("on");
+          void veil.offsetWidth;
+          veil.classList.add("on");
+        }
+        // The last kill of a room lingers.
+        if (e.type === "cleared" || e.type === "won") slow = 0.42;
         if (e.type === "cleared") {
           $("reward").classList.add("hidden");
           $("hud").inert = false;
@@ -1522,11 +1591,18 @@ function frame(now: number) {
       showEnd(world.phase === "won");
     else if (world.mode === "duel") checkpointDuel();
   }
-  if (!paused) view.sync(world, dt);
+  if (!paused) view.sync(world, slow > 0 && mode === "run" ? dt * 0.3 : dt);
   if (mode === "run") updateHud(paused || ended ? 0 : dt);
+  $("hurt-veil").classList.toggle(
+    "low",
+    mode === "run" && world.phase !== "dead" && world.player.hp > 0 && world.player.hp < world.player.maxHp * 0.3,
+  );
   view.render();
   requestAnimationFrame(frame);
 }
+$("hurt-veil").addEventListener("animationend", (e) => {
+  if ((e as AnimationEvent).animationName === "hurt-veil") $("hurt-veil").classList.remove("on");
+});
 requestAnimationFrame(frame);
 setInterval(() => {
   if (mode === "menu" && champion?.chain?.pending && !busy)
@@ -1544,4 +1620,12 @@ if (import.meta.env.DEV)
     },
     FLOORS,
     view,
+    /** One bot-driven tick for frame-by-frame inspection; returns hit-stop seconds. */
+    tick(override?: Partial<Input>) {
+      step(world, { ...bot(world), ...override });
+      const stop = view.consume(world.events);
+      const seen = world.events.map((e) => e.type);
+      world.events.length = 0;
+      return { stop, seen };
+    },
   };

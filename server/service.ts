@@ -133,7 +133,7 @@ export class GameService {
               "Gear upgrades open after the testnet contract is updated.",
               503,
             );
-          result = { upgrade: this.referee.upgrade(owner, body.slot) };
+          result = { upgrade: this.referee.upgrade(owner, body.slot, body.id) };
           break;
         case "/api/claim": {
           if (!this.near.config || !this.near.supports("claim"))
@@ -186,8 +186,10 @@ export class GameService {
         path === "/api/forfeit"
       )
         return this.near.status(this.referee.profile(owner));
-      if (path === "/api/upgrade")
+      if (path === "/api/upgrade") {
+        if (body.id !== undefined) result.upgrade = this.referee.upgrade(owner, body.slot, body.id);
         result.champion = this.near.status(this.referee.profile(owner));
+      }
       if (path === "/api/claim") {
         result.champion = this.near.status(this.referee.profile(owner));
         result.claimed = {
@@ -197,8 +199,12 @@ export class GameService {
           transaction: this.referee.claimTransaction(result.claimed.championId),
         };
       }
-      if (path === "/api/results")
+      if (path === "/api/results") {
+        // The relay may have rejected a changed owner/loadout after local verification.
+        // Recheck the durable result so a rollback cannot be displayed as confirmed coin.
+        result = this.referee.submit(owner, body.id, body.inputs);
         result.champion = this.near.status(this.referee.profile(owner));
+      }
       return result;
     });
   }

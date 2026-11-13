@@ -12,7 +12,8 @@ function arena(skills: SkillId[], identity: keyof typeof import('../src/sim/weap
 for (const technique of [0,1,2,3,4]) for(const cast of [false,true]) for(const ultimate of [false,true]) {
  const input={...idle,cast,ultimate,technique,choice:0};assert.deepEqual(unpackInput(packInput(input)),input);
 }
-for(const value of [5<<27,6<<27,7<<27,0x40000000]) assert.throws(()=>unpackInput(value));
+// Code 5 in the technique field is the jump; 6 and 7 stay invalid.
+for(const value of [6<<27,7<<27,0x40000000]) assert.throws(()=>unpackInput(value));
 for(const id of TECHNIQUE_IDS) {
  const t=TECHNIQUES[id], family=id.split('-')[0] as Family, slot=Number(id.slice(-1));
  const a=arena([id,'ember'],FAMILY_WEAPON[family]);a.player.skills.ember=0;

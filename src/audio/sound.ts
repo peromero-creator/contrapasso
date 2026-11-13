@@ -111,6 +111,15 @@ export class Sound {
         case "hurt":
           this.play(110, 40, 0.24, 0.65);
           break;
+        case "jump":
+          this.play(320, 760, 0.12, 0.2, true);
+          break;
+        case "land":
+          this.play(170, 70, 0.08, 0.3);
+          break;
+        case "plunge":
+          this.play(150, 34, 0.32, 0.8);
+          break;
         case "dash":
           this.play(600, 2400, 0.15, 0.3, true);
           break;

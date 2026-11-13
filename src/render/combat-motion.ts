@@ -64,11 +64,27 @@ export function previewVolley(id: AbilityId, identity: WeaponId) {
   return null;
 }
 
+/** Techniques that leave the ground: slams land on the contact frame, lunges arc through it. */
+const LEAPS: Partial<Record<AbilityId, number>> = {
+  'hammer-1': .55, 'hammer-2': .4, 'hammer-4': .8, 'sword-4': .9, 'axe-1': .4, 'axe-4': 1, 'ember': .6,
+  'sword-2': .3, 'spear-2': .3, 'dagger-1': .24,
+};
+/** Rise, hang, then drop hard: the peak sits late so the fall reads as weight. */
+const leapArc = (q: number) => Math.sin(Math.PI * Math.pow(clamp(q), 1.5));
 /** Cosmetic elevation only: collision, targeting and vulnerability stay on the ground. */
 export function combatLift(m?: CombatMotion) {
-  if(m?.ability!=='hammer-4')return 0;
-  const t=clamp(m.elapsed/abilityContact(m.ability));
-  return .75*Math.sin(Math.PI*t)**2;
+  if (!m) return 0;
+  if (m.ability) {
+    const height = LEAPS[m.ability];
+    return height ? height * leapArc(m.elapsed / abilityContact(m.ability)) : 0;
+  }
+  // Every third strike of a melee chain is a leaping blow.
+  const spec = weapon(m.weapon);
+  if (m.combo % 3 !== 0 || spec.ranged) return 0;
+  const family = familyOf(m.weapon);
+  const height = family === 'hammer' ? .5 : family === 'axe' ? .55 : family === 'sword' ? .32 : family === 'dagger' ? .22 : .16;
+  // Delayed weapons land on the blow; instant ones strike rising and land in recovery.
+  return height * (spec.impactDelay ? leapArc(m.elapsed / spec.impactDelay) : Math.sin(Math.PI * Math.pow(clamp(m.elapsed / spec.swing), .8)));
 }
 
 /** Staff choreography in actor-local space (+X is the committed aim). */

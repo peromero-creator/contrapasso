@@ -23,7 +23,7 @@ export class SkillInputBuffer {
       ready=p.techniqueCd[action-1]<=DT;
     }
     if (!valid) { this.clear();return {}; }
-    if (ready && p.swingT<=DT && p.castT<=DT && p.dashT<=0) {
+    if (ready && p.swingT<=DT && p.castT<=DT && p.dashT<=0 && p.jumpT<=0) {
       this.clear();
       return typeof action==='number'?{technique:action}:action==='cast'?{cast:true}:{ultimate:true};
     }

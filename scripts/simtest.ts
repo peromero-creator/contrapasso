@@ -154,7 +154,8 @@ for (const move of [-1, 0, 1023]) for (const aim of [0, 1023]) for (const choice
   const input = { move, aim, choice, attack: true, dash: true };
   assert.deepEqual(unpack(pack(input)), { ...input, cast: false, ultimate: false, technique: 0 });
 }
-for (const n of [-1, 0.5, 2047, 0x40000000, 5 << 27, NaN]) assert.throws(() => unpack(n));
+// Technique codes 1..4 are slots and 5 is the jump; 6 and 7 stay invalid.
+for (const n of [-1, 0.5, 2047, 0x40000000, 6 << 27, 7 << 27, NaN]) assert.throws(() => unpack(n));
 console.log("Powers and input codec: PASS (all eight powers, rank cap, choices, invalid inputs)");
 
 for (const seed of [1, 42, 20261112, 987654321]) {

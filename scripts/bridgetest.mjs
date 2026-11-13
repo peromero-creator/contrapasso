@@ -85,7 +85,9 @@ try {
   const clone = (value) => (value == null ? null : structuredClone(value));
   near.provider = {
     viewNodeStatus: async () => ({ chain_id: "testnet" }),
-    viewAccount: async () => ({ amount: "0" }),
+    viewAccount: async () => ({ amount: "0", locked: "0", storage_usage: 0 }),
+    experimental_protocolConfig: async () => ({ runtime_config: { storage_amount_per_byte: "10000000000000000000" } }),
+    viewGasPrice: async () => ({ gas_price: "100000000" }),
     callFunction: async ({ method, args }) => {
       if (method === "game_config")
         return {
@@ -214,11 +216,31 @@ try {
   near.checked = false;
   // Upgrades change both the vault and equipped combat build.
   const oldCoins = referee.profile(alice).coins;
-  const improved = await service.perform(alice, "/api/upgrade", {
-    slot: "weapon",
-  });
+  const upgradeRequest = { slot: "weapon", id: randomUUID() };
+  fail = true;
+  const queuedUpgrade = await service.perform(alice, "/api/upgrade", upgradeRequest);
+  assert.equal(queuedUpgrade.champion.chain.pending, true);
+  assert.equal(queuedUpgrade.champion.coins, oldCoins - 15);
+  fail = false;
+  const improved = await service.perform(alice, "/api/upgrade", upgradeRequest);
+  const callsAfterUpgrade = calls;
+  const repeatedUpgrade = await service.perform(alice, "/api/upgrade", upgradeRequest);
+  assert.deepEqual(repeatedUpgrade, improved, "lost HTTP response retries the original upgrade");
+  assert.equal(calls, callsAfterUpgrade, "retry sends no second upgrade transaction");
+  await assert.rejects(service.perform(alice, "/api/upgrade", {...upgradeRequest, slot:"armor"}), /different choices/);
   assert.equal(improved.champion.build.weaponLevel, 1);
   assert.equal(improved.champion.coins, oldCoins - 15);
+  const rejectedUpgradeRequest = { slot: "armor", id: randomUUID() };
+  fail = true;
+  assert.equal((await service.perform(alice, "/api/upgrade", rejectedUpgradeRequest)).champion.chain.pending, true);
+  fail = false;
+  terminal = true;
+  const rejectedUpgrade = await service.perform(alice, "/api/upgrade", rejectedUpgradeRequest);
+  assert.ok(rejectedUpgrade.upgrade.error, "a final rejection is not reported as a successful upgrade");
+  assert.equal(rejectedUpgrade.champion.chain.pending, false);
+  assert.equal(rejectedUpgrade.champion.coins, oldCoins - 15, "failed upgrade restores the confirmed vault");
+  terminal = false;
+  assert.ok((await service.perform(alice, "/api/upgrade", rejectedUpgradeRequest)).upgrade.error);
   const source = referee.profile(alice).id;
   // Do not rotate the guest or claim success until an outgoing transfer is final.
   fail = true;
@@ -269,6 +291,20 @@ try {
     mode: "raffle",
   });
   openRound(store, { nowMs: now }, { id: "bridge-round", durationSeconds: 30 });
+  const originalAccountView = near.provider.viewAccount;
+  near.provider.viewAccount = async () => ({ amount: "30000000000000000000000", locked: "0", storage_usage: 1000 });
+  const quote = await near.market(referee.profile(bob));
+  assert.equal(quote.nativeBalanceYocto, "20000000000000000000000", "UI balance excludes locked storage");
+  assert.equal(quote.nativeGasReserveYocto, "15000000000000000000000", "UI receives the relay gas reserve");
+  near.provider.viewAccount = async () => { throw new Error("RPC unavailable"); };
+  await assert.rejects(near.market(referee.profile(bob)), /RPC unavailable/, "RPC failure is not an empty wallet");
+  const absent = Object.assign(new Error("Account does not exist"), { name: "AccountDoesNotExistError" });
+  const failover = Object.assign(new Error("Providers exhausted"), { name: "FailoverRpcError", errors: [absent, absent] });
+  near.provider.viewAccount = async () => { throw failover; };
+  assert.equal((await near.market(referee.profile(bob))).nativeBalanceYocto, "0", "unfunded implicit account opens the market through fallback providers");
+  failover.errors = [absent, new Error("Timeout")];
+  await assert.rejects(near.market(referee.profile(bob)), /Providers exhausted/, "mixed unknown account and RPC errors remain errors");
+  near.provider.viewAccount = originalAccountView;
   const marketCoins = referee.profile(bob).coins;
   const reserveId = randomUUID(),
     reserveBody = {
@@ -314,7 +350,7 @@ try {
   assert.match(unfundedMint.intent.error, /Get demo test NEAR/);
   assert.equal(unfundedMint.champion.coins, marketCoins - 10);
   assert.equal(referee.pendingChainOperations().length, 0);
-  near.provider.viewAccount = async () => ({ amount: "0" });
+  near.provider.viewAccount = async () => ({ amount: "0", locked: "0", storage_usage: 0 });
   loseAck = true;
   referee.acknowledgeChain = (...args) => {
     if (loseAck) {

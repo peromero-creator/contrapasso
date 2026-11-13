@@ -196,13 +196,13 @@ export class AnimatedModel {
         color === null ? m.base : new THREE.Color(color),
       );
   }
-  update(dt: number, motion?: CombatMotion) {
+  update(dt: number, motion?: CombatMotion, air = 0) {
     this.transition.restore();
     // Restore before sampling: additive accents never accumulate on idle or a new clip.
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
     this.posed.clear();
     if(this.staffFocus)this.staffFocus.visible=false;
-    this.presentation.position.y = combatLift(motion);
+    this.presentation.position.y = combatLift(motion) + air;
     this.mixer.update(dt);
     if (!motion || !this.active) { this.transition.apply(dt); return; }
     this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;

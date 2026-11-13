@@ -13,7 +13,7 @@ npm run dev
 
 Open [localhost:5173](http://127.0.0.1:5173/). This starts the game and local referee together. A fresh checkout runs Solo locally; testnet writes require your own configured server credentials. See [NEAR setup](docs/NEAR.md).
 
-1. **Take the Descent → Solo** starts a server-issued run. WASD moves, mouse aims, hold click attacks, Space dashes. Every third attack has a weapon-specific finisher.
+1. **Take the Descent → Solo** starts a server-issued run. WASD moves, mouse aims, hold click attacks, Space jumps, Shift (or right click) dashes. Attacking in the air dives along the aim and breaks the ground on landing. Every third attack has a weapon-specific finisher.
 2. Unlock skills with Solo coin in the three-path skill tree. Clear a circle → choose a rank for one of your unlocked powers with the mouse or **1 / 2 / 3** → enter the lit gate. Powers stack to rank 3.
 3. Finish → the referee verifies the replay and saves earned coin. **Train Champion** opens the coin-funded skill tree. **Try Same Descent** repeats the seed and loadout.
 4. **Train Champion** also tempers equipped gear from +0 to +9 with earned coin. **What You Own** lists dynamic NFTs, equips relics and claims a champion into an existing testnet wallet.

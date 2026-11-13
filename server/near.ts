@@ -4,6 +4,7 @@ import {
   type MarketOperation,
   type MarketView,
   MINT_PRICE_YOCTO,
+  nativeGasReserve,
 } from "../src/shared/market.ts";
 import {
   Account,
@@ -24,7 +25,7 @@ import type {
   NftView,
   NftToken,
 } from "../src/shared/protocol.ts";
-import { testnetProvider, TESTNET_RPC_URLS } from "./rpc.ts";
+import { testnetProvider, TESTNET_RPC_URLS, isMissingAccount } from "./rpc.ts";
 import { sameBuild } from "../src/sim/build.ts";
 
 export interface NearConfig {
@@ -244,22 +245,18 @@ export class NearBridge {
     const market = await this.view("market_view", { champion_id: profile.id });
     let nativeBalanceYocto: string | undefined;
     try {
-      nativeBalanceYocto = String(
-        (
-          await this.provider!.viewAccount({
-            accountId: this.guest(profile.id).accountId,
-          })
-        ).amount,
-      );
-    } catch {
-      /* An unfunded implicit guest account has no native balance yet. */
+      nativeBalanceYocto = String(await new Account(this.guest(profile.id).accountId, this.provider!).getBalance());
+    } catch (error) {
+      if (!isMissingAccount(error)) throw error;
+      nativeBalanceYocto = "0";
     }
+    const nativeGasReserveYocto = String(nativeGasReserve((await this.provider!.viewGasPrice()).gas_price));
     const exchange = this.supports("exchange")
       ? await this.view("exchange_view", {
           owner_id: this.guest(profile.id).accountId,
         })
       : {};
-    return { ...market, ...exchange, onChain: true, nativeBalanceYocto };
+    return { ...market, ...exchange, onChain: true, nativeBalanceYocto, nativeGasReserveYocto };
   }
   status(profile: Champion): Champion {
     if (!this.config) return profile;
@@ -334,6 +331,13 @@ export class NearBridge {
           409,
         );
       }
+      if (event.operation === "solo" && event.data.gearIds) {
+        const gear = event.data.gearIds as { weapon: string | null; armor: string | null };
+        if (gear.weapon !== current.equipped?.weapon || gear.armor !== current.equipped?.armor) {
+          this.referee.rejectChainOperation(event.id, { [event.championId]: current }, "Equipped NFTs changed before this descent was saved. Start a new descent.");
+          return;
+        }
+      }
       if (
         event.operation === "upgrade" &&
         (current.equipped?.[String(event.data.slot)] !== event.data.gearId ||
@@ -354,23 +358,15 @@ export class NearBridge {
       if (event.operation === "mint" || event.operation === "buy_gear") {
         let balance = 0n;
         try {
-          balance = BigInt(
-            (await this.provider!.viewAccount({ accountId })).amount,
-          );
+          balance = await new Account(accountId, this.provider!).getBalance();
         } catch (error) {
-          if (
-            !["UnknownAccountError", "AccountDoesNotExistError"].includes(
-              (error as Error).name,
-            )
-          )
-            throw error;
+          if (!isMissingAccount(error)) throw error;
         }
-        if (
-          balance <
-          (event.operation === "mint"
-            ? 150000000000000000000000n
-            : BigInt(String(event.data.priceYocto)) + 10000000000000000000000n)
-        ) {
+        const deposit = event.operation === "mint" ? BigInt(MINT_PRICE_YOCTO) : BigInt(String(event.data.priceYocto));
+        // Reserve 150 Tgas at the current price for the 120 Tgas call plus overhead.
+        // Available balance excludes locked storage; no arbitrary 0.15 NEAR mint floor.
+        const gasReserve = nativeGasReserve((await this.provider!.viewGasPrice()).gas_price);
+        if (balance < deposit + gasReserve) {
           this.referee.rejectChainOperation(
             event.id,
             { [event.championId]: current },
@@ -460,7 +456,7 @@ export class NearBridge {
         if (failure.txHash)
           this.referee.noteChainTransaction(event.id, failure.txHash);
         if (
-          MARKET_OPERATIONS.includes(event.operation as MarketOperation) &&
+          (MARKET_OPERATIONS.includes(event.operation as MarketOperation) || event.operation === "upgrade") &&
           (failure.transactionResult?.status?.Failure ||
             (error instanceof NotEnoughBalanceError && !failure.txHash)) &&
           !(await this.view("receipt_applied", { receipt_id: event.id }))

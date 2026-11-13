@@ -14,6 +14,13 @@ import type {
 } from "./shared/protocol";
 import type { SkillId } from "./sim/skills";
 
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/${path}`, {
     method: body === undefined ? "GET" : "POST",
@@ -27,7 +34,7 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
     .json()
     .catch(() => ({ error: "Connection lost. Please try again." }));
   if (!response.ok)
-    throw new Error(result.error ?? "Something went wrong. Please try again.");
+    throw new ApiError(result.error ?? "Something went wrong. Please try again.", response.status);
   return result;
 }
 export const api = {
@@ -43,9 +50,9 @@ export const api = {
   attune: (core: import("./sim/abilities").CoreId) =>
     request<Champion>("attune", { core }),
   train: (skill: SkillId) => request<Champion>("train", { skill }),
-  upgrade: (slot: "weapon" | "armor") =>
+  upgrade: (slot: "weapon" | "armor", id: string) =>
     request<{ champion: Champion; upgrade: UpgradeOutcome }>("upgrade", {
-      slot,
+      slot, id,
     }),
   nft: () => request<NftView>("nft"),
   market: () => request<MarketView>("market"),

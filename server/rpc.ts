@@ -7,6 +7,13 @@ export const TESTNET_RPC_URLS = [
   "https://rpc.testnet.near.org",
   "https://archival-rpc.testnet.near.org",
 ];
+/** The SDK wraps individual provider errors after exhausting its fallbacks. */
+export function isMissingAccount(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (["UnknownAccountError", "AccountDoesNotExistError"].includes(error.name)) return true;
+  const errors = (error as Error & { errors?: unknown[] }).errors;
+  return error.name === "FailoverRpcError" && Array.isArray(errors) && errors.length > 0 && errors.every(isMissingAccount);
+}
 /** Every fallback is pinned to testnet. Re-sending an identical signed transaction retains its hash/nonce. */
 export function testnetProvider(requested = TESTNET_RPC_URL) {
   if (!TESTNET_RPC_URLS.includes(requested))

@@ -79,6 +79,7 @@ export interface ClaimOutcome {
   transaction?: string;
 }
 export interface UpgradeOutcome {
+  error?: string;
   slot: "weapon" | "armor";
   success: boolean;
   level: number;

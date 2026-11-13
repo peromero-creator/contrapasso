@@ -46,6 +46,8 @@ export interface Input {
   cast?: boolean;
   ultimate?: boolean;
   technique?: number;
+  /** Leave the ground. Attacking in the air commits to a plunging blow. */
+  jump?: boolean;
   dash: boolean;
   /** Offered power slot, 1..3. Zero/undefined means no selection. */
   choice?: number;
@@ -127,6 +129,11 @@ export interface Player extends AbilityState {
   armorLevel: number;
   burnT: number;
   burnCd: number;
+  /** Seconds left in the air. */
+  jumpT: number;
+  jumpCd: number;
+  /** The jump has been committed to a plunging blow. */
+  plunge: boolean;
 }
 
 export type Phase = "fight" | "reward" | "cleared" | "dead" | "won";
@@ -152,7 +159,10 @@ export interface SimEvent {
     | "echo"
     | "ranged"
     | "ability"
-    | "combo";
+    | "combo"
+    | "jump"
+    | "land"
+    | "plunge";
   x: number;
   z: number;
   ability?: AbilityId;
@@ -207,6 +217,12 @@ const STATS: Record<
 
 const P_R = 0.5;
 const P_SPEED = 7.6;
+/** A jump is under half a second off the ground; an attack in the air cuts it into a dive. */
+export const JUMP_TIME = 0.46;
+export const PLUNGE_FALL = 0.13;
+export const PLUNGE_RADIUS = 2.6;
+const JUMP_CD = 0.9;
+const PLUNGE_SPEED = 15;
 const DASH_SPEED = 26;
 const DASH_TIME = 0.16;
 const DASH_CD = 0.75;
@@ -274,6 +290,9 @@ export function createWorld(
       armorLevel: equipment.armorLevel,
       burnT: 0,
       burnCd: 0,
+      jumpT: 0,
+      jumpCd: 0,
+      plunge: false,
     },
     enemies: [],
     shots: [],
@@ -926,6 +945,61 @@ function stepZones(w: World) {
   );
 }
 
+/** In the air: steer freely, or attack once to dive along the aim and break the ground on landing. */
+function airborne(w: World, input: Input) {
+  const p = w.player;
+  p.jumpT -= DT;
+  if (!p.plunge) {
+    p.aim = input.aim;
+    // The dive needs real height first, so a held attack still reads as a leap.
+    if (input.attack && p.jumpT <= JUMP_TIME - 0.12) {
+      p.plunge = true;
+      if (p.jumpT > PLUNGE_FALL) p.jumpT = PLUNGE_FALL;
+    }
+  }
+  if (p.plunge) {
+    p.x += DX[p.aim] * PLUNGE_SPEED * DT;
+    p.z += DZ[p.aim] * PLUNGE_SPEED * DT;
+  } else if (input.move >= 0) {
+    const speed = P_SPEED * (1 + 0.08 * rank(p.skills, "haste"));
+    p.x += DX[input.move] * speed * DT;
+    p.z += DZ[input.move] * speed * DT;
+  }
+  clampArena(p, P_R);
+  if (p.jumpT > 0) return;
+  p.jumpT = 0;
+  p.jumpCd = JUMP_CD;
+  if (!p.plunge) {
+    w.events.push({ type: "land", x: p.x, z: p.z });
+    return;
+  }
+  p.plunge = false;
+  const blade = weapon(p.weaponId);
+  const dmg = Math.round((blade.damage + p.weaponLevel * 2) * blade.heavy);
+  p.attackCd = blade.cooldown;
+  // Coming down inside a crowd is the point of the move: a short grace covers the landing.
+  if (p.invuln < 0.2) p.invuln = 0.2;
+  w.events.push({ type: "plunge", x: p.x, z: p.z, dir: p.aim, amount: PLUNGE_RADIUS });
+  for (const e of w.enemies) {
+    if (e.spawn > 0 || e.hp <= 0) continue;
+    const dx = e.x - p.x,
+      dz = e.z - p.z,
+      reach = PLUNGE_RADIUS + e.r,
+      d2 = dx * dx + dz * dz;
+    if (d2 > reach * reach) continue;
+    hurtEnemy(w, e, dmg);
+    const kb = e.kind === "warden" ? 0 : e.kind === "brute" || e.kind === "champion" ? 0.7 : 1.6;
+    if (e.hp > 0 && e.state !== "act" && kb > 0 && d2 > 0.0001) {
+      const d = Math.sqrt(d2);
+      e.knockX = ((dx / d) * kb * blade.knock) / KNOCK_TIME;
+      e.knockZ = ((dz / d) * kb * blade.knock) / KNOCK_TIME;
+      e.knockT = KNOCK_TIME;
+    }
+  }
+  for (const s of w.shots)
+    if (s.side !== "player" && (s.x - p.x) ** 2 + (s.z - p.z) ** 2 <= PLUNGE_RADIUS * PLUNGE_RADIUS) s.life = 0;
+}
+
 function stepPlayer(w: World, input: Input) {
   const p = w.player;
   if (p.comboT > 0) p.comboT -= DT;
@@ -934,9 +1008,11 @@ function stepPlayer(w: World, input: Input) {
   if (p.invuln > 0) p.invuln -= DT;
   if (p.flash > 0) p.flash -= DT;
   if (p.swingT > 0) p.swingT -= DT;
+  if (p.jumpCd > 0) p.jumpCd -= DT;
   tickAbility(w, p, p, p.skills, p.weaponId, "player");
   if (
     w.phase === "fight" &&
+    p.jumpT <= 0 &&
     p.dashT <= 0 &&
     p.castT <= 0 &&
     p.swingT <= 0 &&
@@ -953,6 +1029,18 @@ function stepPlayer(w: World, input: Input) {
   }
   if (p.castT > 0) {
     p.aim = p.castAim;
+    return;
+  }
+
+  if (input.jump && w.phase === "fight" && p.jumpT <= 0 && p.jumpCd <= 0 && p.dashT <= 0) {
+    p.jumpT = JUMP_TIME;
+    p.plunge = false;
+    p.swingT = 0;
+    p.pendingStrike = false;
+    w.events.push({ type: "jump", x: p.x, z: p.z, dir: input.aim });
+  }
+  if (p.jumpT > 0) {
+    airborne(w, input);
     return;
   }
 
