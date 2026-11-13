@@ -149,7 +149,7 @@ The hero's existing rig now layers distinct weapon accents and ranged hand align
 ## Next steps
 
 1. Record the final demo and review the delivery checklist in `docs/SUBMISSION.md`.
-2. Choose hosting and publish the repository when the owner is ready.
+2. Push the reviewed final commits to the existing public repository; submit the local-demo instructions with the owner’s X video. Hosting is optional.
 3. For production: wallet authentication/recovery, stronger randomness, independent contract review, oracle decentralization and additional bot controls. Mainnet is outside the current demo scope.
 
 ## Preparation and motion presentation
@@ -222,3 +222,9 @@ Effects have one rendering priority policy: enemy warnings above the newest play
 Skill transitions carry the displayed pose into the next clip, with contact-aware bridges and follow-through. Heavy contacts have a restrained camera response, and large area skills briefly widen the view according to the shake setting. Boss phase changes have a short presentation pause; deaths slow briefly and recovery openings receive a floor mark. All simulation timings and replay inputs remain version 0.12.0.
 
 Five painted north walls anchor the gates. A painted pilgrim exit replaces the old translucent cylinder. A repeated stone border replaces the black floor band. Warden, Witness and Cantor have separate floor art; the arena bounds and optional-entry rules are unchanged. Generated braziers, a gate threshold, draped Lust niche, Gluttony cauldron, chained Greed chest and broken Wrath column remain outside the fighting area. Environment models and shaders are prepared before a descent.
+
+## Atlas navigation and idle accents
+
+The corner atlas shows the visible map area, highlights the family in hand and jumps to any of the ten regions. It can be folded away. Fit tree and Home restore the complete overview; zooming out simplifies node labels. An off-hand technique offers an owned-weapon picker. It uses the existing authenticated equipment action, retains level and kill metadata, and respects listing, ownership and pending-action locks. A cosmetic preview grants no gear or training.
+
+Camp occasionally adds a gentle weapon-inspection pose to the existing idle rig; the held model stays mounted to the palm. Dragging eases it out, and Menu motion off freezes the showcase. Low life bends the idle stance, easing back on recovery; movement and combat retain their existing clocks. Third basic contacts leave a compact brush mark; it uses a free slot in the six-mark pool and cannot evict a skill. Circle ambience uses 24 perimeter flecks in one instanced draw, no lights, and freezes under reduced motion. These are presentation changes only; simulation remains 0.12.0 and contract rules remain 0.10.0.

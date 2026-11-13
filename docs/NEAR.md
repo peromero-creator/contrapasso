@@ -169,3 +169,11 @@ Simulation 0.10.1 makes active core zones follow their caster. New runs use the 
 Simulation 0.11.0 adds seeded Solo boss identities, boss recovery openings and a short basic-attack input buffer. New client/referee runs use these shared rules; older unfinished runs must restart. The contract ABI and deployed WASM remain unchanged by this gameplay update.
 
 Simulation 0.12.0 moves bosses behind optional gates on circles II, IV and V. The referee validates entry at the cleared gate and verifies both boss and skip routes. Existing coin caps and one-time result settlement still apply; no contract update is needed.
+
+## Delivery readback (2026-11-14, Istanbul)
+
+The deployed 0.10.0 WASM still matches the published hash above. Rebuilding commit `49e81d6` reproduces that hash exactly. The current contract bundle differs only in five skill-description strings inherited from the shared catalog; executable logic, costs and ABI are unchanged. A current build therefore has a different hash without requiring a gameplay migration. The full current WASM suite passed again.
+
+A new simulation-0.12.0 Solo replay was accepted by the live referee and saved on testnet: [transaction](https://testnet.nearblocks.io/txns/7UeBxJYi394uBP19ZJnhZFW4Kx1groYeKEarVv24B1mM). Repeating the result did not award again. Readback confirmed the existing resold Cinder Requiem still belongs to its buyer at +1 and that prior Duel locks are released. Earlier paid mint/resale evidence remains historical; it was not presented as a new mint or sale.
+
+The skill-atlas equipment shortcut was also exercised with the existing buyer account: [equip the purchased +1 blade](https://testnet.nearblocks.io/txns/FaE1ykS9tH7PNNotBjP636oo9G16XTncS3yQtr1fBMuM), then [restore its original spear](https://testnet.nearblocks.io/txns/9KYKRxfyQWpJcqT394eRGeTVAZpESQWdCgYaktM8by1f). The preview, damage and action bar followed confirmed equipment; coin stayed at 77 and the three learned skills were unchanged.
