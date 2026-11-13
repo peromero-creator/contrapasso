@@ -100,6 +100,17 @@ prepared.root.traverse(node => {
     assert.equal(node.frustumCulled, false, 'approximate sorting sphere never clips animated limbs');
   }
 });
+const larger = new AnimatedModel({ scene: rig, animations: [] } as any, 4, 0);
+function outlineShader(actor: AnimatedModel) {
+  let material: T.Material | undefined;
+  actor.root.traverse(n=>{if(n instanceof T.SkinnedMesh && !Array.isArray(n.material) && n.material.side === T.BackSide)material=n.material;});
+  const shader={vertexShader:'#include <begin_vertex>',uniforms:{}} as any;
+  material!.onBeforeCompile(shader, {} as any); return shader;
+}
+const smallOutline=outlineShader(prepared),bigOutline=outlineShader(larger);
+assert.equal(smallOutline.vertexShader,bigOutline.vertexShader,'different actor scales share a shader program');
+assert.equal(smallOutline.uniforms.inkWidth.value,bigOutline.uniforms.inkWidth.value*2,'outline width belongs to each material, not the first compiled actor');
+larger.dispose();
 prepared.dispose();
 const skinnedEchoes=new Afterimages(scene);skinnedEchoes.emit(rig);
 const copy=scene.children.find(n=>n.getObjectByName('body'))!.getObjectByName('body') as T.SkinnedMesh;

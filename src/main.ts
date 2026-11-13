@@ -1,3 +1,4 @@
+import { BOSSES } from './sim/bosses.ts';
 import { SkillInputBuffer } from "./ui/skill-input";
 import { loadoutWeapons } from "./ui/loadout";
 import { SkillTree } from "./ui/skill-tree";
@@ -400,6 +401,15 @@ function updateHud(dt: number) {
     const opponent = world.enemies.find((e) => e.kind === "champion");
     $("duel-boss-fill").style.width =
       `${opponent ? Math.max(0, opponent.hp / opponent.maxHp) * 100 : 0}%`;
+  }
+  if (world.mode !== "duel") {
+    const boss = world.enemies.find(e => e.kind === "warden" && e.hp > 0);
+    $("duel-boss").classList.toggle("hidden", !boss);
+    if (boss) {
+      const opening = boss.state === 'recover' && !boss.openingSpent;
+      $("duel-boss-name").textContent = `${BOSSES[boss.boss ?? 'warden'].name.toUpperCase()}${opening ? ' · FINISHER OPENING' : ''}`;
+      $("duel-boss-fill").style.width = `${Math.max(0,boss.hp/boss.maxHp)*100}%`;
+    }
   }
   $("portal-hint").classList.toggle("hidden", world.phase !== "cleared");
   const seconds = Math.floor(world.tick / 60);

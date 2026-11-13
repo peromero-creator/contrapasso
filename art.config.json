@@ -393,6 +393,107 @@
         "license": "Project asset",
         "source": "Original Google Flow concept art/source/acheron-needle.jpg converted through Meshy image-to-3D"
       }
+    },
+    "cantor": {
+      "source": "art/source/cinder-cantor.glb",
+      "height": 4.6,
+      "rotationY": 90,
+      "textureSize": 512,
+      "clips": {
+        "idle": {
+          "file": "art/source/cinder-cantor-actions.glb",
+          "clip": "Idle"
+        },
+        "run": {
+          "file": "art/source/cinder-cantor-actions.glb",
+          "clip": "Run_02"
+        },
+        "dash": {
+          "file": "art/source/cinder-cantor-actions.glb",
+          "clip": "Run_02"
+        },
+        "attack": {
+          "file": "art/source/cinder-cantor-actions.glb",
+          "clip": "mage_soell_cast"
+        },
+        "death": {
+          "file": "art/source/cinder-cantor-actions.glb",
+          "clip": "Dead"
+        },
+        "attack-slam": {
+          "file": "art/source/cinder-cantor-actions.glb",
+          "clip": "Charged_Ground_Slam"
+        }
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "dash",
+        "attack",
+        "death",
+        "attack-slam"
+      ],
+      "windows": {
+        "attack": [
+          0.35,
+          1.75
+        ],
+        "attack-slam": [
+          1.05,
+          2.8
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/cinder-cantor.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
+      }
+    },
+    "witness": {
+      "source": "art/source/hollow-witness.glb",
+      "height": 4.6,
+      "rotationY": 90,
+      "textureSize": 512,
+      "clips": {
+        "idle": {
+          "file": "art/source/hollow-witness-actions.glb",
+          "clip": "Idle"
+        },
+        "run": {
+          "file": "art/source/hollow-witness-actions.glb",
+          "clip": "Run_02"
+        },
+        "dash": {
+          "file": "art/source/hollow-witness-actions.glb",
+          "clip": "Run_02"
+        },
+        "attack": {
+          "file": "art/source/hollow-witness-actions.glb",
+          "clip": "mage_soell_cast_3"
+        },
+        "death": {
+          "file": "art/source/hollow-witness-actions.glb",
+          "clip": "Dead"
+        }
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "dash",
+        "attack",
+        "death"
+      ],
+      "windows": {
+        "attack": [
+          0.35,
+          1.45
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/hollow-witness.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
+      }
     }
   },
   "floors": {

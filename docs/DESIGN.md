@@ -17,7 +17,7 @@ In Dante's poem a _contrapasso_ is a punishment that mirrors the sin. In this ga
 
 ## Solo
 
-A run is five floors, one circle each. Each floor is one arena with waves of enemies; the boss waits on the fifth floor. After a floor the player chooses an offered rank for an already unlocked power; with no eligible power, the gate opens immediately. Solo is where coin is earned.
+A run is five floors, one circle each. Each floor is one arena with waves of enemies; one of three bosses waits on the fifth floor. After a floor the player chooses an offered rank for an already unlocked power; with no eligible power, the gate opens immediately. Solo is where coin is earned.
 
 ## Duel
 
@@ -192,4 +192,12 @@ Afterimages never contribute lights. The held weapon's light lives in the scene 
 
 Solo enemies have distinct, matte windup cues: the imp's close strike fills a small circle, archers show their tracking aim, brutes and charging Wardens mark a locked lane, and a Warden's radial volley uses an outward-pointing seal instead of a charge lane. The lane stops at the arena boundary. These are anticipation cues, not new damage zones; the existing contact rules, dodge windows and replays are unchanged. The imp's attack animation now uses its actual 0.42-second windup.
 
-Cues follow the displayed enemy position independently of body shake and recoil. They fill continuously without blinking or adding lights, disappear when the windup ends, and share geometry across enemies. Each active warning uses at most three draws. Duel keeps its existing weapon/skill presentation.
+Cues follow the displayed enemy position independently of body shake and recoil. They fill continuously without blinking or adding lights, share geometry across enemies, and normally disappear at release. The Witness gaze remains visible for its brief contact beat. Each active warning uses at most three draws. Duel keeps its existing weapon/skill presentation.
+
+## Boss encounters and combo openings (simulation 0.11)
+
+The final Solo wave selects one of three bosses deterministically from the run seed. The Warden keeps its charge/radial pattern. The Hollow Witness fixes a narrow gaze lane before striking, alternating with slow radial volleys. The Cinder Cantor alternates a fixed-aim projectile fan, a close circular slam and a charge. Below half life the two ritual bosses add projectiles; the phase is captured at the start of a warning, so taking damage cannot widen a volley mid-warning. Damage geometry and floor tells share the same constants. The arena and existing wave rewards stay unchanged.
+
+A boss's recovery is a visible opening. The first weapon finisher (every third basic strike or shot) to hit during that recovery gains 20% damage and extends recovery by 0.18 seconds. Further hits cannot extend it again. Techniques and passive damage do not consume the opening. A compact boss bar names the opponent and signals the opening.
+
+Basic attack taps are retained for up to ten simulation ticks, letting a slightly early second or third press begin when the weapon is ready. The queued attack keeps its aim, executes once, and is cancelled by a dash, jump or committed ability. This does not shorten weapon cooldowns or grant new powers. Client and referee both use simulation 0.11.0; older unfinished runs must restart. NFT ownership, traits, payouts and contract ABI are unchanged.

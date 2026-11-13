@@ -1,3 +1,4 @@
+import { bossMove, bossWindup, SLAM_RADIUS } from '../sim/bosses.ts';
 import { PresentationSample } from "./presentation-sample.ts";
 import { programSamples } from "./program-warmup.ts";
 import { techniqueId, TECHNIQUES } from "../sim/techniques";
@@ -112,6 +113,8 @@ interface EnemyView {
   hpFg: THREE.Sprite;
   tele: THREE.Mesh | null;
   threat?: EnemyThreat;
+  bossPattern?: number;
+  bossProgress?: number;
   h: number;
   model?: AnimatedModel;
   weaponModel?: AnimatedModel;
@@ -201,7 +204,7 @@ export class View {
   prepare() {
     return this.preparation ??= (async () => {
       await Promise.all(this.actorLoads);
-      const models = await Promise.all(['imp', 'archer', 'brute', 'warden'].map(kind => this.models.create(kind)));
+      const models = await Promise.all(['imp', 'archer', 'brute', 'warden', 'witness', 'cantor'].map(kind => this.models.create(kind)));
       const warmup = new THREE.Scene();
       const textures = new Set<THREE.Texture>();
       for (const model of models) if (model) {
@@ -1141,6 +1144,9 @@ export class View {
         case "burn":
           this.burst(e.x, 0.6, e.z, 2, 0xff852a, 1.4);
           break;
+        case "boss-impact":
+          if (e.bossMove === 'slam') { this.impact.ring(e.x, e.z, SLAM_RADIUS, 0xb28368); this.shake = Math.max(this.shake,.08); }
+          break;
         case "nova":
           this.impact.ring(e.x, e.z, e.amount ?? 3, 0xffcd7e, e.followsCaster);
           this.burst(e.x, 0.4, e.z, 16, 0xffcd7e, 5);
@@ -1351,7 +1357,7 @@ export class View {
         v = this.makeEnemy(e.kind);
         this.enemies.set(e.id, v);
         const actor = v;
-        void this.models.create(e.kind, v.h - 0.3).then((model) => {
+        void this.models.create(e.boss ?? e.kind, v.h - 0.3).then((model) => {
           if (!model) return;
           if (this.enemies.get(e.id) !== actor) {
             model.dispose();
@@ -1387,7 +1393,7 @@ export class View {
       this.syncEnemy(e, v, position);
       v.model?.update(dt, e.kind === 'champion' && (e.ability?.castT ?? 0) > 0 ? {
         weapon: e.weaponId ?? 'starter', ability: e.ability!.castId, elapsed: abilityDuration(e.ability!.castId!) - e.ability!.castT, combo: Number(e.ability!.castId?.split('-')[1]) || 1,
-      } : undefined);
+      } : undefined, 0, v.bossProgress);
     }
     for (const [id, v] of this.enemies) {
       if (seen.has(id)) continue;
@@ -1585,7 +1591,7 @@ export class View {
     const k = e.flash > 0 ? Math.min(1, e.flash / 0.14) : 0;
     const heft = e.kind === "warden" ? 0.35 : e.kind === "brute" || e.kind === "champion" ? 0.6 : 1;
     const wob = k > 0 ? Math.exp(-3.2 * (1 - k)) * Math.cos((1 - k) * 8.5) * heft : 0;
-    const charge = wind ? Math.max(0, Math.min(1, 1 - e.t / (WINDUP[e.kind] || 0.5))) : 0;
+    const charge = wind ? Math.max(0, Math.min(1, 1 - e.t / (e.kind === "warden" ? bossWindup(e) : WINDUP[e.kind] || 0.5))) : 0;
     const tremble = wind ? Math.sin(this.time * 46 + e.id) * (0.012 + 0.04 * charge) : 0;
     v.group.position.set(position.x + tremble, 0, position.z);
     v.group.rotation.set(
@@ -1609,7 +1615,9 @@ export class View {
     const rising = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 0.9) : 1;
     v.group.scale.set(1 + 0.2 * wob, rising * (1 - 0.15 * wob), 1 + 0.2 * wob);
     if (v.model) {
-      const state =
+      const ritual = e.kind === 'warden' && e.boss && e.boss !== 'warden';
+      const casting = ritual && (wind || e.state === 'recover') && bossMove(e) !== 'charge';
+      const state = casting ? (bossMove(e) === 'slam' ? 'attack-slam' : 'attack') :
         (e.ability?.castT ?? 0) > 0
           ? abilityClip(e.ability!.castId!, e.weaponId ?? "starter")
           : e.state === "act"
@@ -1628,11 +1636,21 @@ export class View {
           : state.startsWith("ultimate")
             ? CORE_TIME
             : state.startsWith("attack")
-              ? WINDUP[e.kind]
+              ? e.kind === "warden" ? bossWindup(e) : WINDUP[e.kind]
               : state === "dash"
                 ? CHARGE[e.kind]
                 : undefined,
+        !!ritual && wind && v.bossPattern !== e.pattern,
       );
+      if (ritual) {
+        if (v.bossPattern !== e.pattern) { v.bossPattern = e.pattern; v.bossProgress = 0; }
+        if (casting) {
+          const contact = bossMove(e) === "slam" ? .43 : .7;
+          const duration = bossMove(e) === "slam" ? 1.45 : 1.25;
+          const progress = wind ? contact * (1 - e.t / bossWindup(e)) : contact + (1-contact)*Math.min(1, Math.max(0,duration-e.t)/.5);
+          v.bossProgress = Math.max(v.bossProgress ?? 0, progress);
+        } else v.bossProgress = undefined;
+      }
       v.model.flash(
         e.flash > 0.09
           ? 0x503a28

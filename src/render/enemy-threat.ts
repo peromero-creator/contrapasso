@@ -1,15 +1,19 @@
+import { bossMove, bossWindup, GAZE_LENGTH, GAZE_HALF_WIDTH, SLAM_RADIUS } from '../sim/bosses.ts';
 import * as T from 'three';
 import { ARENA_HX, ARENA_HZ, type Enemy } from '../sim/world.ts';
 
 /** Presentation of existing Solo rules, not a second damage system. Archer aim
  * tracks during its windup; charge directions are already locked by the sim. */
 export function enemyThreat(e: Enemy) {
-  if (e.hp <= 0 || e.spawn > 0 || e.state !== 'windup' || e.kind === 'champion') return null;
-  const duration = e.kind === 'imp' ? .42 : e.kind === 'brute' ? .65 : .5;
-  const progress = Math.max(0, Math.min(1, 1 - e.t / duration));
+  if (e.hp <= 0 || e.spawn > 0 || (e.state !== 'windup' && !(e.kind === 'warden' && (e.impactT ?? 0) > 0 && bossMove(e) === 'gaze')) || e.kind === 'champion') return null;
+  const duration = e.kind === 'imp' ? .42 : e.kind === 'brute' ? .65 : e.kind === 'warden' ? bossWindup(e) : .5;
+  const progress = Math.max(0, Math.min(1, e.state === 'recover' ? 1 : 1 - e.t / duration));
   if (e.kind === 'imp') return { shape: 'circle' as const, progress, radius: e.r + .5 + 1.25, length: 0, width: 0 };
+  if (e.kind === 'warden' && bossMove(e) === 'gaze') return { shape: 'charge' as const, progress, radius: 0, length: GAZE_LENGTH, width: GAZE_HALF_WIDTH * 2 };
+  if (e.kind === 'warden' && bossMove(e) === 'slam') return { shape: 'circle' as const, progress, radius: SLAM_RADIUS, length: 0, width: 0 };
+  if (e.kind === 'warden' && bossMove(e) === 'fan') return { shape: 'fan' as const, progress, radius: 0, length: 12, width: 0 };
   // A radial volley has no fixed lane: its random offset is chosen at release.
-  if (e.kind === 'warden' && e.pattern % 3 === 0)
+  if (e.kind === 'warden' && bossMove(e) === 'burst')
     return { shape: 'burst' as const, progress, radius: e.r + .85, length: 0, width: 0 };
   if (e.kind === 'archer') return { shape: 'aim' as const, progress, radius: 0, length: 12, width: .10 };
   const reach = e.r + .5 + .35;
@@ -27,6 +31,15 @@ const laneEdges = new T.BufferGeometry(), edgeVertices: number[] = [];
 for (const [x0,z0,x1,z1] of [[0,-.5,1,-.485],[0,.485,1,.5],[0,-.5,.006,.5],[.994,-.5,1,.5]])
   for (const [x,z] of [[x0,z0],[x1,z0],[x1,z1],[x0,z0],[x1,z1],[x0,z1]]) edgeVertices.push(x,0,z);
 laneEdges.setAttribute('position',new T.Float32BufferAttribute(edgeVertices,3));
+function fanGeometry(offsets: number[]) {
+  const geometry = new T.BufferGeometry(), vertices:number[]=[];
+  for (const offset of offsets) {
+    const a=offset*Math.PI*2/1024,c=Math.cos(a),s=Math.sin(a);
+    for(const [x,z] of [[1.5,-.035],[12,-.035],[12,.035],[1.5,-.035],[12,.035],[1.5,.035]]) vertices.push(x*c-z*s,0,x*s+z*c);
+  }
+  geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3)); return geometry;
+}
+const fanNarrow = fanGeometry([-42,0,42]), fanWide = fanGeometry([-84,-42,0,42,84]);
 const arrow = new T.BufferGeometry();
 arrow.setAttribute('position', new T.Float32BufferAttribute([0,0,-.36, .35,0,0, 0,0,.36, .08,0,0],3));
 arrow.setIndex([0,1,3,1,2,3]);
@@ -58,8 +71,13 @@ export class EnemyThreat {
     this.root.position.set(position.x, 0, position.z);
     this.root.rotation.y = -Math.atan2(e.dz, e.dx);
     const p = cue.progress;
+    if (cue.shape === 'fan') {
+      this.fill.geometry=e.enraged ? fanWide : fanNarrow; this.fill.scale.set(1,1,1); this.fill.visible=true;this.fill.material.opacity=.18+.22*p;
+      // Outer rays appear only in the second phase, captured at windup start.
+      this.border.visible=this.tip.visible=false; return;
+    }
     // One continuous fill, no late flash or sinusoidal blinking.
-    this.fill.material.opacity = cue.shape === 'aim' ? .22 + .28 * p : .06 + .08 * p;
+    this.fill.material.opacity = e.state === 'recover' ? .38 : cue.shape === 'aim' ? .22 + .28 * p : .06 + .08 * p;
     this.border.material.opacity = .28 + .28 * p;
     this.tip.material.opacity = .40 + .28 * p;
     this.tip.visible = cue.shape !== 'circle';

@@ -1,3 +1,4 @@
+import { BOSS_IDS, bossMove, bossWindup, gazeHits, SLAM_RADIUS, type BossId } from './bosses.ts';
 import { TECHNIQUES, techniqueId, weaponTechniques, type TechniqueId, type Technique } from "./techniques.ts";
 import {
   abilityState,
@@ -59,6 +60,10 @@ export type EnemyState = "seek" | "windup" | "act" | "recover";
 export interface Enemy {
   id: number;
   kind: EnemyKind;
+  boss?: BossId;
+  enraged?: boolean;
+  openingSpent?: boolean;
+  impactT?: number;
   x: number;
   z: number;
   hp: number;
@@ -103,6 +108,8 @@ export interface Shot {
   hitIds?: number[];
   skills?: Skills;
   heavy?: boolean;
+  /** Basic weapon third shot; spell heaviness does not consume boss openings. */
+  finisher?: boolean;
 }
 
 export interface Player extends AbilityState {
@@ -114,6 +121,8 @@ export interface Player extends AbilityState {
   swingT: number;
   swingN: number;
   pendingStrike: boolean;
+  attackQueue: number;
+  attackQueueAim: number;
   attackCd: number;
   dashT: number;
   dashCd: number;
@@ -140,6 +149,7 @@ export type Phase = "fight" | "reward" | "cleared" | "dead" | "won";
 
 export interface SimEvent {
   type:
+    | "boss-impact"
     | "swing"
     | "hit"
     | "kill"
@@ -165,6 +175,7 @@ export interface SimEvent {
     | "plunge";
   x: number;
   z: number;
+  bossMove?: "gaze" | "slam";
   ability?: AbilityId;
   stage?: "charge" | "release" | "pulse";
   side?: "player" | "enemy";
@@ -276,6 +287,8 @@ export function createWorld(
       swingT: 0,
       swingN: 0,
       pendingStrike: false,
+      attackQueue: 0,
+      attackQueueAim: 0,
       attackCd: 0,
       dashT: 0,
       dashCd: 0,
@@ -404,6 +417,7 @@ function spawnEnemy(w: World, kind: EnemyKind) {
   w.enemies.push({
     id: w.nextId++,
     kind,
+    ...(kind === "warden" ? { boss: BOSS_IDS[w.seed % BOSS_IDS.length] } : {}),
     x,
     z,
     hp,
@@ -637,8 +651,17 @@ function fireWeapon(
       hitIds: [],
       skills: { ...skills },
       heavy,
+      finisher: heavy,
     });
   }
+}
+
+function punishOpening(w: World, e: Enemy, damage: number, heavy: boolean) {
+  if (!heavy || e.kind !== "warden" || e.state !== "recover" || e.openingSpent) return damage;
+  e.openingSpent = true;
+  e.t += .18;
+  w.events.push({ type: "combo", x: e.x, z: e.z });
+  return Math.round(damage * 1.2);
 }
 
 function melee(w: World) {
@@ -683,7 +706,7 @@ function melee(w: World) {
     hurtEnemy(
       w,
       e,
-      Math.round(dmg * executionBonus(p.weaponId, heavy, e.hp, e.maxHp)),
+      punishOpening(w, e, Math.round(dmg * executionBonus(p.weaponId, heavy, e.hp, e.maxHp)), heavy),
     );
     if (heavy && burning && rank(p.skills, "pyre"))
       nova(w, e.x, e.z, 2.5, 12 * rank(p.skills, "pyre"), "ember");
@@ -1005,6 +1028,11 @@ function airborne(w: World, input: Input) {
 
 function stepPlayer(w: World, input: Input) {
   const p = w.player;
+  if (p.attackQueue > 0) p.attackQueue--;
+  if (input.attack && p.castT <= 0 && p.dashT <= 0 && p.jumpT <= 0) {
+    p.attackQueue = 10;
+    p.attackQueueAim = input.aim;
+  }
   if (p.comboT > 0) p.comboT -= DT;
   if (p.attackCd > 0) p.attackCd -= DT;
   if (p.dashCd > 0) p.dashCd -= DT;
@@ -1031,11 +1059,13 @@ function stepPlayer(w: World, input: Input) {
     }
   }
   if (p.castT > 0) {
+    p.attackQueue = 0;
     p.aim = p.castAim;
     return;
   }
 
   if (input.jump && w.phase === "fight" && p.jumpT <= 0 && p.jumpCd <= 0 && p.dashT <= 0) {
+    p.attackQueue = 0;
     p.jumpT = JUMP_TIME;
     p.plunge = false;
     p.swingT = 0;
@@ -1048,6 +1078,7 @@ function stepPlayer(w: World, input: Input) {
   }
 
   if (input.dash && p.dashCd <= 0 && p.dashT <= 0) {
+    p.attackQueue = 0;
     p.dashDir = input.move >= 0 ? input.move : input.aim;
     p.dashT = DASH_TIME;
     p.comboT = 1 + DASH_TIME;
@@ -1085,8 +1116,9 @@ function stepPlayer(w: World, input: Input) {
       melee(w);
     }
     if (p.swingT <= 0) p.aim = input.aim;
-    if (input.attack && p.attackCd <= 0) {
-      p.aim = input.aim;
+    if ((input.attack || p.attackQueue > 0) && p.attackCd <= 0 && p.swingT <= 0) {
+      p.aim = input.attack ? input.aim : p.attackQueueAim;
+      p.attackQueue = 0;
       p.swingN += 1;
       const blade = weapon(p.weaponId);
       p.swingT = blade.swing;
@@ -1134,12 +1166,51 @@ function stepPlayer(w: World, input: Input) {
   clampArena(p, P_R);
 }
 
+function stepRitualBoss(w: World, e: Enemy, ex: number, ez: number, d: number) {
+  if (e.state === "seek") {
+    e.dx = ex; e.dz = ez;
+    const desired = e.boss === "witness" ? 7 : 3.5;
+    if (d > desired) { e.x += ex * 2.8 * DT; e.z += ez * 2.8 * DT; }
+    if (e.cd <= 0 && d < 14) {
+      e.pattern++; e.enraged = e.hp < e.maxHp * .5;
+      e.state = "windup"; e.t = bossWindup(e); e.hitDone = false; e.openingSpent = false;
+    }
+    return;
+  }
+  e.t -= DT;
+  const move = bossMove(e);
+  if (e.state === "windup" && e.t <= 0) {
+    if (move === "charge") { e.state = "act"; e.t = .6; return; }
+    if (move === "gaze" || move === "slam") {
+      if (move === "gaze" ? gazeHits(e, w.player) : (e.x-w.player.x)**2+(e.z-w.player.z)**2 <= SLAM_RADIUS**2)
+        hurtPlayer(w, move === "gaze" ? 19 : 23);
+      e.impactT = .18;
+      w.events.push({ type: "boss-impact", x:e.x,z:e.z,dir:dirIndex(e.dx,e.dz), bossMove:move });
+    } else {
+      const n = move === "burst" ? (e.enraged ? 14 : 10) : (e.enraged ? 5 : 3);
+      const aim = dirIndex(e.dx,e.dz);
+      for (let i=0;i<n;i++) {
+        const di=(aim+(move === "burst" ? Math.floor(i*DIRS/n) : (i-(n-1)/2)*42)+DIRS)%DIRS;
+        fireShot(w,e.x+DX[di]*e.r,e.z+DZ[di]*e.r,DX[di],DZ[di],move === "burst" ? 7 : 10,12);
+      }
+    }
+    e.state = "recover"; e.t = move === "slam" ? 1.45 : 1.25; e.cd = 0;
+  } else if (e.state === "act") {
+    e.x += e.dx * 19 * DT; e.z += e.dz * 19 * DT;
+    if (!e.hitDone && (e.x-w.player.x)**2+(e.z-w.player.z)**2 < (e.r+P_R+.35)**2) {
+      hurtPlayer(w,24); e.hitDone = true;
+    }
+    if (e.t <= 0) { e.state = "recover"; e.t = 1.2; e.cd = 0; }
+  } else if (e.state === "recover" && e.t <= 0) e.state = "seek";
+}
+
 function stepEnemy(w: World, e: Enemy) {
   // A killing swing resolves before enemies act on this tick.
   if (e.hp <= 0) return;
   const p = w.player;
   const s = STATS[e.kind];
   if (e.flash > 0) e.flash -= DT;
+  if ((e.impactT ?? 0) > 0) e.impactT! -= DT;
   if (e.spawn > 0) {
     e.spawn -= DT;
     return;
@@ -1373,6 +1444,10 @@ function stepEnemy(w: World, e: Enemy) {
     }
     case "brute":
     case "warden": {
+      if (e.kind === "warden" && e.boss && e.boss !== "warden") {
+        stepRitualBoss(w, e, ex, ez, d);
+        break;
+      }
       const boss = e.kind === "warden";
       if (e.state === "seek") {
         e.dx = ex;
@@ -1384,6 +1459,7 @@ function stepEnemy(w: World, e: Enemy) {
           e.t = boss ? 0.5 : 0.65;
           e.hitDone = false;
           e.pattern += 1;
+          e.openingSpent = false;
         }
       } else if (e.state === "windup") {
         e.t -= DT;
@@ -1518,7 +1594,7 @@ export function step(w: World, input: Input): void {
         if (e.hp <= 0 || e.spawn > 0 || s.hitIds?.includes(e.id)) continue;
         if ((s.x - e.x) ** 2 + (s.z - e.z) ** 2 > (e.r + 0.2) ** 2) continue;
         const burning = e.burnT > 0;
-        hurtEnemy(w, e, s.dmg);
+        hurtEnemy(w, e, punishOpening(w, e, s.dmg, !!s.finisher));
         if (rank(s.skills ?? {}, "ember")) e.burnT = 3;
         if (s.heavy && burning && rank(s.skills ?? {}, "pyre"))
           nova(w, e.x, e.z, 2.5, 12 * rank(s.skills ?? {}, "pyre"), "ember");

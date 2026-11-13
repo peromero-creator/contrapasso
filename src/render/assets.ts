@@ -157,9 +157,12 @@ export class AnimatedModel {
         side: THREE.BackSide,
       });
       ink.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader.replace(
+        // Width is per material. Baking a captured constant into identical shader
+        // callbacks lets the program cache reuse another model's outline width.
+        shader.uniforms.inkWidth = { value: width };
+        shader.vertexShader = "uniform float inkWidth;\n" + shader.vertexShader.replace(
           "#include <begin_vertex>",
-          `#include <begin_vertex>\n  transformed += normalize(objectNormal) * ${width.toFixed(6)};`,
+          `#include <begin_vertex>\n  transformed += normalize(objectNormal) * inkWidth;`,
         );
       };
       this.allMaterials.add(ink);
@@ -217,13 +220,17 @@ export class AnimatedModel {
       else m.material.emissive.setHex(color);
     }
   }
-  update(dt: number, motion?: CombatMotion, air = 0) {
+  update(dt: number, motion?: CombatMotion, air = 0, clipProgress?: number) {
     this.transition.restore();
     // Restore before sampling: additive accents never accumulate on idle or a new clip.
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
     this.posed.clear();
     if(this.staffFocus)this.staffFocus.visible=false;
     this.presentation.position.y = combatLift(motion) + air;
+    if (clipProgress !== undefined && this.active) {
+      this.active.time = Math.max(0, Math.min(1, clipProgress)) * this.active.getClip().duration;
+      this.mixer.update(0); this.transition.apply(dt); return;
+    }
     if (!motion || !this.active) { this.mixer.update(dt); this.transition.apply(dt); return; }
     this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;
     this.mixer.update(0);

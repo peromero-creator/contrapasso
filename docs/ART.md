@@ -143,3 +143,11 @@ Animation transitions capture the displayed rig pose, including hand corrections
 The imp, archer and brute builds set `simplify: { "ratio": 0.5, "error": 0.005 }` in `art.config.json`. The packer applies Meshopt simplification after welding and before compression; the error bound can stop it before the target ratio. Current triangle counts are 4,572 / 5,266 / 7,128 (previously 9,147 / 10,550 / 12,690). The 1024-pixel textures, 24-joint rigs and all animation sampler values are retained. Original source GLBs remain unchanged, so the runtime exports can be rebuilt or retuned. Hero and held-weapon geometry is unchanged.
 
 Ritual ribbon groups and repeated plate/flame shapes reuse immutable geometry. Flat translucent strokes use a single rendering pass while keeping their normal alpha blending. No generated art, texture downscaling or paid service was used for this optimization.
+
+## Ritual bosses
+
+The Hollow Witness and Cinder Cantor are original Flow concepts developed from owner-supplied references to eye-bearing palms, ritual horns and funerary drapery. Their source concepts are `art/source/hollow-witness.jpg` and `art/source/cinder-cantor.jpg`. The original social-media screenshots are not game assets and are not redistributed in this repository.
+
+Both characters now use separate Meshy rigs and preset clips. The Witness uses Mage Spell Cast 3; the Cantor uses Mage Spell Cast and Charged Ground Slam, alongside idle, run and death. The render clock samples the selected attack through preparation, contact and recovery; a finisher-induced recovery extension cannot rewind the displayed pose. These are adapted presets, not bespoke motion capture. Their packed exports use 512px textures and approximately 6,100 triangles each, under 450 KB per character. Boss models/textures/shaders are prepared before play, and reuse the existing bounded effects with no additional lights or postprocessing.
+
+Outline thickness is supplied per material rather than baked into a shared shader program. Differently sized actors therefore retain the intended line weight without requiring a new shader variant for each size. Architectural exploration for a bell hall, palm-eye pillars and balconies is a separate concept direction; it is not a shipped new map.

@@ -285,6 +285,61 @@
         "license": "Project asset",
         "source": "Original Google Flow concept art/source/acheron-needle.jpg converted through Meshy image-to-3D"
       }
+    },
+    "cantor": {
+      "file": "/assets/models/cantor-3a1fcdc5592a.glb",
+      "height": 4.6,
+      "rotationY": 90,
+      "clips": [
+        "Armature|clip0|baselayer",
+        "idle",
+        "run",
+        "dash",
+        "attack",
+        "death",
+        "attack-slam"
+      ],
+      "bytes": 417024,
+      "windows": {
+        "attack": [
+          0.35,
+          1.75
+        ],
+        "attack-slam": [
+          1.05,
+          2.8
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/cinder-cantor.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
+      }
+    },
+    "witness": {
+      "file": "/assets/models/witness-3ce54b67f7e5.glb",
+      "height": 4.6,
+      "rotationY": 90,
+      "clips": [
+        "Armature|clip0|baselayer",
+        "idle",
+        "run",
+        "dash",
+        "attack",
+        "death"
+      ],
+      "bytes": 443368,
+      "windows": {
+        "attack": [
+          0.35,
+          1.45
+        ]
+      },
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/hollow-witness.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
+      }
     }
   },
   "floors": {
