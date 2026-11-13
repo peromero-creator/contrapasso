@@ -103,6 +103,24 @@ for (const core of CORE_IDS) {
   }
 }
 const overkill = arena();
+// Every core follows its owner, including subsequent Furnace Heart pulses.
+// The old cast position must stop doing damage after the owner moves away.
+for (const core of CORE_IDS) {
+  const w = arena(core);
+  w.player.charge = 100;
+  step(w, { ...idle, ultimate: true });
+  frames(w, 40);
+  assert.ok(w.zones.length > 0);
+  w.player.castT = 0;
+  w.player.x = 10;
+  w.enemies = [enemy(0, 0, 101), enemy(10, 0, 102)];
+  frames(w, 32);
+  if (core !== 'iron') {
+    assert.equal(w.enemies[0].hp, 2000, `${core}: abandoned origin does not hit`);
+    assert.ok(w.enemies[1].hp < 2000, `${core}: next pulse hits around the owner`);
+  }
+  for (const zone of w.zones) assert.equal(zone.x, w.player.x);
+}
 overkill.enemies[0].hp = 1;
 step(overkill, { ...idle, attack: true });
 assert.ok(overkill.player.charge < 1, "overkill cannot farm charge");

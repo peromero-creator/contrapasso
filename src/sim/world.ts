@@ -171,6 +171,7 @@ export interface SimEvent {
   kind?: EnemyKind;
   amount?: number;
   dir?: number;
+  followsCaster?: boolean;
 }
 
 export interface World {
@@ -501,6 +502,7 @@ function nova(
   radius: number,
   dmg: number,
   motif?: CoreId,
+  followsCaster = motif === 'ash' || motif === 'iron',
 ) {
   for (const e of w.enemies) {
     if (e.spawn > 0 || e.hp <= 0) continue;
@@ -516,7 +518,7 @@ function nova(
       (s.x - x) ** 2 + (s.z - z) ** 2 <= radius * radius
     )
       s.life = 0;
-  w.events.push({ type: "nova", x, z, amount: radius });
+  w.events.push({ type: "nova", x, z, amount: radius, followsCaster });
   if (motif)
     w.events.push({
       type: "ability",
@@ -525,6 +527,7 @@ function nova(
       x,
       z,
       amount: radius,
+      followsCaster,
     });
 }
 
@@ -876,10 +879,10 @@ function stepZones(w: World) {
       z.age = 99;
       continue;
     }
-    if (z.id === "ash") {
-      z.x = owner.x;
-      z.z = owner.z;
-    }
+    // All active cores are carried auras. Their next pulse must hit where the
+    // wielder (and the visible ring) is, never the abandoned cast position.
+    z.x = owner.x;
+    z.z = owner.z;
     const max = z.id === "ember" ? 3 : z.id === "ash" ? 6 : 1;
     if (z.pulses < max && z.age + 0.00001 >= z.pulses * 0.5) {
       const radius =
@@ -1062,8 +1065,8 @@ function stepPlayer(w: World, input: Input) {
     p.x += DX[p.dashDir] * DASH_SPEED * DT;
     p.z += DZ[p.dashDir] * DASH_SPEED * DT;
     if (p.dashT <= 0 && rank(p.skills, "afterimage")) {
-      nova(w, p.x, p.z, 2.8, 12 * rank(p.skills, "afterimage"));
-      w.events.push({ type: "echo", x: p.x, z: p.z });
+      nova(w, p.x, p.z, 2.8, 12 * rank(p.skills, "afterimage"), undefined, true);
+      w.events.push({ type: "echo", x: p.x, z: p.z, followsCaster: true });
     }
   } else {
     if (

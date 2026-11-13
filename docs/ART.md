@@ -133,6 +133,13 @@ Weapon strokes use five shared immutable geometries, with one to three meshes pe
 
 ### Movement and transition continuity
 
-Combat windups, blade trails, circling cuts and Reaping Orbit follow their wielder. Spectral guards retain their local lunge while moving with the orbit's owner. Released projectiles, planted eruptions and hammer fractures remain in world space. Windups disappear on release, interruption or owner death; the effect pool limits are unchanged.
+Combat windups, blade trails, circling cuts and Reaping Orbit follow their wielder. Spectral guards retain their local lunge while moving with the orbit's owner. Released projectiles and victim-centered explosions remain in world space; active area rings and hammer aftershocks now follow the wielder (simulation 0.10.1). Windups disappear on release, interruption or owner death; the effect pool limits are unchanged.
 
 Animation transitions capture the displayed rig pose, including hand corrections, and blend into the next sample. Restarting the same clip uses the same path, avoiding a snap to its first frame. Cached transforms are restored before sampling so corrections cannot accumulate. Locomotion decisions only update on a new simulation tick; a high refresh rate or hit-stop no longer alternates run and idle on repeated frames. Existing contact times, damage and replay rules are unchanged.
+
+
+### Runtime enemy geometry budget
+
+The imp, archer and brute builds set `simplify: { "ratio": 0.5, "error": 0.005 }` in `art.config.json`. The packer applies Meshopt simplification after welding and before compression; the error bound can stop it before the target ratio. Current triangle counts are 4,572 / 5,266 / 7,128 (previously 9,147 / 10,550 / 12,690). The 1024-pixel textures, 24-joint rigs and all animation sampler values are retained. Original source GLBs remain unchanged, so the runtime exports can be rebuilt or retuned. Hero and held-weapon geometry is unchanged.
+
+Ritual ribbon groups and repeated plate/flame shapes reuse immutable geometry. Flat translucent strokes use a single rendering pass while keeping their normal alpha blending. No generated art, texture downscaling or paid service was used for this optimization.

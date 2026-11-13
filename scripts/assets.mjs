@@ -7,8 +7,8 @@ import { dirname, resolve, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { copyToDocument, dedup, prune, resample, unpartition, weld, meshopt } from "@gltf-transform/functions";
-import { MeshoptEncoder, MeshoptDecoder } from "meshoptimizer";
+import { copyToDocument, dedup, prune, resample, unpartition, weld, meshopt, simplify } from "@gltf-transform/functions";
+import { MeshoptEncoder, MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
 
 /** Pack local rig exports. No API calls, downloads or generation credits. */
 export async function buildAssets(configFile) {
@@ -72,7 +72,13 @@ export async function buildAssets(configFile) {
       }
     }
     for (const required of spec.requiredClips ?? []) if (!document.getRoot().listAnimations().some(a => a.getName() === required)) throw new Error(`${name}: required clip '${required}' is missing`);
-    await document.transform(resample(), dedup(), prune(), unpartition(), weld(), meshopt({ encoder: MeshoptEncoder, level: "medium" }));
+    await document.transform(resample(), dedup(), prune(), unpartition(), weld());
+    if (spec.simplify) {
+      const { ratio, error } = spec.simplify;
+      if (!(ratio > 0 && ratio <= 1 && error > 0 && error <= .01)) throw new Error(`${name}: invalid simplification limits`);
+      await document.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error }));
+    }
+    await document.transform(meshopt({ encoder: MeshoptEncoder, level: "medium" }));
     const binary = await io.writeBinary(document);
     const hash = createHash("sha256").update(binary).digest("hex").slice(0, 12);
     const file = `models/${name}-${hash}.glb`;

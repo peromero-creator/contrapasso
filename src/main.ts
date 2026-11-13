@@ -504,6 +504,7 @@ async function startRun(retry?: string) {
   $<HTMLButtonElement>("mode-solo").disabled = true;
   try {
     if (!champion) await loadChampion();
+    await view.prepare();
     const next = await api.begin(retry, challenge?.id ?? previousRunId);
     enterRun(next);
   } catch (e) {
@@ -651,6 +652,7 @@ async function startDuel(opponentId: string) {
   renderLobby();
   notice("Preparing your Duel…");
   try {
+    await view.prepare();
     const next = await api.duel(opponentId);
     champion = await api.profile();
     enterRun(next);
@@ -1465,7 +1467,7 @@ $("skill-preview-expand").onclick = () => {
   $("skill-preview-expand").setAttribute('aria-label',expanded?'Close expanded preview':'Expand animation preview');
 };
 document.addEventListener('keydown', e => { if(e.key==='Escape' && document.querySelector('.skill-theatre.expanded')) { $("skill-preview-expand").click(); e.stopImmediatePropagation(); } }, true);
-$("preview-lance").onclick = () => showSkillPreview(spellId(champion?.build.spell));
+
 const embers = $("embers");
 for (let i = 0; i < 36; i++) {
   const e = document.createElement("i");
@@ -1533,15 +1535,19 @@ function paintChain(pop: boolean) {
   const count = $("chain-count");
   count.textContent = String(chain);
   $("chain-rank").textContent = chain >= 40 ? "DAMNATION" : chain >= 25 ? "MERCILESS" : chain >= 12 ? "RELENTLESS" : "";
-  if (pop)
+  if (pop) {
+    for (const animation of count.getAnimations()) animation.cancel();
     count.animate(
       [{ transform: "scale(1.5)", color: "#fff6e0" }, { transform: "scale(1)" }],
       { duration: 170, easing: "ease-out" },
     );
+  }
 }
+let hudElapsed = 0;
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  if (document.hidden) { requestAnimationFrame(frame); return; }
   if (mode === "run" && !paused && !ended && !busy) {
     if (world.phase === "reward" && !choiceQueued) acc = 0;
     else if (freeze > 0) freeze -= dt;
@@ -1580,11 +1586,9 @@ function frame(now: number) {
         if (e.type === "hit") {
           chain += 1;
           chainT = 3;
-          paintChain(true);
         }
         if (e.type === "hurt" && chain) {
           chain = 0;
-          paintChain(false);
         }
         if (e.type === "hurt") {
           const veil = $("hurt-veil");
@@ -1602,6 +1606,7 @@ function frame(now: number) {
         }
         if (e.type === "reward") showReward();
       }
+      if (world.events.some(e => e.type === "hit" || e.type === "hurt")) paintChain(chain > 0);
       freeze = Math.max(freeze, view.consume(world.events));
       sound.consume(world.events);
       world.events.length = 0;
@@ -1616,13 +1621,16 @@ function frame(now: number) {
       showEnd(world.phase === "won");
     else if (world.mode === "duel") checkpointDuel();
   }
-  if (!paused) view.sync(world, slow > 0 && mode === "run" ? dt * 0.3 : dt);
-  if (mode === "run") updateHud(paused || ended ? 0 : dt);
+  if (mode === "run" && !paused) view.sync(world, slow > 0 ? dt * 0.3 : dt, Math.min(1, acc / DT));
+  if (mode === "run") {
+    hudElapsed += dt;
+    if (hudElapsed >= 1 / 30) { updateHud(paused || ended ? 0 : hudElapsed); hudElapsed = 0; }
+  } else hudElapsed = 0;
   $("hurt-veil").classList.toggle(
     "low",
     mode === "run" && world.phase !== "dead" && world.player.hp > 0 && world.player.hp < world.player.maxHp * 0.3,
   );
-  view.render();
+  if (mode === "run") view.render();
   requestAnimationFrame(frame);
 }
 $("hurt-veil").addEventListener("animationend", (e) => {

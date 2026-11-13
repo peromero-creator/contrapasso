@@ -133,7 +133,7 @@ for(const signature of [ritualCharge(0x88aaaa),bloodThread(0xaa6677),...(['furna
       if(n instanceof THREE.Mesh){assert.equal(n.material.blending,THREE.NormalBlending);assert.ok(n.userData.fade>=0&&n.userData.fade<=1);}
     });
   }
-  signature.root.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();n.material.dispose();}});
+  signature.root.traverse(n=>{if(n instanceof THREE.Mesh){if(!n.geometry.userData.sharedEffect)n.geometry.dispose();n.material.dispose();}});
 }
 console.log('Spell presentation: PASS (staff release directions, attached focus, interruption reset, finite bounded fades, normal blending)');
 
@@ -186,12 +186,12 @@ for(let i=0;i<10;i++)step(followWorld,{...idle,move:0});
 assert.ok(followWorld.player.x>origin);assert.equal(anchor.sample(followWorld)?.x,followWorld.player.x,'windup follows movement before contact');
 for(let i=0;i<12;i++)step(followWorld,idle);
 assert.equal(anchor.sample(followWorld),null,'released windup disappears instead of leaving an old seal');
-for(const id of ['sword-3','dagger-4','axe-3','spear-3','ash'] as const)assert.equal(attachmentFor({type:'ability',ability:id,stage:'pulse',x:0,z:0},'starter'),'wielder');
-for(const id of ['ember','iron','hammer-4','staff-4','crossbow-2','lance'] as const)assert.equal(attachmentFor({type:'ability',ability:id,stage:'pulse',x:0,z:0},'starter'),null,'committed ground hits/projectiles remain in world space');
+for(const id of ['sword-3','dagger-4','axe-3','spear-3','ash','ember','iron','hammer-4','staff-2','staff-3'] as const)assert.equal(attachmentFor({type:'ability',ability:id,stage:'pulse',side:'player',x:0,z:0},'starter'),'wielder');
+for(const id of ['staff-4','crossbow-2','lance'] as const)assert.equal(attachmentFor({type:'ability',ability:id,stage:'pulse',side:'player',x:0,z:0},'starter'),null,'released projectiles remain in world space');
 const orbit=new EffectAnchor({type:'ability',ability:'ash',stage:'pulse',x:0,z:0},'wielder');
 followWorld.player.x+=5;assert.equal(orbit.sample(followWorld)?.x,followWorld.player.x);
 followWorld.player.hp=0;assert.equal(orbit.sample(followWorld),null);
-console.log('Motion continuity: PASS (interrupted poses, same-pose restart, moving windup/orbits, release cleanup, world-space impacts)');
+console.log('Motion continuity: PASS (interrupted poses, same-pose restart, moving windup/orbits, release cleanup, moving area attacks, world-space projectiles)');
 
 const continuousRig=new THREE.Group(),continuousBone=new THREE.Bone();continuousBone.name='Wrist';continuousRig.add(continuousBone);
 const continuous=new AnimatedModel({scene:continuousRig,animations:[

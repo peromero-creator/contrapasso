@@ -1,4 +1,4 @@
-import { EffectAnchor, attachmentFor } from "./effect-anchor.ts";
+import { EffectAnchor, attachmentFor, isPassivePulse } from "./effect-anchor.ts";
 import { ModelLibrary, type AnimatedModel } from "./assets";
 import { mountGrip, starterWeapon } from "./weapon-pose";
 import { dragonSoul, brokenCathedral, ritualPulse, ritualCharge, covenantWard, bloodThread, weaponImpact } from "./signatures";
@@ -18,6 +18,8 @@ const colors = {
   ash: CORES.ash.color,
   iron: CORES.iron.color,
 };
+const wispPlane = new T.PlaneGeometry(1.7,.65), sealPlane = new T.PlaneGeometry(2,2);
+wispPlane.userData.sharedEffect = sealPlane.userData.sharedEffect = true;
 const ring = new T.RingGeometry(0.89, 1, 64);
 const shard = new T.PlaneGeometry(0.65, 2.4);
 const lanceGeo = new T.ConeGeometry(0.1, 1.2, 5).rotateZ(-Math.PI / 2);
@@ -85,7 +87,9 @@ export class SoulFx {
         actor.root.visible=false;this.root.add(actor.root);this.guards.push({actor,life:0,angle:0,enemy:false,materials:[...materials]});
       }
     });
+    return this.guardLoad;
   }
+  prepare() { return this.prepareGuards(); }
   private root = new T.Group();
   private time = 0;
   private ward = covenantWard();
@@ -185,6 +189,7 @@ export class SoulFx {
         opacity,
         depthWrite: false,
         side: T.DoubleSide,
+        forceSinglePass: true,
       }),
     );
     root.add(m);
@@ -200,6 +205,7 @@ export class SoulFx {
     }
   }
   private emit(e: SimEvent, identity: WeaponId) {
+    if (this.trackActors && isPassivePulse(e)) { this.passivePulse(e); return; }
     if (e.type === 'swing' || e.type === 'ranged') { this.strike(e, identity); return; }
     if (e.type !== "ability" && e.type !== "combo" && e.type !== "echo") return;
     if (e.ability && e.stage !== 'charge' && e.stage !== 'release' && previewVolley(e.ability, identity)) { this.volley(e, identity); return; }
@@ -325,6 +331,24 @@ export class SoulFx {
     });
     while (this.motifs.length > 32) this.dispose(this.motifs.shift()!);
   }
+  /** A passive trigger is a small painted echo, never another cathedral or guard summon. */
+  private passivePulse(e: SimEvent) {
+    const root = new T.Group(), radius = e.amount ?? 2.5;
+    const color = e.ability === 'ember' ? 0xa77551 : e.ability === 'iron' ? 0xa36b79 : 0x829c9b;
+    root.position.set(e.x,.045,e.z);
+    const rim = this.part(root, ring, color, .16);
+    rim.rotation.x=-Math.PI/2;rim.scale.setScalar(radius);
+    for(let i=0;i<3;i++) {
+      const accent = this.part(root, e.ability === 'ember' ? shard : orbitBlade, color, .24);
+      const angle=i*Math.PI*2/3;
+      accent.position.set(Math.cos(angle)*radius*.55,.3,Math.sin(angle)*radius*.55);
+      if(e.ability === 'ember') { (accent.material as T.MeshBasicMaterial).map=this.flame;accent.scale.set(.8,.45,1); }
+      else { accent.rotation.x=-Math.PI/2;accent.scale.setScalar(.7); }
+    }
+    this.root.add(root);
+    this.motifs.push({root,life:.32,max:.32,radius:1,kind:'combo',inward:false,animate:t=>root.scale.setScalar(.65+.35*t)});
+    while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
+  }
   private procession(e: SimEvent) {
     for(let i=0;i<2;i++) {
       const guard=this.guards.find(g=>g.life<=0);if(!guard)break;
@@ -383,7 +407,7 @@ export class SoulFx {
       dart.rotation.y = -angle; dart.position.set(Math.cos(angle)*.7, 1.3, Math.sin(angle)*.7);
       if(staff) {
         if(e.ability==='staff-4') dragonSoul(dart,color);
-        const plume=this.part(dart,new T.PlaneGeometry(1.7,.65),color,.68);
+        const plume=this.part(dart,wispPlane,color,.68);
         (plume.material as T.MeshBasicMaterial).map=this.wisp;
         plume.rotation.x=-Math.PI/2;plume.position.x=-.25;
         const thread=this.part(dart,orbitBlade,color,.3);thread.scale.set(.7,1,.14);thread.rotation.y=Math.PI;thread.position.x=-.25;
@@ -424,7 +448,7 @@ export class SoulFx {
       return;
     }
     // Only windup reaches this path; damaging contacts have distinct family strokes.
-    const seal=this.part(root,new T.PlaneGeometry(2,2),color,.18);
+    const seal=this.part(root,sealPlane,color,.18);
     (seal.material as T.MeshBasicMaterial).map=this.seal;seal.rotation.x=-Math.PI/2;
     this.root.add(root);
     const life=spec.contact;
@@ -450,12 +474,12 @@ export class SoulFx {
     this.motifs = [];
     for(const guard of this.guards){guard.life=0;guard.actor.root.visible=false;}
   }
-  sync(w: World, dt: number) {
+  sync(w: World, dt: number, hero = { x: w.player.x, z: w.player.z }) {
     this.time += dt;
     for(const guard of this.guards) {
       if(guard.life<=0)continue;
       if (guard.anchor) {
-        const owner = guard.anchor.sample(w);
+        const owner = guard.anchor.position(w, hero);
         if (!owner) { guard.life=0;guard.actor.root.visible=false;continue; }
         guard.actor.root.position.x += owner.x - guard.centerX!;
         guard.actor.root.position.z += owner.z - guard.centerZ!;
@@ -474,20 +498,20 @@ export class SoulFx {
     }
     const p = w.player;
     this.core.visible = !!p.core && w.phase !== "dead";
-    this.core.position.set(p.x, 1.25, p.z + 0.15);
+    this.core.position.set(hero.x, 1.25, hero.z + 0.15);
     this.core.rotation.y = this.time;
     this.core.material.color.setHex(p.core ? CORES[p.core].color : 0x888888);
     this.core.scale.setScalar(0.7 + p.charge / 130);
     this.ward.visible = p.wardT > 0;
-    this.ward.position.set(p.x, 0, p.z);
+    this.ward.position.set(hero.x, 0, hero.z);
     this.ward.rotation.y = this.time * 0.4;
     for (const m of this.motifs) {
       if (m.anchor) {
-        const owner = m.anchor.sample(w);
+        const owner = m.anchor.position(w, hero);
         if (!owner) { m.life=0;continue; }
         m.root.position.x=owner.x;m.root.position.z=owner.z;
       }
-      m.life -= dt;
+      m.life = m.anchor?.chargeRemaining(w) ?? m.life - dt;
       const t = 1 - Math.max(0, m.life) / m.max;
       m.animate?.(t);
       for(const spinner of m.spinners??[])spinner.rotation.y+=dt*16;

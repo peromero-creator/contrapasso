@@ -1,5 +1,5 @@
 import { FAMILIES, FAMILY_NAMES, FAMILY_WEAPON, TECHNIQUES, techniqueId, techniqueParents, familyOf, type Family, type TechniqueId } from '../sim/techniques';
-import { CORE_IDS, CORES, SPELL_IDS, SPELLS, spellId, type AbilityId, type SpellId, type CoreId } from '../sim/abilities';
+import { CORE_IDS, CORES, SPELL_IDS, SPELLS, spellId, spellCooldown, type AbilityId, type SpellId, type CoreId } from '../sim/abilities';
 import { SKILLS, SKILL_BRANCHES, PREREQUISITES, canLearn, type SkillId } from '../sim/skills';
 import type { Champion } from '../shared/protocol';
 import { skillIcon } from './icons';
@@ -34,20 +34,28 @@ export class SkillTree {
     theatre?.remove();
     this.champion = champion; this.busy = busy;
     if (!this.initialized) { this.page = familyOf(champion.build.weaponId ?? 'starter'); this.initialized = true; }
-    const nodes = this.nodes();
-    if (!nodes.some(n => nodeKey(n) === this.selected)) this.selected = nodeKey(nodes[0]);
     const title = pageName(this.page), all = this.page === 'all';
+    if (theatre) theatre.hidden = this.page === 'vows' || all;
+    if (all) {
+      this.root.innerHTML = `<div class="tree-heading"><h3>Choose your path</h3><p>Weapon techniques · Q spells · R ultimates</p></div><div class="tree-overview">${PAGES.map(page => {
+        const branch = this.branchNodes(page), learned = branch.filter(n => champion.skills.includes(n.skill)).length;
+        return `<button data-page="${page}" class="tree-path"><span class="path-icon">${skillIcon(branch[0].skill)}</span><strong>${pageName(page)}</strong><span>${learned} / ${branch.length} learned</span><span class="path-growth" aria-hidden="true">${branch.map(n=>`<i class="${champion.skills.includes(n.skill)?'learned':''}"></i>`).join('')}</span></button>`;
+      }).join('')}</div>`;
+      if (theatre) this.root.append(theatre);
+      for (const b of this.root.querySelectorAll<HTMLButtonElement>('[data-page]')) b.onclick=()=>{this.page=b.dataset.page as Page;this.selected=null;this.resetCamera=true;this.render(this.champion,this.busy);};
+      return;
+    }
+    const nodes = this.branchNodes(this.page as Branch);
+    if (!nodes.some(n => nodeKey(n) === this.selected)) this.selected = nodeKey(nodes[0]);
     this.root.innerHTML = `<nav class="tree-tabs" aria-label="Skill categories"><button data-page="all" aria-pressed="${all}">ALL PATHS</button>${PAGES.map(p => `<button data-page="${p}" aria-pressed="${p === this.page}">${pageName(p)}${familyOf(champion.build.weaponId ?? 'starter') === p ? '<i>In hand</i>' : ''}</button>`).join('')}</nav>
-      <div class="tree-heading"><div><span class="eyebrow">THE LIVING ARSENAL</span><h3>${title}</h3></div><p>Drag to explore · Scroll to zoom<br>Select a skill to see its weapon in motion.</p></div>
-      <div class="tree-workspace"><div class="tree-explorer"><div class="tree-toolbar" aria-label="Tree navigation"><button data-camera="out" aria-label="Zoom out">−</button><output class="tree-zoom" aria-label="Zoom level">100%</output><button data-camera="in" aria-label="Zoom in">+</button><button data-camera="fit">Fit tree</button><button data-camera="selected">Find selected</button><span>${nodes.length} skills</span></div><div class="tree-viewport" tabindex="0" role="region" aria-label="${title} skill map. Arrow keys pan; plus and minus zoom; Home fits the tree."><div class="tree-map" style="width:${all?2800:800}px;height:${all?1620:500}px">
-      ${all ? PAGES.map((p,i)=>`<button class="tree-branch-label" data-branch="${p}" style="left:${(i%4)*25+12.5}%;top:${Math.floor(i/4)*33.333+1.5}%">${pageName(p)} ↗</button>`).join('') : ''}
-      <svg class="tree-links" viewBox="0 0 1000 460" preserveAspectRatio="none" aria-hidden="true">${!all?'<path class="tree-trunk" d="M500 460 Q500 420 500 380 M500 450 Q410 425 390 455 M500 440 Q570 420 620 455"/>':''}${nodes.map(n=>n.parents.map(p=>{ const parent=nodes.find(v=>v.skill===p&&v.page===n.page); if(!parent)return '';const x=parent.x*10,y=parent.y*4.6-10,nx=n.x*10,ny=n.y*4.6-10;return `<path class="${champion.skills.includes(n.skill)?'grown':champion.skills.includes(p)?'growing':''}" d="M${x} ${y} C${x} ${(y+ny)/2} ${nx} ${(y+ny)/2} ${nx} ${ny}"/>`;}).join('')).join('')}</svg>
+      <div class="tree-heading"><div><h3>${title}</h3></div><p>Choose a skill to preview and train.</p></div>
+      <div class="tree-workspace"><div class="tree-explorer"><div class="tree-toolbar" aria-label="Tree navigation"><button data-camera="out" aria-label="Zoom out">−</button><output class="tree-zoom" aria-label="Zoom level">100%</output><button data-camera="in" aria-label="Zoom in">+</button><button data-camera="fit">Fit tree</button><button data-camera="selected">Find selected</button><span>${nodes.length} skills</span></div><div class="tree-viewport" tabindex="0" role="region" aria-label="${title} skill map. Arrow keys pan; plus and minus zoom; Home fits the tree."><div class="tree-map" style="width:800px;height:500px">
+      <svg class="tree-links" viewBox="0 0 1000 460" preserveAspectRatio="none" aria-hidden="true"><path class="tree-trunk" d="M500 460 Q500 420 500 380 M500 450 Q410 425 390 455 M500 440 Q570 420 620 455"/>${nodes.map(n=>n.parents.map(p=>{ const parent=nodes.find(v=>v.skill===p&&v.page===n.page); if(!parent)return '';const x=parent.x*10,y=parent.y*4.6-10,nx=n.x*10,ny=n.y*4.6-10;return `<path class="${champion.skills.includes(n.skill)?'grown':champion.skills.includes(p)?'growing':''}" d="M${x} ${y} C${x} ${(y+ny)/2} ${nx} ${(y+ny)/2} ${nx} ${ny}"/>`;}).join('')).join('')}</svg>
       ${nodes.map(n=>`<button class="tree-node ${champion.skills.includes(n.skill)?'learned':canLearn(champion.skills,n.skill)?'reachable':'sealed'}" data-node="${nodeKey(n)}" title="${n.title}" style="left:${n.x}%;top:${n.y}%" aria-label="${n.title}${champion.skills.includes(n.skill)?', learned':', '+SKILLS[n.skill].cost+' coin'}" aria-pressed="${this.selected===nodeKey(n)}"><span class="node-orb">${skillIcon(n.skill)}<em>${n.key}</em></span><strong>${n.title}</strong><small>${champion.skills.includes(n.skill)?'LEARNED':SKILLS[n.skill].cost+' COIN'}</small></button>`).join('')}
-      ${!all?'<span class="tree-root-label">EARNED IN THE DESCENT</span>':''}</div></div><p class="tree-map-hint">Mouse / touch: drag · Keyboard: arrows, + / −, Home · Tab: browse skills</p></div><div class="tree-side"><aside id="tree-detail" class="tree-detail" aria-live="polite"></aside></div></div>`;
+      </div></div><p class="tree-map-hint">Drag to explore · Scroll to zoom</p></div><div class="tree-side"><aside id="tree-detail" class="tree-detail" aria-live="polite"></aside></div></div>`;
     if (theatre) this.root.querySelector('.tree-side')!.prepend(theatre);
     const choosePage=(page:Page)=>{this.page=page;this.selected=null;this.resetCamera=true;this.render(this.champion,this.busy);};
     for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-page]')) b.onclick=()=>choosePage(b.dataset.page as Page);
-    for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-branch]')) b.onclick=()=>choosePage(b.dataset.branch as Branch);
     for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-node]')) {
       b.onclick=()=>{this.cancelHold();this.selected=b.dataset.node!;for(const el of this.root.querySelectorAll('[data-node]'))el.setAttribute('aria-pressed',String(el===b));const n=nodes.find(n=>nodeKey(n)===this.selected)!;this.detail(n);this.previewNode(n);};
       b.onfocus=()=>this.reveal(b);
@@ -59,7 +67,7 @@ export class SkillTree {
   focusWeapon(identity: WeaponId) {
     this.page = familyOf(identity); this.selected = null; this.resetCamera = true; this.initialized = true;
   }
-  close() { this.cancelHold(); }
+  close() { this.cancelHold(); this.observer?.disconnect(); this.resetCamera = true; }
   private previewNode(n: Node) {
     if(n.ability) this.actions.preview(n.ability,FAMILIES.includes(n.page as Family)?(familyOf(this.champion.build.weaponId ?? "starter")===n.page?this.champion.build.weaponId ?? "starter":FAMILY_WEAPON[n.page as Family]):undefined);
   }
@@ -68,9 +76,6 @@ export class SkillTree {
     if(page==='spells')return SPELL_IDS.map((id,i)=>({page,skill:SPELLS[id].skill,title:SPELLS[id].name,x:20+i*30,y:i===1?27:57,key:'Q',ability:id,parents:[]}));
     if(page==='cores')return CORE_IDS.map((id,i)=>({page,skill:id,title:CORES[id].name,x:20+i*30,y:i===1?27:57,key:'R',ability:id,parents:[]}));
     return SKILL_BRANCHES.flatMap((b,i)=>b.skills.map((skill,j)=>({page,skill,title:SKILLS[skill].name,x:18+i*32,y:81-j*22,key:String(j+1),parents:PREREQUISITES[skill]?[PREREQUISITES[skill]!]:[]})));
-  }
-  private nodes(): Node[] {
-    return this.page==='all'?PAGES.flatMap((p,i)=>this.branchNodes(p).map(n=>({...n,x:(i%4)*25+n.x*.25,y:Math.floor(i/4)*100/3+9+n.y*(p==='vows'?.29:.23)}))):this.branchNodes(this.page);
   }
   private reveal(node: HTMLElement) {
     const viewport=this.root.querySelector<HTMLElement>('.tree-viewport')!;
@@ -117,7 +122,19 @@ export class SkillTree {
     const blocked = this.busy || !!c.chain?.pending || !featureReady;
     const description = page === 'cores' ? CORES[n.ability as CoreId].description : page === 'spells' ? SPELLS[n.ability as SpellId].description : SKILLS[n.skill].description;
     const detail = this.root.querySelector<HTMLElement>('#tree-detail')!;
-    detail.innerHTML = `<span class="eyebrow">${page === 'cores' ? 'ULTIMATE · R' : page === 'spells' ? 'SPELL · Q' : t ? 'WEAPON TECHNIQUE · '+n.key : 'PASSIVE VOW'}</span><h3>${n.title}</h3><p>${description}</p>${spec ? `<div class="technique-stats"><span><b>${spec.damage}</b>base damage / hit</span><span><b>${spec.cooldown}s</b>cooldown</span><span><b>${spec.pulses ?? 1}</b>contact${(spec.pulses ?? 1)>1?'s':''}</span></div><small>+2 damage per weapon level. +15% technique damage per circle rank. Active with ${FAMILY_NAMES[page as Family].toLowerCase()} in hand.</small>` : `<small>${SKILLS[n.skill].rank}</small>`}<p class="tree-requirement">${known ? 'Learned permanently. No additional NFT or mint required.' : !ready ? 'First learn: '+parents.filter(p=>!c.skills.includes(p)).map(p=>SKILLS[p].name).join(' + ') : !enough ? `You have ${c.coins} coin. Earn ${SKILLS[n.skill].cost-c.coins} more in Solo.` : 'Hold to learn. Release early to cancel.'}</p>${known ? (page === 'spells' || page === 'cores' ? `<button class="btn tree-select" ${blocked || current ? 'disabled':''}>${current?'EQUIPPED': 'EQUIP ON '+n.key}</button>` : '<span class="tree-learned">✓ LEARNED · '+(t?'READY ON '+n.key:'ALWAYS ACTIVE')+'</span>') : `<button class="btn hold-learn" ${blocked || !ready || !enough ? 'disabled':''} aria-label="Hold to learn ${n.title} for ${SKILLS[n.skill].cost} coin"><span class="hold-fill"></span><span class="hold-copy">${!featureReady?'UPDATE REQUIRED':blocked?'CONFIRMING…':`HOLD TO LEARN · ${SKILLS[n.skill].cost} COIN`}</span></button>`}${n.ability?'<button class="btn ghost tree-preview">REPLAY ANIMATION</button>':''}<span class="hold-status" role="status"></span>`;
+    const inHand = !t || familyOf(c.build.weaponId ?? 'starter') === page;
+    const level = inHand ? c.build.weaponLevel ?? 0 : 0;
+    const missing = parents.filter(p=>!c.skills.includes(p));
+    const requirement = known ? (t && !inHand ? `Equip ${FAMILY_NAMES[page as Family].toLowerCase()} to use this skill.` : '') :
+      !ready ? `Requires ${missing.map(p=>SKILLS[p].name).join(' + ')}.` :
+      !enough ? `${SKILLS[n.skill].cost-c.coins} more coin needed. Earn coin in Solo.` : '';
+    detail.innerHTML = `<span class="eyebrow">${page === 'cores' ? 'ULTIMATE · R' : page === 'spells' ? 'SPELL · Q' : t ? 'WEAPON TECHNIQUE · '+n.key : 'PASSIVE VOW'}</span>
+      <h3>${n.title}</h3><p>${description}</p>
+      ${spec ? `<div class="technique-stats"><span><b>${spec.damage+level*2}</b>base damage / hit</span><span><b>${spec.cooldown}s</b>cooldown</span></div>` : page === 'spells' ? `<div class="technique-stats"><span><b>${spellCooldown(Object.fromEntries(c.skills.map(id=>[id,1]))).toFixed(1)}s</b>cooldown</span><span><b>+25%</b>next weapon hit</span></div>` : page === 'cores' ? '<p class="core-cost">Requires a full soul core. Charge it by dealing damage.</p>' : ''}
+      ${requirement ? `<p class="tree-requirement">${requirement}</p>` : ''}
+      ${known ? (page === 'spells' || page === 'cores' ? `<button class="btn tree-select" ${blocked || current ? 'disabled':''}>${current?'EQUIPPED ON '+n.key: 'EQUIP ON '+n.key}</button>` : `<span class="tree-learned">✓ ${t?(inHand?'READY ON '+n.key:'LEARNED'):'ALWAYS ACTIVE'}</span>`) : `<button class="btn hold-learn" ${blocked || !ready || !enough ? 'disabled':''} aria-label="Hold to learn ${n.title} for ${SKILLS[n.skill].cost} coin"><span class="hold-fill"></span><span class="hold-copy">${!featureReady?'UPDATE REQUIRED':blocked?'CONFIRMING…':`HOLD TO LEARN · ${SKILLS[n.skill].cost} COIN`}</span></button>`}
+      ${n.ability?'<button class="tree-preview">↻ Replay animation</button>':''}
+      <details class="tree-extra"><summary>Progression details</summary><p>${spec ? `Damage shown at weapon +${level}, circle rank 1. Each weapon level adds 2 damage; each additional circle rank adds 15%.` : SKILLS[n.skill].rank}${n.title!==SKILLS[n.skill].name?` Unlocks with ${SKILLS[n.skill].name}.`:''}</p></details><span class="hold-status" role="status"></span>`;
     const preview = () => this.previewNode(n);
     detail.querySelector<HTMLButtonElement>('.tree-preview')?.addEventListener('click',preview);
     detail.querySelector<HTMLButtonElement>('.tree-select')?.addEventListener('click',()=>{ void (page === 'spells' ? this.actions.spell(n.ability as SpellId) : this.actions.core(n.ability as CoreId)); });

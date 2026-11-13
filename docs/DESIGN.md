@@ -167,3 +167,23 @@ Q, R and weapon techniques have a single 14-tick input buffer (about 233 ms). A 
 Space jumps; attacking during the jump commits a plunge in the aimed direction. The HUD shows jump recovery and the airborne attack opportunity. These actions use simulation 0.10.0's existing 30-bit input. Arena transitions clear transient spell, damage-text and ghost effects while keeping shared actor geometry; new runs clear the cosmetic hit chain. Hit flares use subdued warm tones, and reduced-motion mode uses a static low-health tint.
 
 The result screen distinguishes a locally verified replay from a confirmed testnet save. Pending saves are checked again using the same run ID, with a manual retry after connection failures. Confirmation never awards the same replay twice.
+
+
+## Combat performance and training readability
+
+The arena renderer draws only during a run and stops while its tab is hidden. Static perimeter meshes are batched by material, blood uses two bounded instanced draws, and dash silhouettes reuse at most four skeletons. Model fit bounds are cached per asset and rotation. The illustrated lighting and full-resolution artwork are retained; the unused post-processing copy is removed.
+
+The displayed hero interpolates between simulation ticks. Attached windups and moving attacks use that displayed position; released projectiles and enemy death explosions retain their world positions. Windup lifetime follows the simulation clock through hit-stop. Passive nova triggers use short, four-mesh echoes; caster-centered dash/reprisal echoes follow the hero, while victim explosions keep their impact origin; active ultimates retain their full signatures. Light hits no longer stop the whole game; heavy contacts keep a short accent with a minimum interval between pauses. Damage, hit times and replay inputs are unchanged.
+
+Skill Tree opens on the equipped weapon's branch. All Paths presents ten readable branch cards with learned counts. Each branch retains its growing connections, pan, zoom and silent matching-weapon preview. The selected skill shows its action, damage/cooldown where applicable, prerequisite or missing coin, and one training/equip control. Progression formulas sit behind a disclosure. A learned technique from another weapon family is marked as learned, not ready in the current hand. Hold-to-learn cancellation and server-authoritative payment remain unchanged.
+
+
+## Carried auras and frame pacing (0.10.1)
+
+Active area skills travel with their wielder: staff rings, hammer aftershocks, Q circle/thread and all three cores. Furnace Heart now moves its authoritative damage center before each pulse, for both the player and Duel rival. Its visual tail follows the displayed actor too. Released bolts and victim-centered death explosions still travel or resolve at their actual target; they are not pulled back onto the hero. Simulation version 0.10.1 distinguishes these rules from older replays.
+
+Common enemy meshes and shaders are prepared before issuing a new Solo or Duel challenge. Enemy positions and health bars interpolate between simulation ticks. Repeated ritual strokes share cached geometry; strokes with the same motion are drawn together. Flat translucent effects use one pass. Enemy imp, archer and brute exports use bounded Meshopt simplification while retaining their original textures, bones and animation samples. Full-resolution arena rendering and character outlines remain enabled.
+
+Preparation waits for the hero and held-weapon models, retains compiled effect material variants, and performs a covered warm-up draw before combat. Skinned actors and their outlines cache a bind-pose sphere for depth sorting, avoiding a first-draw scan of every animated vertex. Frustum culling stays disabled on those meshes so the approximate sorting bound cannot clip animated limbs.
+
+Afterimages never contribute lights. The held weapon's light lives in the scene and follows the grip independently of actor visibility, keeping the light count stable through dash echoes and hurt blinking. This avoids recompiling the arena's lit materials during combat.

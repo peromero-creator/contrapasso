@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { batchScenery } from "./static-batch.ts";
 import type { ModelLibrary } from "./assets";
 import { ARENA_HX, ARENA_HZ, type World } from "../sim/world";
 
@@ -11,6 +12,7 @@ export class Underworld {
   private drops = new Map<number, THREE.Group>();
   private cloth: THREE.Mesh[] = [];
   private time = 0;
+  private moving = new Set<THREE.Object3D>();
   private souls: THREE.Group[] = [];
   private censers: THREE.Group[] = [];
   private stone = new THREE.MeshStandardMaterial({
@@ -161,6 +163,9 @@ export class Underworld {
       this.box(g, 3.5, 0.9, 0.8, -9, 0.55, -ARENA_HZ - 1.4, this.stone);
       this.box(g, 4, 0.35, 1.3, 9, 0.1, -ARENA_HZ - 1, this.stone);
     }
+    for (const group of [...this.censers, ...this.souls]) batchScenery(group, new Set());
+    for (const node of [...this.cloth, ...this.censers, ...this.souls]) this.moving.add(node);
+    for (const group of this.circles) batchScenery(group, this.moving);
     this.root.add(this.boat, this.spider);
     this.boat.position.set(-ARENA_HX - 2.1, 0, 0);
     this.boat.rotation.y = 0;
@@ -229,6 +234,7 @@ export class Underworld {
     g.add(niche);
     const fallback = new THREE.Group();
     niche.add(fallback);
+    this.moving.add(fallback);
     for (const side of [-1, 1]) {
       const h = broken && side === 1 ? height * 0.55 : height;
       this.box(fallback, 0.65, h, 0.8, side * 1.4, h / 2, 0, this.stone);

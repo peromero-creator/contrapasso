@@ -24,7 +24,7 @@ export const CORES: Record<
   ember: {
     name: "Furnace Heart",
     description:
-      "Three expanding eruptions ignite everything within 5.5 steps. Funeral Pyre strengthens each eruption.",
+      "Three expanding fire waves follow you, reaching 5.5 steps. Funeral Pyre strengthens each wave.",
     color: 0xca7545,
   },
   ash: {

@@ -69,7 +69,7 @@ function ringTexture() {
 }
 
 interface Puff { sprite: THREE.Sprite; life: number; max: number; vx: number; vz: number; size: number }
-interface Ring { mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>; life: number; radius: number }
+interface Ring { mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>; life: number; radius: number; followsCaster?: boolean }
 const RING_TIME = 0.42;
 
 export class ImpactFx {
@@ -156,7 +156,7 @@ export class ImpactFx {
     }
   }
 
-  ring(x: number, z: number, radius: number, color = 0xffcd7e) {
+  ring(x: number, z: number, radius: number, color = 0xffcd7e, followsCaster = false) {
     let r = this.rings.find((q) => q.life <= 0);
     if (!r) {
       if (this.rings.length >= 20) r = this.rings.reduce((a, b) => (a.life < b.life ? a : b));
@@ -170,13 +170,14 @@ export class ImpactFx {
     }
     r.life = RING_TIME;
     r.radius = radius;
+    r.followsCaster = followsCaster;
     r.mesh.material.color.setHex(color);
     r.mesh.position.set(x, 0.07, z);
     r.mesh.scale.setScalar(0.01);
     r.mesh.visible = true;
   }
 
-  update(dt: number) {
+  update(dt: number, hero?: { x: number; z: number }) {
     for (const p of this.puffs) {
       if (p.life <= 0) continue;
       p.life -= dt;
@@ -192,6 +193,7 @@ export class ImpactFx {
     }
     for (const r of this.rings) {
       if (r.life <= 0) continue;
+      if (r.followsCaster && hero) { r.mesh.position.x = hero.x; r.mesh.position.z = hero.z; }
       r.life -= dt;
       const k = Math.max(0, r.life / RING_TIME), out = 1 - k * k * k;
       r.mesh.scale.setScalar(Math.max(0.01, r.radius * out));

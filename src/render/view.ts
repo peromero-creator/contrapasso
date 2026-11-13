@@ -1,6 +1,8 @@
+import { PresentationSample } from "./presentation-sample.ts";
+import { programSamples } from "./program-warmup.ts";
 import { techniqueId, TECHNIQUES } from "../sim/techniques";
 import { abilityClip } from "./weapon-pose";
-import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
+import { Afterimages } from "./afterimages.ts";
 import { SoulFx } from "./soul-fx";
 import { CAST_TIME, CORE_TIME, abilityDuration } from "../sim/abilities";
 import { attackClip, orientWeapon, mountGrip, starterWeapon } from "./weapon-pose";
@@ -12,9 +14,6 @@ import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
 import { Underworld } from "./dressing";
 // Everything visual. Reads the simulation state, never changes it.
 import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import {
   ARENA_HX,
   ARENA_HZ,
@@ -104,6 +103,7 @@ export const CIRCLES = [
 ];
 
 interface EnemyView {
+  sample: PresentationSample;
   group: THREE.Group;
   mats: THREE.MeshStandardMaterial[];
   base: THREE.Color[];
@@ -190,6 +190,56 @@ const std = (color: number, emissive = 0x000000, ei = 1) =>
 export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
+  private preparation?: Promise<void>;
+  private preparedActors: AnimatedModel[] = [];
+  private preparedPrograms?: THREE.Scene;
+  private actorLoads: Promise<void>[] = [];
+  /** Upload common enemy meshes and compile their shaders before the run starts.
+   * Retain these materials so the program cache survives until the first wave. */
+  prepare() {
+    return this.preparation ??= (async () => {
+      await Promise.all(this.actorLoads);
+      const models = await Promise.all(['imp', 'archer', 'brute', 'warden'].map(kind => this.models.create(kind)));
+      const warmup = new THREE.Scene();
+      const textures = new Set<THREE.Texture>();
+      for (const model of models) if (model) {
+        this.preparedActors.push(model); warmup.add(model.root); model.play('idle'); model.update(0);
+        model.root.traverse(node => {
+          if (node instanceof THREE.Mesh) for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+            const map = (material as THREE.MeshStandardMaterial).map;
+            if (map) textures.add(map);
+          }
+        });
+      }
+      for (const texture of textures) this.renderer.initTexture(texture);
+      await this.soul.prepare();
+      // Exercise material variants while the preparation screen still covers the
+      // arena. No world is stepped and no gameplay/chain event is produced.
+      for (const ability of ['ember', 'iron', 'ash', 'staff-4', 'hammer-4', 'siphon-spell', 'nova-spell'] as const) {
+        this.soul.event({ type: 'ability', ability, stage: ability.endsWith('spell') ? 'release' : 'pulse', side: 'player', x: 0, z: 0 }, 'vesper-reed');
+      }
+      this.soul.event({ type: 'ability', ability: 'lance', stage: 'charge', side: 'player', x: 0, z: 0 });
+      this.consume([{ type: 'hit', x: 0, z: 0, amount: 30 }, { type: 'kill', kind: 'brute', x: 0, z: 0 }, { type: 'plunge', x: 0, z: 0 }]);
+      this.gore.update(0);
+      this.afterimages.emit(this.hero);
+      warmup.add(new THREE.Mesh(this.boltGeo, this.boltMat), new THREE.Mesh(this.shotGeo, this.soulMat), new THREE.Mesh(this.shotGeo, this.shotMat));
+      this.preparedPrograms = programSamples([this.scene, warmup]);
+      await this.renderer.compileAsync(this.preparedPrograms, this.camera, this.scene);
+      // Some drivers defer pipeline creation and buffer upload until a real draw.
+      // Draw once behind the preparation screen, then restore the clean arena in
+      // the same task, before the browser can present the warm-up geometry.
+      this.preparedPrograms.fog = this.scene.fog?.clone() ?? null;
+      this.scene.traverseVisible(node => {
+        if (node instanceof THREE.Light) this.preparedPrograms!.add(node.clone());
+      });
+      for (const node of this.preparedPrograms.children) { node.visible = true; node.frustumCulled = false; }
+      this.renderer.render(this.preparedPrograms, this.camera);
+      this.clearArenaEffects();
+      this.shake = this.punch = 0; this.kick.set(0, 0); this.lastImpactTime = -1;
+      this.finisherT = this.plungeT = this.liftPeak = 0;
+      this.renderer.render(this.scene, this.camera);
+    })();
+  }
   private gore = new Gore(this.scene);
   private impact = new ImpactFx(this.scene);
   /** Camera reactions: a shove along the blow and a brief zoom punch. */
@@ -237,12 +287,13 @@ export class View {
   private calm = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.3 : 1;
   private soul = new SoulFx(this.scene, true);
   private previousCast = 0;
-  private echoes: { root: THREE.Object3D; life: number }[] = [];
+  private afterimages!: Afterimages;
   private echoCd = 0;
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   private viewH = VIEW_HEIGHT;
   private aspect = 1;
-  private composer: EffectComposer;
+  private lastImpactTime = -1;
+  private heroSample = new PresentationSample();
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private target = new THREE.Vector3();
@@ -419,13 +470,10 @@ export class View {
 
     this.scene.background = new THREE.Color(0x0b0e14);
 
+    this.afterimages = new Afterimages(this.scene);
     this.buildArena();
     this.buildHero();
     this.buildPortal();
-
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.composer.addPass(new OutputPass());
 
     this.setCircle(0);
     this.resize();
@@ -668,7 +716,7 @@ export class View {
     this.swordPivot.position.y = 1.05;
     this.hero.add(this.swordPivot);
     this.scene.add(this.hero);
-    void this.models.create("hero", 2.2).then((model) => {
+    this.actorLoads.push(this.models.create("hero", 2.2).then((model) => {
       if (!model) return;
       this.heroModel = model;
       for (const child of this.hero.children)
@@ -681,19 +729,19 @@ export class View {
         mountGrip(hand, this.swordGrip);
         // The entire grip moves to the hand, including a relic loaded before the hero.
       }
-    });
-    this.swordGrip.add(this.weaponGlow);
-    this.weaponGlow.position.x = 0.8;
+    }));
+    // Keep light membership stable through hurt blinking and afterimage cloning.
+    this.scene.add(this.weaponGlow);
     for (const id of WEAPON_IDS) {
       const spec = weapon(id);
       if (!spec.model) continue;
-      void this.models.create(spec.model, spec.height).then((model) => {
+      this.actorLoads.push(this.models.create(spec.model, spec.height).then((model) => {
         if (!model) return;
         orientWeapon(model.root, spec);
         this.relicBlades.set(id, model.root);
         this.swordGrip.add(model.root);
         this.useWeapon(this.equippedWeapon, this.weaponLevel);
-      });
+      }));
     }
 
     this.slashMat = new THREE.MeshBasicMaterial({
@@ -757,7 +805,8 @@ export class View {
     this.soul.clear();
     clearTransientEffects(this.scene,
       [this.cracks, this.splats, this.pulses, this.particles],
-      this.damageTexts, this.echoes);
+      this.damageTexts, []);
+    this.afterimages.clear();
     this.squashT = this.squashAmp = this.dustCd = this.echoCd = 0;
     for (const c of this.fallen) this.disposeEnemy(c.view);
     this.fallen = [];
@@ -922,6 +971,7 @@ export class View {
     this.scene.add(hpBg, hpFg);
     this.scene.add(group);
     return {
+      sample: new PresentationSample(),
       group,
       mats,
       base: mats.map((m) => m.emissive.clone()),
@@ -1004,7 +1054,7 @@ export class View {
           this.impact.hit(e.x, e.z, hx / hl, hz / hl, (heavy ? 1.45 : 1) * (fin ? 1.3 : 1), weapon(this.equippedWeapon).color);
           if (fin) {
             // The chain's closing blow holds a beat longer and hits the frame harder.
-            stop = Math.max(stop, 0.045);
+            stop = Math.max(stop, 0.028);
             this.shake = Math.max(this.shake, 0.2);
             this.punch = Math.max(this.punch, 0.014);
           }
@@ -1012,8 +1062,7 @@ export class View {
           this.kick.y += (hz / hl) * (heavy ? 0.16 : 0.07);
           if (this.kick.length() > 0.3) this.kick.setLength(0.3);
           this.shake = Math.max(this.shake, heavy ? 0.17 : 0.09);
-          stop = Math.max(stop, this.equippedWeapon === 'tollkeeper' || this.equippedWeapon === 'guillotine-hymn'
-            ? (e.amount ?? 0) > 40 ? .045 : .025 : this.equippedWeapon === 'widows-fang' ? .012 : (e.amount ?? 0) > 40 ? .028 : .016);
+          if (heavy && !weapon(this.equippedWeapon).ranged) stop = Math.max(stop, .022);
           break;
         }
         case "kill":
@@ -1044,7 +1093,7 @@ export class View {
           }
           this.shake = Math.max(this.shake, e.kind === "warden" ? 0.45 : 0.22);
           this.punch = Math.max(this.punch, e.kind === "warden" ? 0.06 : 0.022);
-          stop = Math.max(stop, e.kind === "warden" ? 0.11 : 0.05);
+          stop = Math.max(stop, e.kind === "warden" ? 0.08 : 0.024);
           break;
         case "hurt":
           this.damageText(e.x, e.z, `−${e.amount ?? 0}`, "#d6a092", 2.5);
@@ -1052,7 +1101,7 @@ export class View {
           this.impact.hit(e.x, e.z, Math.random() - 0.5, Math.random() - 0.5, 1.1, 0xff3a22, 0.12);
           this.shake = Math.max(this.shake, 0.3);
           this.punch = Math.max(this.punch, 0.018);
-          stop = Math.max(stop, 0.04);
+          stop = Math.max(stop, 0.026);
           break;
         case "jump":
           this.impact.puff(e.x, e.z, 6, 0x9b8c7c, 2.4, 1.1);
@@ -1072,7 +1121,7 @@ export class View {
         case "dash":
           this.burst(e.x, 0.6, e.z, 8, 0xffe0b0, 3);
           this.impact.puff(e.x, e.z, 5, 0x9b8c7c, 2.8, 1);
-          this.pulse(e.x, e.z, 1.3);
+          this.impact.ring(e.x, e.z, 1.3, 0xffcd7e, true);
           break;
         case "spawn":
           this.burst(e.x, 0.2, e.z, 8, glow, 3);
@@ -1086,7 +1135,7 @@ export class View {
           this.burst(e.x, 0.6, e.z, 2, 0xff852a, 1.4);
           break;
         case "nova":
-          this.pulse(e.x, e.z, e.amount ?? 3);
+          this.impact.ring(e.x, e.z, e.amount ?? 3, 0xffcd7e, e.followsCaster);
           this.burst(e.x, 0.4, e.z, 16, 0xffcd7e, 5);
           break;
         case "heal":
@@ -1095,22 +1144,27 @@ export class View {
           break;
         case "echo":
           this.burst(e.x, 0.5, e.z, 22, 0xadc1ef, 4);
-          this.pulse(e.x, e.z, 2.8);
+          this.impact.ring(e.x, e.z, 2.8, 0xffcd7e, e.followsCaster);
           break;
         case "skill":
           this.burst(e.x, 1, e.z, 24, 0xe9b76e, 4);
           break;
       }
     }
+    // One accent per impact window. Multi-hit spells and burn ticks must not
+    // repeatedly halt movement for the whole duration of the attack.
+    if (stop && this.time - this.lastImpactTime < .16 && stop < .08) return 0;
+    if (stop) this.lastImpactTime = this.time;
     return stop;
   }
 
-  sync(w: World, dt: number) {
+  sync(w: World, dt: number, alpha = 1) {
     this.rivalWeapon = w.enemies.find(e => e.kind === "champion")?.weaponId ?? "starter";
     const battlefieldChanged =
       w.tick < this.lastWorldTick || w.floor - 1 !== this.circle;
     if (w.tick < this.lastWorldTick) {
       this.clearArenaEffects();
+      this.lastImpactTime = -1;
       this.stride.set(0, 0);
       this.liftPeak = this.finisherT = this.airY = this.diveFrom = this.plungeT = 0;
       this.kick.set(0, 0);
@@ -1127,7 +1181,6 @@ export class View {
       this.useWeapon(p.weaponId, p.weaponLevel);
     this.underworld.sync(w, dt);
     if (battlefieldChanged) this.soul.clear();
-    this.soul.sync(w, dt);
     this.slashMat.color.setHex(weapon(p.weaponId).color);
     if (
       p.weaponLevel >= 3 &&
@@ -1150,7 +1203,12 @@ export class View {
     this.stride.multiplyScalar(Math.exp(-dt * 26));
     if (battlefieldChanged) this.stride.set(0, 0);
     this.finisherT -= dt;
-    this.hero.position.set(p.x + this.stride.x, 0, p.z + this.stride.y);
+    const rawMotion: CombatMotion | undefined = w.phase === 'dead' || p.dashT > 0 || p.jumpT > 0 ? undefined : p.castT > 0 ? {
+      weapon: p.weaponId, ability: p.castId, elapsed: abilityDuration(p.castId!) - p.castT, combo: Number(p.castId?.split('-')[1]) || 1,
+    } : p.swingT > 0 ? { weapon: p.weaponId, elapsed: weapon(p.weaponId).swing-p.swingT, combo:p.swingN } : undefined;
+    const sampled = this.heroSample.sample(w.tick, p.x, p.z, `${p.weaponId}:${p.castT>0?'cast:'+p.castN:'swing:'+p.swingN}`, rawMotion, alpha, battlefieldChanged);
+    this.hero.position.set((p.swingT > 0 ? p.x : sampled.x) + this.stride.x, 0, (p.swingT > 0 ? p.z : sampled.z) + this.stride.y);
+    this.soul.sync(w, dt, this.hero.position);
     this.hero.rotation.y = -dirAngle(p.castT > 0 ? p.castAim : p.aim);
     const dashing = p.dashT > 0;
     // The simulation only knows "in the air"; the arc is drawn here, and a dive falls from wherever it began.
@@ -1220,9 +1278,7 @@ export class View {
           (p.swingT > 0 && p.swingN !== this.previousHeroSwing),
       );
       this.heroModel.flash(p.flash > 0.19 ? 0xa8382a : p.flash > 0 ? 0x401b16 : null);
-      const motion: CombatMotion | undefined = w.phase === 'dead' || dashing || airborne ? undefined : p.castT > 0 ? {
-        weapon: p.weaponId, ability: p.castId, elapsed: abilityDuration(p.castId!) - p.castT, combo: Number(p.castId?.split('-')[1]) || 1,
-      } : p.swingT > 0 ? { weapon: p.weaponId, elapsed: weapon(p.weaponId).swing - p.swingT, combo: p.swingN } : undefined;
+      const motion = sampled.motion;
       this.heroModel.update(dt, motion, this.airY);
       // Off the ground the shadow tightens; coming down, the floor answers.
       const lift = combatLift(motion);
@@ -1247,43 +1303,11 @@ export class View {
       this.heroModel
     ) {
       this.echoCd = 0.055;
-      const ghost = cloneSkeleton(this.hero);
-      ghost.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          const tint = (mat: THREE.Material) => {
-            const m = mat.clone();
-            m.transparent = true;
-            m.opacity = 0.16;
-            m.depthWrite = false;
-            if (m instanceof THREE.MeshStandardMaterial) {
-              m.color.setHex(0x647c89);
-              m.emissive.setHex(0);
-            }
-            return m;
-          };
-          o.material = Array.isArray(o.material)
-            ? o.material.map(tint)
-            : tint(o.material);
-        }
-      });
-      this.scene.add(ghost);
-      this.echoes.push({ root: ghost, life: 0.3 });
+      this.afterimages.emit(this.hero);
     }
-    for (const echo of this.echoes) {
-      echo.life -= dt;
-      if (battlefieldChanged) echo.life = 0;
-      echo.root.traverse((o) => {
-        if (o instanceof THREE.Mesh)
-          for (const m of Array.isArray(o.material)
-            ? o.material
-            : [o.material]) {
-            m.opacity = 0.16 * Math.max(0, echo.life / 0.3);
-            if (echo.life <= 0) m.dispose();
-          }
-      });
-      if (echo.life <= 0) this.scene.remove(echo.root);
-    }
-    this.echoes = this.echoes.filter((e) => e.life > 0);
+    if (battlefieldChanged) this.afterimages.clear();
+    this.afterimages.update(dt);
+    this.swordGrip.localToWorld(this.weaponGlow.position.set(.8, 0, 0));
     this.previousHeroSwing = p.swingN;
     this.previousCast = p.castN;
     this.previousHero.set(p.x, p.z);
@@ -1352,7 +1376,8 @@ export class View {
           }
         });
       }
-      this.syncEnemy(e, v);
+      const position = v.sample.sample(w.tick, e.x, e.z, '', undefined, alpha, battlefieldChanged);
+      this.syncEnemy(e, v, position);
       v.model?.update(dt, e.kind === 'champion' && (e.ability?.castT ?? 0) > 0 ? {
         weapon: e.weaponId ?? 'starter', ability: e.ability!.castId, elapsed: abilityDuration(e.ability!.castId!) - e.ability!.castT, combo: Number(e.ability!.castId?.split('-')[1]) || 1,
       } : undefined);
@@ -1443,7 +1468,7 @@ export class View {
       m.emissiveIntensity = 0.4 + Math.sin(this.time * 1.2 + m.id) * 0.03;
 
     this.gore.update(dt);
-    this.impact.update(dt);
+    this.impact.update(dt, this.hero.position);
     // particles
     for (const text of this.damageTexts) {
       text.life -= dt;
@@ -1544,7 +1569,7 @@ export class View {
     v.hpFg.material.dispose();
   }
 
-  private syncEnemy(e: Enemy, v: EnemyView) {
+  private syncEnemy(e: Enemy, v: EnemyView, position: { x: number; z: number } = e) {
     const wind = e.state === "windup";
     // A blow squashes the body and tips it away from the attacker; a wind-up trembles.
     const k = e.flash > 0 ? Math.min(1, e.flash / 0.14) : 0;
@@ -1552,7 +1577,7 @@ export class View {
     const wob = k > 0 ? Math.exp(-3.2 * (1 - k)) * Math.cos((1 - k) * 8.5) * heft : 0;
     const charge = wind ? Math.max(0, Math.min(1, 1 - e.t / (WINDUP[e.kind] || 0.5))) : 0;
     const tremble = wind ? Math.sin(this.time * 46 + e.id) * (0.012 + 0.04 * charge) : 0;
-    v.group.position.set(e.x + tremble, 0, e.z);
+    v.group.position.set(position.x + tremble, 0, position.z);
     v.group.rotation.set(
       0,
       (e.ability?.castT ?? 0) > 0
@@ -1630,8 +1655,8 @@ export class View {
     v.hpBg.visible = v.hpFg.visible = show;
     if (show) {
       const bw = e.kind === "warden" ? 4 : 1.3;
-      v.hpBg.position.set(e.x - bw / 2, v.h, e.z);
-      v.hpFg.position.set(e.x - bw / 2, v.h, e.z);
+      v.hpBg.position.set(position.x - bw / 2, v.h, position.z);
+      v.hpFg.position.set(position.x - bw / 2, v.h, position.z);
       v.hpFg.scale.x = Math.max(0.001, bw * (e.hp / e.maxHp));
     }
   }
@@ -1651,7 +1676,6 @@ export class View {
     const w = window.innerWidth;
     const h = window.innerHeight;
     this.renderer.setSize(w, h, false);
-    this.composer.setSize(w, h);
     this.aspect = w / h;
     // narrow windows zoom out so at least 20 units of arena width stay visible
     this.viewH = Math.max(VIEW_HEIGHT, 20 / this.aspect);
@@ -1665,6 +1689,6 @@ export class View {
   }
 
   render() {
-    this.composer.render();
+    this.renderer.render(this.scene, this.camera);
   }
 }

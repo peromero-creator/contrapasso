@@ -2689,3 +2689,43 @@ h1 {
     radial-gradient(ellipse 85% 80% at 50% 46%, transparent 48%, rgba(7, 5, 4, 0.62) 100%),
     linear-gradient(to bottom, rgba(7, 5, 4, 0.22), transparent 18%, transparent 80%, rgba(7, 5, 4, 0.28));
 }
+
+/* Training: readable branch first, one decision beside its preview. */
+.tree-overview { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:16px; margin:24px 0 32px; }
+.tree-path { min-height:185px; padding:22px 16px; display:flex; flex-direction:column; align-items:center; gap:12px; background:radial-gradient(ellipse at top,#3a3022,#171813); border:1px solid #766143; color:#c9bfa7; cursor:pointer; font:14px var(--body); }
+.tree-path:hover,.tree-path:focus-visible { border-color:#d1ae72; background:#342b20; }
+.tree-path strong { font:17px 'Cinzel',serif; color:#ead6b2; }
+.path-icon .skill-icon { width:40px; height:40px; margin:0; }
+.path-growth { display:flex; flex-wrap:wrap; justify-content:center; gap:5px; margin-top:auto; }
+.path-growth i { width:8px; height:8px; border:1px solid #9c8156; border-radius:50%; }
+.path-growth i.learned { background:#ceb375; }
+#forge .skill-theatre[hidden] { display:none; }
+.tree-tabs button { font-size:14px; padding:10px 13px; }
+.tree-tabs i { font-size:10px; }
+.tree-node { width:185px; }
+.tree-node strong { font:600 calc(14px * var(--label-scale,1))/1.35 var(--body); color:#e4d4b6; text-shadow:0 2px 4px #12110d; }
+.tree-node small { font-size:calc(11px * var(--label-scale,1)); letter-spacing:.05em; color:#c0ac88; }
+.tree-node.sealed { opacity:.8; }
+.tree-node.sealed .node-orb { color:#8e836e; }
+.tree-root-label { display:none; }
+.tree-side .skill-theatre > div,.tree-side #skill-stage { height:190px; min-height:190px; }
+#forge .tree-side .skill-theatre article { display:none; }
+#forge .skill-theatre.expanded article { display:block; }
+.tree-detail { padding:18px 22px; }
+.tree-detail h3 { font-size:23px; }
+.tree-detail p { font-size:15px; line-height:1.5; color:#d0c7b4; }
+.technique-stats { margin:14px 0; }
+.technique-stats span { font-size:13px; }
+.technique-stats b { font-size:23px; }
+.tree-detail .tree-requirement { font-size:14px; min-height:0; color:#ccb589; }
+.tree-learned { font-size:13px; padding:12px 0; }
+.tree-detail .btn { font-size:14px; margin-top:6px; }
+.tree-preview { display:block; margin:14px 0 0; padding:5px 0; background:none; color:#cbb48a; border:0; font:14px var(--body); cursor:pointer; }
+.tree-extra { margin-top:16px; font:13px var(--body); color:#a99b81; }
+.tree-extra summary { cursor:pointer; }
+.tree-extra p { font-size:13px; }
+.hold-status:empty { display:none; }
+#skill-preview-label { font-size:11px; }
+@media(min-width:761px) { .tree-side { max-height:none; overflow:visible; } .tree-viewport { height:max(430px,calc(100dvh - 315px)); } }
+@media(max-width:1000px) { .tree-overview { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:600px) { .tree-overview { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .tree-path { min-height:165px; } }

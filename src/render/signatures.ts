@@ -1,13 +1,26 @@
 import * as T from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Original sculpted silhouettes. Translucent pigment, never additive light.
 function mesh(root: T.Group, geometry: T.BufferGeometry, color: number, opacity: number) {
-  const part=new T.Mesh(geometry,new T.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,side:T.DoubleSide,vertexColors:geometry.hasAttribute('color')}));
+  const part=new T.Mesh(geometry,new T.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false,side:T.DoubleSide,forceSinglePass:true,vertexColors:geometry.hasAttribute('color')}));
   part.userData.alpha=opacity; root.add(part); return part;
 }
 function cut(points: number[][], depth=.08) {
   const shape=new T.Shape(); points.forEach(([x,y],i)=>i?shape.lineTo(x,y):shape.moveTo(x,y)); shape.closePath();
   return new T.ExtrudeGeometry(shape,{depth,bevelEnabled:false});
+}
+// These silhouettes are immutable. Repeated casts reuse their GPU buffers.
+const signatureGeometry = new Map<string, T.BufferGeometry>();
+function cachedShape(key: string, build: () => T.BufferGeometry) {
+  let geometry = signatureGeometry.get(key);
+  if (!geometry) { geometry = build(); geometry.userData.sharedEffect = true; signatureGeometry.set(key, geometry); }
+  return geometry;
+}
+function joined(parts: T.BufferGeometry[]) {
+  const result = mergeGeometries(parts)!;
+  for (const part of parts) part.dispose();
+  return result;
 }
 /** A horned soul at the head of Astral Funeral's real projectile fan. */
 function sculptDragon(root: T.Group, color: number) {
@@ -48,7 +61,7 @@ export function brokenCathedral(radius: number, color: number) {
   const root=new T.Group(),pieces:T.Mesh[]=[];
   for(let i=0;i<12;i++) {
     const a=i*Math.PI/6, distance=radius*(.35+(i%3)*.17);
-    const plate=mesh(root,cut([[-.2,-.12],[.18,-.25],[.45,.05],[.04,.24],[-.33,.14]],.1+(i%3)*.08),i%3===0?color:0x736756,i%3===0?.3:.24);
+    const plate=mesh(root,cachedShape(`plate-${i%3}`,()=>cut([[-.2,-.12],[.18,-.25],[.45,.05],[.04,.24],[-.33,.14]],.1+(i%3)*.08)),i%3===0?color:0x736756,i%3===0?.3:.24);
     plate.scale.setScalar(.55);plate.rotation.x=-Math.PI/2;plate.rotation.z=a;plate.position.set(Math.cos(a)*distance,.04,Math.sin(a)*distance);pieces.push(plate);
   }
   return {root,animate:(t:number)=>pieces.forEach((p,i)=>{p.position.y=.03+Math.sin(Math.PI*t)*(.3+(i%3)*.18);p.rotation.y=Math.sin(Math.PI*t)*((i%2?1:-1)*.3);})};
@@ -74,18 +87,21 @@ export type RitualKind='furnace'|'harvest'|'covenant'|'orbit';
 export function ritualPulse(kind:RitualKind,radius:number,color:number,flame?:T.Texture) {
   const root=new T.Group(), strokes:T.Mesh[]=[], tongues:{mesh:T.Mesh;angle:number;height:number}[]=[];
   const count=kind==='orbit'?3:kind==='furnace'?9:7;
-  for(let i=0;i<count;i++) {
+  const geometry=cachedShape(`pulse-${kind}-${radius}`,()=>joined(Array.from({length:count},(_,i)=>{
     const a=i*Math.PI*2/count;
-    const stroke=mesh(root,ribbon(t=>{
+    return ribbon(t=>{
       const angle=a+(kind==='furnace'?.23:kind==='orbit'?1.8:1.05)*t;
       const r=kind==='orbit'?radius*(.8+.2*t):kind==='furnace'?radius*(.55+.24*t):radius*(.12+.88*t);
       const y=kind==='furnace'?.045:kind==='orbit'?.45+Math.sin(Math.PI*t)*.35:Math.sin(Math.PI*t)*1.25+.15;
       return new T.Vector3(Math.cos(angle)*r,y,Math.sin(angle)*r);
-    },kind==='furnace'?.12:kind==='orbit'?.23:.18),color,kind==='furnace'?.65:.55);
-    strokes.push(stroke);
+    },kind==='furnace'?.12:kind==='orbit'?.23:.18);
+  })));
+  strokes.push(mesh(root,geometry,color,kind==='furnace'?.65:.55));
+  for(let i=0;i<count;i++) {
+    const a=i*Math.PI*2/count;
     if(kind==='furnace' && flame) {
       const height=.9+(i%3)*.35;
-      const tongue=mesh(root,new T.PlaneGeometry(.8,height),0xffffff,.67);
+      const tongue=mesh(root,cachedShape(`tongue-${height}`,()=>new T.PlaneGeometry(.8,height)),0xffffff,.67);
       (tongue.material as T.MeshBasicMaterial).map=flame;
       tongue.rotation.y=.6; tongues.push({mesh:tongue,angle:a,height});
     }
@@ -113,13 +129,11 @@ export function ritualPulse(kind:RitualKind,radius:number,color:number,flame?:T.
 /** Quiet gathering wisps grow denser before release; they never fill the whole arena. */
 export function ritualCharge(color:number) {
   const root=new T.Group(), wisps:T.Mesh[]=[];
-  for(let i=0;i<5;i++) {
+  const geometry=cachedShape('charge',()=>joined(Array.from({length:5},(_,i)=>{
     const a=i*Math.PI*2/5;
-    const w=mesh(root,ribbon(t=>{
-      const r=1.15*(1-t)+.16,angle=a+t*1.1;
-      return new T.Vector3(Math.cos(angle)*r,.08+t*t*1.6,Math.sin(angle)*r);
-    },.075),color,.32);wisps.push(w);
-  }
+    return ribbon(t=>{const r=1.15*(1-t)+.16,angle=a+t*1.1;return new T.Vector3(Math.cos(angle)*r,.08+t*t*1.6,Math.sin(angle)*r);},.075);
+  })));
+  wisps.push(mesh(root,geometry,color,.32));
   return {root,animate:(t:number)=>{
     root.rotation.y=t*.55;root.scale.setScalar(1-.24*t);
     wisps.forEach(w=>{w.userData.fade=Math.sin(Math.PI*Math.min(.95,t))**.6;});

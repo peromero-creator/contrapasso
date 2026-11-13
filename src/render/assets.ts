@@ -49,7 +49,10 @@ interface Manifest {
   floors: Record<string, string>;
 }
 
+const fitBounds = new WeakMap<GLTF, Map<number, THREE.Box3>>();
+
 export class AnimatedModel {
+  private lastFlash: number | null | undefined;
   private presentation = new THREE.Group();
   private staffFocus: THREE.Group | null = null;
   readonly root = new THREE.Group();
@@ -79,7 +82,15 @@ export class AnimatedModel {
       node.castShadow = true;
       node.receiveShadow = true;
       // Skinned bounds are only valid for the bind pose; a handful of actors is cheap to always draw.
-      if (node instanceof THREE.SkinnedMesh) node.frustumCulled = false;
+      if (node instanceof THREE.SkinnedMesh) {
+        node.frustumCulled = false;
+        // WebGLRenderer still computes a skinned sphere for depth sorting even
+        // with frustum culling off. Scanning every posed vertex on first draw
+        // stalls each new actor/echo. The bind-pose center is sufficient for
+        // sorting; actors are not culled or picked through this approximate bound.
+        if (!node.geometry.boundingSphere) node.geometry.computeBoundingSphere();
+        node.boundingSphere = node.geometry.boundingSphere!.clone();
+      }
       const copy = (material: THREE.Material) => {
         const m = material.clone();
         this.allMaterials.add(m);
@@ -98,13 +109,20 @@ export class AnimatedModel {
     const fit = new THREE.Group();
     fit.add(this.content);
     fit.rotation.y = (rotationY * Math.PI) / 180;
-    // Bones must have world matrices before a skinned mesh can be measured.
-    fit.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(fit, true);
-    const scale = height / Math.max(0.01, box.getSize(new THREE.Vector3()).y);
+    // A template's bind-pose bounds do not change between spawns. Measuring every
+    // skinned vertex twice per actor used to stall enemy waves and summoned guards.
+    let rotations = fitBounds.get(template);
+    if (!rotations) { rotations = new Map(); fitBounds.set(template, rotations); }
+    let bounds = rotations.get(rotationY);
+    if (!bounds) {
+      fit.updateMatrixWorld(true);
+      bounds = new THREE.Box3().setFromObject(fit, true);
+      rotations.set(rotationY, bounds);
+    }
+    const scale = height / Math.max(0.01, bounds.getSize(new THREE.Vector3()).y);
     fit.scale.setScalar(scale);
-    fit.updateMatrixWorld(true);
-    box.setFromObject(fit, true);
+    const box = bounds.clone();
+    box.min.multiplyScalar(scale); box.max.multiplyScalar(scale);
     const center = box.getCenter(new THREE.Vector3());
     fit.position.set(-center.x, -box.min.y, -center.z);
     this.presentation.add(fit);
@@ -129,7 +147,7 @@ export class AnimatedModel {
       if (node instanceof THREE.SkinnedMesh) skinned.push(node);
     });
     for (const mesh of skinned) {
-      mesh.geometry.computeBoundingBox();
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
       const local = mesh.geometry
         .boundingBox!.getSize(new THREE.Vector3())
         .length();
@@ -151,6 +169,7 @@ export class AnimatedModel {
       hull.quaternion.copy(mesh.quaternion);
       hull.scale.copy(mesh.scale);
       hull.frustumCulled = false;
+      hull.boundingSphere = mesh.boundingSphere!.clone();
       mesh.parent?.add(hull);
     }
   }
@@ -191,10 +210,12 @@ export class AnimatedModel {
       m.material.color.multiply(new THREE.Color(color));
   }
   flash(color: number | null) {
-    for (const m of this.materials)
-      m.material.emissive.copy(
-        color === null ? m.base : new THREE.Color(color),
-      );
+    if (color === this.lastFlash) return;
+    this.lastFlash = color;
+    for (const m of this.materials) {
+      if (color === null) m.material.emissive.copy(m.base);
+      else m.material.emissive.setHex(color);
+    }
   }
   update(dt: number, motion?: CombatMotion, air = 0) {
     this.transition.restore();
@@ -203,8 +224,7 @@ export class AnimatedModel {
     this.posed.clear();
     if(this.staffFocus)this.staffFocus.visible=false;
     this.presentation.position.y = combatLift(motion) + air;
-    this.mixer.update(dt);
-    if (!motion || !this.active) { this.transition.apply(dt); return; }
+    if (!motion || !this.active) { this.mixer.update(dt); this.transition.apply(dt); return; }
     this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;
     this.mixer.update(0);
     for (const [name, angles] of Object.entries(combatPose(motion))) {

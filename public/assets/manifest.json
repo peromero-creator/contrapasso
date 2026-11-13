@@ -90,7 +90,7 @@
       }
     },
     "imp": {
-      "file": "/assets/models/imp-981adb69935d.glb",
+      "file": "/assets/models/imp-fdad37667d27.glb",
       "height": 2.2,
       "rotationY": 90,
       "clips": [
@@ -98,7 +98,7 @@
         "run",
         "attack"
       ],
-      "bytes": 592264,
+      "bytes": 541412,
       "windows": {
         "attack": [
           0.75,
@@ -112,7 +112,7 @@
       }
     },
     "archer": {
-      "file": "/assets/models/archer-abdc23d7f50e.glb",
+      "file": "/assets/models/archer-5c75cb2f6272.glb",
       "height": 2.2,
       "rotationY": 90,
       "clips": [
@@ -120,7 +120,7 @@
         "run",
         "attack"
       ],
-      "bytes": 674664,
+      "bytes": 616792,
       "windows": {
         "attack": [
           0.2,
@@ -134,7 +134,7 @@
       }
     },
     "brute": {
-      "file": "/assets/models/brute-988267fb308f.glb",
+      "file": "/assets/models/brute-02d2f5b85e87.glb",
       "height": 2.2,
       "rotationY": 90,
       "clips": [
@@ -143,7 +143,7 @@
         "attack",
         "dash"
       ],
-      "bytes": 883692,
+      "bytes": 800380,
       "windows": {
         "attack": [
           1.1,
