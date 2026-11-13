@@ -6,6 +6,7 @@ import { WeaponTrail } from '../src/render/weapon-trail.ts';
 import { Sound } from '../src/audio/sound.ts';
 import { inkFamily } from '../src/render/skill-ink.ts';
 import type { Enemy } from '../src/sim/world.ts';
+import { Atmosphere } from '../src/render/atmosphere.ts';
 
 // CPU-side canvas substitute: verify pooling and lifetime, not raster appearance.
 const oldDocument=Object.getOwnPropertyDescriptor(globalThis,'document');
@@ -24,6 +25,16 @@ weight.update(1);assert.equal(weight.root.children.filter(n=>n.visible).length,1
 weight.update(1);assert.ok(weight.root.children.every(n=>!n.visible));
 for(let i=0;i<100;i++)weight.event({type:'ability',stage:'pulse',ability:'hammer-1',side:'player',x:i,z:0});
 assert.equal(weight.root.children.length,6,'fixed footprint pool remains bounded');
+const beforeFinisher=weight.root.children.map(s=>s.position.toArray());
+weight.finisher(99,99,0,0xaabbcc);
+assert.deepEqual(weight.root.children.map(s=>s.position.toArray()),beforeFinisher,'a basic finisher cannot evict a skill from a full pool');
+weight.clear();weight.finisher(2,3,.6,0xaabbcc);
+const closing=weight.root.children.find(n=>n.visible)!;
+assert.equal(closing.children[1].visible,false,'closing brush mark has no misleading area ring');
+assert.ok(closing.children[0].renderOrder<highestPlayer);
+weight.update(.35);assert.ok(weight.root.children.every(n=>!n.visible),'finisher mark expires');
+weight.event({type:'ability',stage:'pulse',ability:'staff-2',side:'player',x:0,z:0});
+assert.ok(weight.root.children.find(n=>n.visible)!.children[1].visible,'reusing a slot restores the skill edge');
 weight.clear();assert.equal(weight.peakChain,0);
 assert.equal(new Set(['ember','ash','iron'].map(id=>inkFamily(id as 'ember'))).size,3,'ultimates have distinct masks');
 if(oldDocument)Object.defineProperty(globalThis,'document',oldDocument);else Reflect.deleteProperty(globalThis,'document');
@@ -37,3 +48,11 @@ const sound=new Sound(true);sound.toggle();sound.muted=false;sound.unlock();soun
 sound.consume([{type:'ability',stage:'charge',ability:'ember',side:'player',x:0,z:0},{type:'ability',stage:'pulse',ability:'ember',side:'player',x:0,z:0}]);
 assert.equal(audioContexts,0,'silent mode never creates an audio context, including ultimate cues');
 console.log('Polish: PASS (warning priority, bounded ink/trails, lasting orbit, distinct cores, hard audio lock)');
+const atmosphere=new Atmosphere(),buffer=atmosphere.mesh.instanceMatrix.array;
+for(let i=0;i<3000;i++)atmosphere.update(1/120,i%6);
+assert.equal(atmosphere.mesh.count,24);assert.equal(atmosphere.mesh.instanceMatrix.array,buffer);
+assert.ok(Array.from(buffer).every(Number.isFinite));assert.equal(atmosphere.mesh.material.blending,T.NormalBlending);
+assert.equal(atmosphere.mesh.material.forceSinglePass,true);
+const paused=Array.from(buffer);atmosphere.update(1,5,true);assert.deepEqual(Array.from(buffer),paused,'reduced motion freezes ambient flecks');
+atmosphere.mesh.geometry.dispose();atmosphere.mesh.material.dispose();
+console.log('Atmosphere: PASS (24 reused instances, finite transforms, one pass, reduced motion)');

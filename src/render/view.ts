@@ -9,7 +9,7 @@ import { abilityClip } from "./weapon-pose";
 import { Afterimages } from "./afterimages.ts";
 import { SoulFx } from "./soul-fx";
 import { CAST_TIME, CORE_TIME, abilityContact, abilityDuration } from "../sim/abilities";
-import { skillInk } from "./skill-ink.ts";
+import { skillInk, finisherInk } from "./skill-ink.ts";
 import { SkillWeight, skillTier } from "./skill-weight";
 import { attackClip, orientWeapon, mountGrip, starterWeapon } from "./weapon-pose";
 import { Gore } from "./gore";
@@ -231,6 +231,7 @@ export class View {
       for (const texture of textures) this.renderer.initTexture(texture);
       await this.soul.prepare();
       for(const id of ['sword-1','hammer-1','axe-1','dagger-1','spear-1','crossbow-1','staff-1','ember','ash','iron'] as const)this.renderer.initTexture(skillInk(id));
+      this.renderer.initTexture(finisherInk());
       // Exercise material variants while the preparation screen still covers the
       // arena. No world is stepped and no gameplay/chain event is produced.
       for (const ability of ['ember', 'iron', 'ash', 'staff-4', 'hammer-4', 'siphon-spell', 'nova-spell'] as const) {
@@ -279,6 +280,7 @@ export class View {
   /** Presentation lag that turns the simulation's instant attack step into a stride. */
   private stride = new THREE.Vector2();
   private finisherT = 0;
+  private wounded = 0;
   /** Jump presentation: current height, and where a dive started from. */
   private airY = 0;
   private diveFrom = 0;
@@ -1068,6 +1070,10 @@ export class View {
       this.soul.event(e, e.side === "enemy" ? this.rivalWeapon : this.equippedWeapon);
       switch (e.type) {
         case "swing":
+          if(e.amount===2 && e.side!=='enemy') {
+            const angle=dirAngle(e.dir??0);
+            this.skillWeight.finisher(e.x+Math.cos(angle)*1.3,e.z+Math.sin(angle)*1.3,angle,weapon(this.equippedWeapon).color);
+          }
           if (e.amount === 2 && e.side !== "enemy") this.finisherT = 0.5;
           this.slashT = 0; // The shared weapon-specific ink stroke now owns the swing silhouette.
           this.swingSide = -this.swingSide;
@@ -1075,6 +1081,10 @@ export class View {
           this.slashMat.color.setHex(e.amount === 2 ? 0xfff0d0 : 0xffb46a);
           break;
         case "ranged":
+          if(e.amount===2 && e.side!=='enemy') {
+            const angle=dirAngle(e.dir??0);
+            this.skillWeight.finisher(e.x+Math.cos(angle)*.8,e.z+Math.sin(angle)*.8,angle,weapon(this.equippedWeapon).color);
+          }
           break;
         case "hit": {
           const heavy = (e.amount ?? 0) > 40;
@@ -1205,6 +1215,7 @@ export class View {
       this.lastImpactTime = -1;
       this.stride.set(0, 0);
       this.liftPeak = this.finisherT = this.airY = this.diveFrom = this.plungeT = 0;
+      this.wounded = 0;
       this.kick.set(0, 0);
       this.shake = this.punch = 0;
     }
@@ -1361,7 +1372,10 @@ export class View {
       );
       this.heroModel.flash(p.flash > 0.19 ? 0xa8382a : p.flash > 0 ? 0x401b16 : null);
       const motion = sampled.motion;
-      this.heroModel.update(dt, motion, this.airY);
+      const resting=!motion&&!moving&&!airborne&&!dashing&&this.plungeT<=0&&w.phase!=='dead';
+      const fatigue=resting?Math.min(1,Math.max(0,(.3-p.hp/p.maxHp)/.2)):0;
+      this.wounded+=(fatigue-this.wounded)*(1-Math.exp(-dt*5));
+      this.heroModel.update(dt, motion, this.airY,undefined,resting?{wounded:this.wounded}:undefined);
       // Off the ground the shadow tightens; coming down, the floor answers.
       const lift = combatLift(motion);
       const height = Math.min(1, lift + this.airY / JUMP_HEIGHT);

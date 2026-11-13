@@ -14,6 +14,7 @@ import {
   CORES,
 } from "../sim/abilities";
 import * as THREE from "three";
+import { inspectionWeight } from './rest-pose.ts';
 import { ModelLibrary, type AnimatedModel } from "./assets";
 import { weapon, weaponId, type WeaponId } from "../sim/weapons";
 import { attackClip, orientWeapon, mountGrip, starterWeapon } from "./weapon-pose";
@@ -161,6 +162,9 @@ export class RelicStage {
   private playing = false;
   private last = 0;
   private speed = 1;
+  private inspectionTime = 0;
+  private inspecting = 0;
+  private dragging = false;
   private ready: Promise<void>;
   constructor(
     private canvas: HTMLCanvasElement,
@@ -189,9 +193,9 @@ export class RelicStage {
     if(this.showcase) {
       let drag:number|null=null;
       canvas.style.touchAction='none';canvas.style.cursor='grab';
-      canvas.addEventListener('pointerdown',e=>{drag=e.clientX;canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';});
+      canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;drag=e.clientX;this.dragging=true;this.inspectionTime=0;canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';});
       canvas.addEventListener('pointermove',e=>{if(drag===null||!this.hero)return;this.hero.root.rotation.y+=(e.clientX-drag)*.009;drag=e.clientX;});
-      const end=()=>{drag=null;canvas.style.cursor='grab';};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+      const end=()=>{drag=null;this.dragging=false;canvas.style.cursor='grab';};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('lostpointercapture',end);
     }
     this.tick = this.tick.bind(this);
     requestAnimationFrame(this.tick);
@@ -206,6 +210,7 @@ export class RelicStage {
   }
   async select(id: WeaponId) {
     if (!this.loading && id === this.identity && (this.blade || id === 'starter')) return;
+    this.inspectionTime=0;this.inspecting=0;
     this.loading = true;
     this.starter.visible = false;
     if (this.blade) this.blade.root.visible = false;
@@ -260,7 +265,11 @@ export class RelicStage {
       this.camera.updateProjectionMatrix();
     }
     if(this.showcase) {
-      this.hero.play('idle');this.hero.update(document.documentElement.classList.contains('calm')?0:dt);
+      const calm=document.documentElement.classList.contains('calm');
+      if(!calm&&!this.dragging)this.inspectionTime+=dt;
+      const target=calm||this.dragging?0:inspectionWeight(this.inspectionTime);
+      this.inspecting=calm?0:this.inspecting+(target-this.inspecting)*(1-Math.exp(-dt*10));
+      this.hero.play('idle');this.hero.update(calm?0:dt,undefined,0,undefined,{inspect:this.inspecting,weapon:this.identity});
       this.label.textContent=`${weapon(this.identity).name} · Drag to turn`;
       this.renderer.render(this.scene,this.camera);return;
     }

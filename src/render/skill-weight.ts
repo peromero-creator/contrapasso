@@ -1,4 +1,4 @@
-import { skillInk } from "./skill-ink.ts";
+import { skillInk, finisherInk } from "./skill-ink.ts";
 import { FX_ORDER, FX_ALPHA } from "./effect-policy.ts";
 import * as T from "three";
 import { TECHNIQUES, techniqueId } from "../sim/techniques.ts";
@@ -106,12 +106,21 @@ export class SkillWeight {
     s.fill.material.map=skillInk(e.ability!);
     s.peak = FX_ALPHA.floor;
     s.fill.geometry = FILL[shape]; s.edge.geometry = EDGE[shape];
+    s.edge.visible = true;
     s.fill.material.color.setHex(color);
     s.edge.material.color.setHex(color).lerp(new T.Color(0xfff0d0), 0.35);
     s.root.position.set(e.x, 0.05, e.z);
     s.root.rotation.y = -(e.dir ?? 0) * Math.PI * 2 / 1024;
     s.root.visible = true;
     this.paint(s);
+  }
+  /** A closing basic strike leaves one short brush mark at contact. It cannot evict a skill. */
+  finisher(x:number,z:number,direction:number,color:number) {
+    const s=this.stamps.find(s=>!s.root.visible);if(!s)return;
+    s.shape='disc';s.reach=.95;s.age=0;s.life=.34;s.duck=1;s.peak=.6;s.ability=undefined;
+    s.fill.geometry=FILL.disc;s.fill.material.map=finisherInk();s.fill.material.color.setHex(color);
+    s.fill.renderOrder=FX_ORDER.strike;s.edge.visible=false;
+    s.root.position.set(x,.052,z);s.root.rotation.y=-direction;s.root.visible=true;this.paint(s);
   }
   private paint(s: Stamp) {
     const t = Math.min(1, s.age / s.life), snap = Math.min(1, t / 0.16), out = 1 - (1 - snap) ** 3;

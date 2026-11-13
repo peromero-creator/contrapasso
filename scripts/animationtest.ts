@@ -58,6 +58,14 @@ actor.update(.1,{weapon:'tollkeeper',combo:3,elapsed:.12});
 assert.ok(actor.bone('Spine')!.quaternion.angleTo(new THREE.Quaternion())>.01);
 actor.update(0);
 assert.ok(actor.bone('Spine')!.quaternion.angleTo(new THREE.Quaternion())<1e-7,'an additive accent never leaks into the next pose');
+actor.update(0,undefined,0,undefined,{wounded:1});
+const woundedPose=actor.bone('Spine')!.quaternion.clone();
+for(let i=0;i<200;i++)actor.update(0,undefined,0,undefined,{wounded:1});
+assert.ok(actor.bone('Spine')!.quaternion.angleTo(woundedPose)<1e-7,'wounded idle never accumulates rotation');
+actor.update(0);assert.ok(actor.bone('Spine')!.quaternion.angleTo(new THREE.Quaternion())<1e-7,'rest pose clears on movement or healing');
+actor.update(0,undefined,0,undefined,{inspect:1,weapon:'vesper-reed'});
+assert.ok(actor.bone('Spine')!.quaternion.angleTo(new THREE.Quaternion())>.01);
+actor.update(0);assert.ok(actor.bone('Spine')!.quaternion.angleTo(new THREE.Quaternion())<1e-7,'inspection clears without moving the actor root');
 const hand = new THREE.Group(), grip = new THREE.Group(); hand.scale.setScalar(.012);
 mountGrip(hand,grip);grip.add(starterWeapon());hand.updateMatrixWorld(true);
 assert.ok(grip.getWorldScale(new THREE.Vector3()).distanceTo(new THREE.Vector3(1,1,1))<1e-7,'held prop keeps its world size on a normalized rig');
@@ -107,6 +115,17 @@ for(const id of ['spear-1','spear-2','spear-4','dagger-1','sword-2'] as const) {
   const lane=new THREE.Vector3(1,.025,0).normalize().transformDirection(aiming.root.matrixWorld);
   assert.ok(tipAxis.dot(lane)>.999,`${id}: held tip follows the committed lane`);
   aiming.update(0);assert.ok(aiming.bone('RightHand')!.quaternion.angleTo(new THREE.Quaternion())<1e-7);
+}
+aiming.update(1);
+for(const id of WEAPON_IDS) {
+  const h=aiming.bone('RightHand')!, f=aiming.bone('RightForeArm')!;
+  const length=h.getWorldPosition(new THREE.Vector3()).distanceTo(f.getWorldPosition(new THREE.Vector3()));
+  aiming.update(0,undefined,0,undefined,{inspect:1,weapon:id});
+  const pose=h.quaternion.clone();
+  for(let i=0;i<40;i++)aiming.update(0,undefined,0,undefined,{inspect:1,weapon:id});
+  assert.ok(h.quaternion.angleTo(pose)<1e-7,`${id}: inspection does not accumulate wrist rotation`);
+  assert.ok(Math.abs(length-h.getWorldPosition(new THREE.Vector3()).distanceTo(f.getWorldPosition(new THREE.Vector3())))<1e-7,`${id}: inspection preserves limb length`);
+  aiming.update(0);assert.ok(h.quaternion.angleTo(new THREE.Quaternion())<1e-7,`${id}: inspection wrist resets`);
 }
 aiming.dispose();body.geometry.dispose();body.material.dispose();
 console.log('Ranged hand posing: PASS (rotated actor, forward muzzle, unchanged limb lengths, clean recovery)');

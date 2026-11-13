@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { batchScenery } from "./static-batch.ts";
+import { Atmosphere } from './atmosphere.ts';
 import type { ModelLibrary } from "./assets";
 import { ARENA_HX, ARENA_HZ, type World } from "../sim/world";
 
@@ -14,6 +15,8 @@ export class Underworld {
   private spider = new THREE.Group();
   private drops = new Map<number, THREE.Group>();
   private time = 0;
+  private atmosphere = new Atmosphere();
+  private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private stoneMaps = new Map<THREE.Texture, THREE.CanvasTexture>();
   private dark = new THREE.MeshStandardMaterial({
     color: 0x4c4840,
@@ -24,6 +27,7 @@ export class Underworld {
     private models: ModelLibrary,
   ) {
     scene.add(this.root);
+    this.root.add(this.atmosphere.mesh);
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 128;
     const ink = canvas.getContext("2d")!;
@@ -229,6 +233,8 @@ export class Underworld {
     this.time += dt;
     this.root.visible = w.mode === "solo";
     const circle = chamber ? 5 : Math.max(0, Math.min(4, visualCircle));
+    this.atmosphere.mesh.visible=w.mode==='solo';
+    if(w.mode==='solo')this.atmosphere.update(dt,circle,this.reducedMotion.matches);
     this.circles.forEach((g, i) => {
       g.visible = i === circle;
     });

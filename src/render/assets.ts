@@ -7,6 +7,7 @@ import { abilityContact, abilityDuration } from "../sim/abilities.ts";
 import { clipContact, combatLift, combatPose, motionClock, staffGesture, piercingGesture, crossbowRecoil, type CombatMotion } from "./combat-motion.ts";
 
 import { PoseTransition } from "./pose-transition.ts";
+import { restPose, type RestPose } from './rest-pose.ts';
 
 interface ModelSpec {
   file: string;
@@ -235,7 +236,7 @@ export class AnimatedModel {
       else m.material.emissive.setHex(color);
     }
   }
-  update(dt: number, motion?: CombatMotion, air = 0, clipProgress?: number) {
+  update(dt: number, motion?: CombatMotion, air = 0, clipProgress?: number, rest?: RestPose) {
     this.transition.restore();
     // Restore before sampling: additive accents never accumulate on idle or a new clip.
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
@@ -246,7 +247,16 @@ export class AnimatedModel {
       this.active.time = Math.max(0, Math.min(1, clipProgress)) * this.active.getClip().duration;
       this.mixer.update(0); this.transition.apply(dt); return;
     }
-    if (!motion || !this.active) { this.mixer.update(dt); this.transition.apply(dt); return; }
+    if (!motion || !this.active) {
+      this.mixer.update(dt);
+      if(rest && (rest.wounded || rest.inspect)) for(const [name,angles] of Object.entries(restPose(rest))) {
+        const joint=this.bone(name);if(!joint)continue;
+        this.posed.set(joint,joint.quaternion.clone());
+        joint.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...angles)));
+      }
+      if(rest?.inspect)this.aimInspection(rest);
+      this.transition.apply(dt); return;
+    }
     this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;
     this.mixer.update(0);
     for (const [name, angles] of Object.entries(combatPose(motion))) {
@@ -262,6 +272,19 @@ export class AnimatedModel {
     // A blend moves both hands; seat the shaft through both palms again in the pose actually shown.
     this.alignHeavyGrip(motion);
     this.updateStaffFocus(motion);
+  }
+  /** Turn the held edge toward the gaze, clear of the torso, without moving its grip. */
+  private aimInspection(rest: RestPose) {
+    const hand=this.bone('RightHand');if(!hand?.parent)return;
+    const long=['vesper-reed','acheron-needle','tollkeeper'].includes(rest.weapon??'starter');
+    this.root.updateWorldMatrix(true,true);
+    const bolt=rest.weapon==='gravewhisper';
+    const target=(bolt?new THREE.Vector3(.8,.25,.45):new THREE.Vector3(.25,long?.86:.94,long?.45:.2)).normalize().transformDirection(this.root.matrixWorld);
+    const world=hand.getWorldQuaternion(new THREE.Quaternion());
+    const axis=new THREE.Vector3(...(rest.weapon==='gravewhisper'?[-1,0,0]:[0,0,1]) as [number,number,number]).applyQuaternion(world);
+    const desired=hand.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(new THREE.Quaternion().setFromUnitVectors(axis,target).multiply(world));
+    if(!this.posed.has(hand))this.posed.set(hand,hand.quaternion.clone());
+    hand.quaternion.slerp(desired,Math.max(0,Math.min(1,rest.inspect??0))*(bolt?.4:1));
   }
   /** Gathering pigment is attached to the actual staff crown, never the actor origin. */
   private updateStaffFocus(motion: CombatMotion) {

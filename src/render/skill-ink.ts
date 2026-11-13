@@ -6,12 +6,17 @@ const masks = new Map<string,T.CanvasTexture>();
 export function inkFamily(id: AbilityId): string {
   return id === 'ember' ? 'flame' : id === 'ash' ? 'orbit' : id === 'iron' ? 'ward' : id.startsWith('staff') || id.endsWith('spell') || id === 'lance' ? 'seal' : id.split('-')[0];
 }
-export function skillInk(id: AbilityId): T.CanvasTexture {
-  const family=inkFamily(id); const old=masks.get(family);if(old)return old;
+export function skillInk(id: AbilityId): T.CanvasTexture { return inkMask(inkFamily(id)); }
+export function finisherInk(): T.CanvasTexture { return inkMask('finisher'); }
+function inkMask(family:string): T.CanvasTexture {
+  const old=masks.get(family);if(old)return old;
   const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
   const c=canvas.getContext('2d')!;c.translate(128,128);c.strokeStyle='#fff';c.fillStyle='#fff';c.lineCap='round';
   const arc=(r:number,a:number,b:number,width:number)=>{c.lineWidth=width;c.beginPath();c.arc(0,0,r,a,b);c.stroke();};
-  if(family==='hammer'||family==='axe') {
+  if(family==='finisher') {
+    // A compact torn brush cut, not a circle implying another damaging area.
+    for(let i=0;i<3;i++){const y=(i-1)*32;c.beginPath();c.moveTo(-105,y+20);c.quadraticCurveTo(-15,y-16,105,y-28);c.quadraticCurveTo(22,y+8,-105,y+20);c.fill();}
+  } else if(family==='hammer'||family==='axe') {
     for(let i=0;i<8;i++){c.save();c.rotate(i*Math.PI/4);c.lineWidth=i%2?3:6;c.beginPath();c.moveTo(12,0);c.lineTo(39,-8);c.lineTo(56,9);c.lineTo(85,4);c.lineTo(113,18);c.stroke();c.lineWidth=2;c.beginPath();c.moveTo(56,9);c.lineTo(67,35);c.stroke();c.restore();}
   } else if(family==='seal'||family==='ward') {
     arc(102,0,Math.PI*2,3);arc(86,0,Math.PI*2,2);
