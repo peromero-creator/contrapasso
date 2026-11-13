@@ -1,3 +1,4 @@
+import { BossGate } from './boss-gate';
 import { bossMove, bossWindup, SLAM_RADIUS } from '../sim/bosses.ts';
 import { PresentationSample } from "./presentation-sample.ts";
 import { programSamples } from "./program-warmup.ts";
@@ -16,6 +17,7 @@ import { Underworld } from "./dressing";
 // Everything visual. Reads the simulation state, never changes it.
 import * as THREE from "three";
 import {
+  BOSS_GATE, bossAvailable,
   ARENA_HX,
   ARENA_HZ,
   JUMP_TIME,
@@ -203,7 +205,8 @@ export class View {
    * Retain these materials so the program cache survives until the first wave. */
   prepare() {
     return this.preparation ??= (async () => {
-      await Promise.all(this.actorLoads);
+      await Promise.all([...this.actorLoads, this.bossGate.ready]);
+      await Promise.all(CIRCLES.map(c=>this.models.floor(c.name).then(t=>{if(t)this.renderer.initTexture(t);})));
       const models = await Promise.all(['imp', 'archer', 'brute', 'warden', 'witness', 'cantor'].map(kind => this.models.create(kind)));
       const warmup = new THREE.Scene();
       const textures = new Set<THREE.Texture>();
@@ -228,6 +231,12 @@ export class View {
       this.gore.update(0);
       this.afterimages.emit(this.hero);
       warmup.add(new THREE.Mesh(this.boltGeo, this.boltMat), new THREE.Mesh(this.shotGeo, this.soulMat), new THREE.Mesh(this.shotGeo, this.shotMat));
+      // Keep the two mapless enemy-health sprite programs alive between waves.
+      warmup.add(new THREE.Sprite(new THREE.SpriteMaterial({color:0x140808,depthTest:false})),new THREE.Sprite(new THREE.SpriteMaterial({color:0xb77667,depthTest:false,toneMapped:false})));
+      for(const base of [this.boltMat,this.soulMat,this.shotMat]) {
+        let halo=this.halos.get(base);if(!halo)this.halos.set(base,halo=this.halo(base.color.getHex()));
+        warmup.add(new THREE.Sprite(halo));
+      }
       const threatSample = new EnemyThreat();
       warmup.add(threatSample.root);
       this.preparedPrograms = programSamples([this.scene, warmup]);
@@ -421,6 +430,7 @@ export class View {
   private soulMat = new THREE.MeshBasicMaterial({ color: 0x9eada9 });
   private shotMat = new THREE.MeshBasicMaterial({ color: 0xff6a3a });
   private portal = new THREE.Group();
+  private bossGate = new BossGate();
   private particles: Particle[] = [];
   private pGeo = new THREE.OctahedronGeometry(0.1, 0);
   /** One shared glow per projectile colour, so shots read as light rather than beads. */
@@ -781,30 +791,30 @@ export class View {
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffd27a,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.55,
       blending: THREE.NormalBlending,
       depthWrite: false,
     });
-    const ring = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.5, 48), mat);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.3, 1.45, 48), mat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.04;
     const beamMat = new THREE.MeshBasicMaterial({
       color: 0xffb040,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.065,
       blending: THREE.NormalBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
     const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.15, 1.15, 7, 24, 1, true),
+      new THREE.CylinderGeometry(1.3, 1.3, 2, 24, 1, true),
       beamMat,
     );
-    beam.position.y = 3.5;
+    beam.position.y = 1;
     this.portal.add(ring, beam);
     this.portal.position.set(PORTAL.x, 0, PORTAL.z);
     this.portal.visible = false;
-    this.scene.add(this.portal);
+    this.scene.add(this.portal, this.bossGate.root);
   }
 
   private clearArenaEffects() {
@@ -1173,8 +1183,10 @@ export class View {
 
   sync(w: World, dt: number, alpha = 1) {
     this.rivalWeapon = w.enemies.find(e => e.kind === "champion")?.weaponId ?? "starter";
+    const chamberVisible = w.bossEncounter === "active" ? w.gateTransition <= 27 : w.gateDirection === "return" && w.gateTransition > 27;
+    const visualCircle = chamberVisible ? 0 : w.floor - 1;
     const battlefieldChanged =
-      w.tick < this.lastWorldTick || w.floor - 1 !== this.circle;
+      w.tick < this.lastWorldTick || visualCircle !== this.circle;
     if (w.tick < this.lastWorldTick) {
       this.clearArenaEffects();
       this.lastImpactTime = -1;
@@ -1185,14 +1197,15 @@ export class View {
     }
     this.lastWorldTick = w.tick;
     this.time += dt;
-    this.setCircle(w.floor - 1);
+    this.setCircle(visualCircle);
     const p = w.player;
     if (
       p.weaponId !== this.equippedWeapon ||
       p.weaponLevel !== this.weaponLevel
     )
       this.useWeapon(p.weaponId, p.weaponLevel);
-    this.underworld.sync(w, dt);
+    this.underworld.sync(w, dt, visualCircle);
+    this.bossGate.update(w, dt);
     if (battlefieldChanged) this.soul.clear();
     this.slashMat.color.setHex(weapon(p.weaponId).color);
     if (
@@ -1544,7 +1557,8 @@ export class View {
     this.look.x += (Math.cos(facing) * 0.55 - this.look.x) * Math.min(1, dt * 2.5);
     this.look.y += (Math.sin(facing) * 0.55 - this.look.y) * Math.min(1, dt * 2.5);
     const tx = Math.max(-limX, Math.min(limX, p.x + this.look.x * this.calm));
-    const tz = Math.max(-limZ, Math.min(limZ, p.z + this.look.y * this.calm)) - 0.8;
+    const gateFocus = w.phase === "cleared" && (bossAvailable(w) || w.bossEncounter === "defeated") ? Math.max(0,1-Math.abs(p.x-BOSS_GATE.x)/6) * Math.max(0,Math.min(1,(-p.z-2)/4)) : 0;
+    const tz = Math.max(-limZ, Math.min(limZ, p.z + this.look.y * this.calm)) - 0.8 - gateFocus*5.6;
     this.target.x += (tx - this.target.x) * Math.min(1, dt * 5);
     this.target.z += (tz - this.target.z) * Math.min(1, dt * 5);
     this.shake *= Math.exp(-dt * 9);

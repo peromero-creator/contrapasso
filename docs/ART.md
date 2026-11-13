@@ -151,3 +151,9 @@ The Hollow Witness and Cinder Cantor are original Flow concepts developed from o
 Both characters now use separate Meshy rigs and preset clips. The Witness uses Mage Spell Cast 3; the Cantor uses Mage Spell Cast and Charged Ground Slam, alongside idle, run and death. The render clock samples the selected attack through preparation, contact and recovery; a finisher-induced recovery extension cannot rewind the displayed pose. These are adapted presets, not bespoke motion capture. Their packed exports use 512px textures and approximately 6,100 triangles each, under 450 KB per character. Boss models/textures/shaders are prepared before play, and reuse the existing bounded effects with no additional lights or postprocessing.
 
 Outline thickness is supplied per material rather than baked into a shared shader program. Differently sized actors therefore retain the intended line weight without requiring a new shader variant for each size. Architectural exploration for a bell hall, palm-eye pillars and balconies is a separate concept direction; it is not a shipped new map.
+
+## Penitent gate and vow cards
+
+`public/art/penitent-gate.jpg` and `public/art/vow-cards.jpg` are original Google Flow / Nano Banana illustrations generated for Contrapasso. The gate uses the established palm-eye/ivory/bronze direction; the card atlas contains weapon, spell, soul-core and endurance motifs. Social-media reference screenshots are not distributed as game assets.
+
+The gate is a painted 2.5D prop, not a newly rigged 3D model: one image mapped onto a silhouette frame and two hinged leaves with a dark aperture. It adds four opaque meshes and no lights. Card panels are selected with CSS, while skill names, effects, costs and input cues remain live text. Original circle artwork is retained; the experimental primitive bell-hall scene was withdrawn. No additional Meshy generation was used for this revision.

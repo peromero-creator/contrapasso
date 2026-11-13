@@ -18,12 +18,11 @@ const PAGES: Branch[] = [...FAMILIES, 'spells', 'cores', 'vows'];
 const pageName = (p: Page) => p === 'all' ? 'All paths' : p === 'spells' ? 'Q · Spells' : p === 'cores' ? 'R · Ultimates' : p === 'vows' ? 'Soul vows' : FAMILY_NAMES[p];
 const nodeKey = (n: Node) => `${n.page}:${n.skill}`;
 export class SkillTree {
-  private page: Page = 'sword';
+  private page: Page = 'all';
   private selected: string | null = null;
   private champion!: Champion;
   private busy = false;
   private cancelHold = () => {};
-  private initialized = false;
   private observer?: ResizeObserver;
   private camera = { x: 0, y: 0, scale: 1 };
   private resetCamera = true;
@@ -33,28 +32,30 @@ export class SkillTree {
     const theatre = document.querySelector<HTMLElement>('.skill-theatre');
     theatre?.remove();
     this.champion = champion; this.busy = busy;
-    if (!this.initialized) { this.page = familyOf(champion.build.weaponId ?? 'starter'); this.initialized = true; }
-    const title = pageName(this.page), all = this.page === 'all';
-    if (theatre) theatre.hidden = this.page === 'vows' || all;
-    if (all) {
-      this.root.innerHTML = `<div class="tree-heading"><h3>Choose your path</h3><p>Weapon techniques · Q spells · R ultimates</p></div><div class="tree-overview">${PAGES.map(page => {
-        const branch = this.branchNodes(page), learned = branch.filter(n => champion.skills.includes(n.skill)).length;
-        return `<button data-page="${page}" class="tree-path"><span class="path-icon">${skillIcon(branch[0].skill)}</span><strong>${pageName(page)}</strong><span>${learned} / ${branch.length} learned</span><span class="path-growth" aria-hidden="true">${branch.map(n=>`<i class="${champion.skills.includes(n.skill)?'learned':''}"></i>`).join('')}</span></button>`;
-      }).join('')}</div>`;
-      if (theatre) this.root.append(theatre);
-      for (const b of this.root.querySelectorAll<HTMLButtonElement>('[data-page]')) b.onclick=()=>{this.page=b.dataset.page as Page;this.selected=null;this.resetCamera=true;this.render(this.champion,this.busy);};
-      return;
-    }
-    const nodes = this.branchNodes(this.page as Branch);
+    const title = 'Skill atlas', all = this.page === 'all';
+    if (theatre) theatre.hidden = false;
+    const width = 2160, height = 1320;
+    const colors = ['#ce9b68','#bd8980','#a49fbc','#a0ae83','#81aaa7','#c27a64','#bdac75','#a196c0','#c79567','#aeaaa0'];
+    const regions = PAGES.map((page,i)=>({page,x:(i%4)*540,y:Math.floor(i/4)*440,color:colors[i],width:page==='vows'?1600:520}));
+    const nodes = regions.flatMap(r=>this.branchNodes(r.page).map(n=>({...n,x:(r.x+60+n.x*(r.page==='vows'?14.8:4.2))/width*100,y:(r.y+65+n.y*3.6)/height*100})));
     if (!nodes.some(n => nodeKey(n) === this.selected)) this.selected = nodeKey(nodes[0]);
     this.root.innerHTML = `<nav class="tree-tabs" aria-label="Skill categories"><button data-page="all" aria-pressed="${all}">ALL PATHS</button>${PAGES.map(p => `<button data-page="${p}" aria-pressed="${p === this.page}">${pageName(p)}${familyOf(champion.build.weaponId ?? 'starter') === p ? '<i>In hand</i>' : ''}</button>`).join('')}</nav>
-      <div class="tree-heading"><div><h3>${title}</h3></div><p>Choose a skill to preview and train.</p></div>
-      <div class="tree-workspace"><div class="tree-explorer"><div class="tree-toolbar" aria-label="Tree navigation"><button data-camera="out" aria-label="Zoom out">−</button><output class="tree-zoom" aria-label="Zoom level">100%</output><button data-camera="in" aria-label="Zoom in">+</button><button data-camera="fit">Fit tree</button><button data-camera="selected">Find selected</button><span>${nodes.length} skills</span></div><div class="tree-viewport" tabindex="0" role="region" aria-label="${title} skill map. Arrow keys pan; plus and minus zoom; Home fits the tree."><div class="tree-map" style="width:800px;height:500px">
-      <svg class="tree-links" viewBox="0 0 1000 460" preserveAspectRatio="none" aria-hidden="true"><path class="tree-trunk" d="M500 460 Q500 420 500 380 M500 450 Q410 425 390 455 M500 440 Q570 420 620 455"/>${nodes.map(n=>n.parents.map(p=>{ const parent=nodes.find(v=>v.skill===p&&v.page===n.page); if(!parent)return '';const x=parent.x*10,y=parent.y*4.6-10,nx=n.x*10,ny=n.y*4.6-10;return `<path class="${champion.skills.includes(n.skill)?'grown':champion.skills.includes(p)?'growing':''}" d="M${x} ${y} C${x} ${(y+ny)/2} ${nx} ${(y+ny)/2} ${nx} ${ny}"/>`;}).join('')).join('')}</svg>
-      ${nodes.map(n=>`<button class="tree-node ${champion.skills.includes(n.skill)?'learned':canLearn(champion.skills,n.skill)?'reachable':'sealed'}" data-node="${nodeKey(n)}" title="${n.title}" style="left:${n.x}%;top:${n.y}%" aria-label="${n.title}${champion.skills.includes(n.skill)?', learned':', '+SKILLS[n.skill].cost+' coin'}" aria-pressed="${this.selected===nodeKey(n)}"><span class="node-orb">${skillIcon(n.skill)}<em>${n.key}</em></span><strong>${n.title}</strong><small>${champion.skills.includes(n.skill)?'LEARNED':SKILLS[n.skill].cost+' COIN'}</small></button>`).join('')}
+      <div class="tree-heading"><div><h3>${title}</h3></div><p>${new Set(nodes.map(n=>n.skill)).size} skills · ${champion.coins} coin</p></div>
+      <div class="tree-workspace"><div class="tree-explorer"><div class="tree-toolbar" aria-label="Tree navigation"><button data-camera="out" aria-label="Zoom out">−</button><output class="tree-zoom" aria-label="Zoom level">100%</output><button data-camera="in" aria-label="Zoom in">+</button><button data-camera="fit">Fit tree</button><button data-camera="selected">Find selected</button><span>${new Set(nodes.map(n=>n.skill)).size} skills</span></div><div class="tree-viewport" tabindex="0" role="region" aria-label="${title} skill map. Arrow keys pan; plus and minus zoom; Home fits the tree."><div class="tree-map" style="width:${width}px;height:${height}px">
+      ${regions.map(r=>`<section class="atlas-region" style="left:${r.x}px;top:${r.y}px;width:${r.width}px;--path-color:${r.color}"><h4>${pageName(r.page)}</h4></section>`).join('')}<svg class="tree-links" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">${nodes.map(n=>n.parents.map(p=>{ const parent=nodes.find(v=>v.skill===p&&v.page===n.page); if(!parent)return '';const x=parent.x*width/100,y=parent.y*height/100,nx=n.x*width/100,ny=n.y*height/100;return `<path class="${champion.skills.includes(n.skill)?'grown':champion.skills.includes(p)?'growing':''}" d="M${x} ${y} C${x} ${(y+ny)/2} ${nx} ${(y+ny)/2} ${nx} ${ny}"/>`;}).join('')).join('')}</svg>
+      ${nodes.map(n=>`<button class="tree-node ${champion.skills.includes(n.skill)?'learned':canLearn(champion.skills,n.skill)?'reachable':'sealed'}" data-node="${nodeKey(n)}" title="${n.title}" style="left:${n.x}%;top:${n.y}%;--path-color:${colors[PAGES.indexOf(n.page)]}" aria-label="${n.title}${champion.skills.includes(n.skill)?', learned':', '+SKILLS[n.skill].cost+' coin'}" aria-pressed="${this.selected===nodeKey(n)}"><span class="node-orb">${skillIcon(n.skill)}<em>${n.key}</em></span><strong>${n.title}</strong><small>${champion.skills.includes(n.skill)?'':SKILLS[n.skill].cost+' COIN'}</small></button>`).join('')}
       </div></div><p class="tree-map-hint">Drag to explore · Scroll to zoom</p></div><div class="tree-side"><aside id="tree-detail" class="tree-detail" aria-live="polite"></aside></div></div>`;
     if (theatre) this.root.querySelector('.tree-side')!.prepend(theatre);
-    const choosePage=(page:Page)=>{this.page=page;this.selected=null;this.resetCamera=true;this.render(this.champion,this.busy);};
+    const choosePage=(page:Page)=>{
+      this.page=page;
+      for(const b of this.root.querySelectorAll('[data-page]'))b.setAttribute('aria-pressed',String((b as HTMLElement).dataset.page===page));
+      if(page==='all'){this.root.querySelector<HTMLButtonElement>('[data-camera="fit"]')!.click();return;}
+      const n=nodes.find(n=>n.page===page)!;this.selected=nodeKey(n);
+      this.root.querySelector<HTMLButtonElement>(`[data-node="${this.selected}"]`)!.click();
+      const r=regions.find(r=>r.page===page)!;const vp=this.root.querySelector<HTMLElement>('.tree-viewport')!;
+      const scale=Math.min(1.4,(vp.clientWidth-40)/(r.width+20),(vp.clientHeight-30)/440);
+      this.camera={scale,x:vp.clientWidth/2-(r.x+(r.width+20)/2)*scale,y:vp.clientHeight/2-(r.y+220)*scale};this.paintCamera();
+    };
     for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-page]')) b.onclick=()=>choosePage(b.dataset.page as Page);
     for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-node]')) {
       b.onclick=()=>{this.cancelHold();this.selected=b.dataset.node!;for(const el of this.root.querySelectorAll('[data-node]'))el.setAttribute('aria-pressed',String(el===b));const n=nodes.find(n=>nodeKey(n)===this.selected)!;this.detail(n);this.previewNode(n);};
@@ -65,7 +66,7 @@ export class SkillTree {
     this.previewNode(nodes.find(n=>nodeKey(n)===this.selected)!);
   }
   focusWeapon(identity: WeaponId) {
-    this.page = familyOf(identity); this.selected = null; this.resetCamera = true; this.initialized = true;
+    this.page = 'all'; this.selected = `${familyOf(identity)}:${familyOf(identity)}-1`; this.resetCamera = true;
   }
   close() { this.cancelHold(); this.observer?.disconnect(); this.resetCamera = true; }
   private previewNode(n: Node) {
@@ -88,7 +89,8 @@ export class SkillTree {
   }
   private paintCamera() {
     const map=this.root.querySelector<HTMLElement>('.tree-map')!;
-    map.style.setProperty("--label-scale",String(Math.min(2,Math.max(1,1/this.camera.scale))));
+    map.classList.toggle("atlas-overview",this.camera.scale<.65);
+    map.style.setProperty("--label-scale",String(Math.min(1.3,Math.max(1,1/this.camera.scale))));
     map.style.transform=`translate(${this.camera.x}px,${this.camera.y}px) scale(${this.camera.scale})`;
     this.root.querySelector('output')!.textContent=`${Math.round(this.camera.scale*100)}%`;
   }
@@ -96,8 +98,8 @@ export class SkillTree {
     const viewport=this.root.querySelector<HTMLElement>('.tree-viewport')!,map=this.root.querySelector<HTMLElement>('.tree-map')!;
     const fit=()=>{const scale=Math.min((viewport.clientWidth-28)/map.offsetWidth,(viewport.clientHeight-28)/map.offsetHeight,1);this.camera={scale:Math.max(.12,scale),x:(viewport.clientWidth-map.offsetWidth*scale)/2,y:(viewport.clientHeight-map.offsetHeight*scale)/2};this.paintCamera();};
     const zoom=(factor:number,x=viewport.clientWidth/2,y=viewport.clientHeight/2)=>{const old=this.camera.scale,next=Math.max(.12,Math.min(2,old*factor));this.camera={scale:next,x:x-(x-this.camera.x)*next/old,y:y-(y-this.camera.y)*next/old};this.paintCamera();};
-    // On a narrow screen the whole tree only fits at an unreadable size, so open on the selected (or first) skill instead.
-    const open=()=>{fit();if(this.camera.scale<.6){const n=this.root.querySelector<HTMLElement>('[data-node][aria-pressed=true]')??this.root.querySelector<HTMLElement>('[data-node]');if(n){const s=.8;this.camera={scale:s,x:viewport.clientWidth/2-(n.offsetLeft+n.offsetWidth/2)*s,y:viewport.clientHeight/2-(n.offsetTop+n.offsetHeight/2)*s};this.paintCamera();}}};
+    // Start with every region visible; category buttons focus a readable cluster.
+    const open=()=>fit();
     if(this.resetCamera){requestAnimationFrame(open);this.resetCamera=false;}else this.paintCamera();
     let lastWidth=viewport.clientWidth,lastHeight=viewport.clientHeight;
     this.observer=new ResizeObserver(()=>{if(viewport.clientWidth!==lastWidth||viewport.clientHeight!==lastHeight){lastWidth=viewport.clientWidth;lastHeight=viewport.clientHeight;open();}});this.observer.observe(viewport);
@@ -114,6 +116,7 @@ export class SkillTree {
   }
   private detail(n: Node) {
     const page = n.page;
+    const theatre=this.root.querySelector<HTMLElement>('.skill-theatre');if(theatre)theatre.hidden=!n.ability;
     const c = this.champion, known = c.skills.includes(n.skill), ready = canLearn(c.skills,n.skill), enough = c.coins >= SKILLS[n.skill].cost;
     const t = techniqueId(n.skill), spec = t ? TECHNIQUES[t] : null;
     const parents = t ? techniqueParents(t) : PREREQUISITES[n.skill] ? [PREREQUISITES[n.skill]!] : [];

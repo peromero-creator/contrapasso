@@ -104,6 +104,8 @@ step(victory, idle);
 step(victory, { ...idle, choice: 4 });
 assert.equal(digest(victory), waiting, "the reward waits for a valid selection");
 step(victory, { ...idle, choice: 1 });
+assert.equal(victory.phase, "cleared");
+victory.player.x=PORTAL.x;victory.player.z=PORTAL.z;step(victory,idle);
 assert.equal(victory.phase, "won");
 for (const phase of ["dead", "won"] as const) {
   const w = arena();

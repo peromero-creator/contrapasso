@@ -24,6 +24,7 @@ import { canPayNative, type MarketOperation, type MarketView } from "./shared/ma
 import * as THREE from "three";
 import { View, CIRCLES } from "./render/view";
 import {
+  BOSS_FLOORS, bossAvailable, nearBossGate,
   createWorld,
   createDuelWorld,
   step,
@@ -205,7 +206,7 @@ function readInput(): Input {
   if (jumpQueued > 0)
     jumpQueued =
       world.player.jumpCd <= DT && world.player.jumpT <= 0 && world.player.castT <= 0 ? 0 : jumpQueued - 1;
-  return { move, aim, attack, dash, ...skillInput.take(world.player, dash || jump), jump };
+  return { move, aim, attack, dash, ...skillInput.take(world.player, dash || jump), jump, choice: world.phase === "cleared" ? choiceQueued : 0 };
 }
 function choose(choice: number) {
   if (world.phase !== "reward" || paused || choiceQueued) return;
@@ -243,6 +244,7 @@ window.addEventListener("keydown", (e) => {
     if (!e.repeat && choice) choose(choice);
     return;
   }
+  if (!e.repeat && e.code === "KeyE" && nearBossGate(world)) choiceQueued = 1;
   if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
   if (!e.repeat && ["ShiftLeft", "ShiftRight", "KeyK"].includes(e.code))
     dashQueued = 8;
@@ -311,21 +313,19 @@ function setPaused(value: boolean) {
       document.activeElement.blur();
   }
 }
+$("boss-enter").onclick = () => { if (!paused && nearBossGate(world)) choiceQueued = 1; };
 function showReward() {
   if (world.phase !== "reward" || !world.offers.length) return;
   clearInput();
   acc = freeze = slow = 0;
   $("hud").inert = true;
-  $("reward-circle").textContent = `CIRCLE ${ROMAN[world.floor - 1]} CLEARED`;
-  $("reward-sub").textContent =
-    world.floor === FLOORS
-      ? "One last vow. What you become will return for someone else."
-      : "Take one power into the next circle. Choose carefully.";
+  $("reward-circle").textContent = world.bossEncounter === "defeated" ? "BOSS DEFEATED" : `CIRCLE ${ROMAN[world.floor - 1]} CLEARED`;
+  $("reward-sub").textContent = "Choose one upgrade for this descent.";
   const cards = $("reward-cards");
   cards.innerHTML = world.offers
     .map(
       (id, i) =>
-        `<button class="power-choice" data-choice="${i + 1}"><span class="power-key">0${i + 1}</span>${skillIcon(id)}<span class="power-rank">RANK ${rank(world.player.skills, id) + 1}</span><strong>${SKILLS[id].name}</strong><span class="power-description">${SKILLS[id].description}</span><span class="power-effect">${SKILLS[id].rank}</span><span class="power-take">TAKE THIS VOW <span>↗</span></span></button>`,
+        `<button class="power-choice" style="--card-panel:${id.startsWith("staff-")||id.endsWith("-spell")||id==="pyre"?1:techniqueId(id)?0:["ember","ash","iron"].includes(id)?2:3}" data-choice="${i + 1}"><span class="power-key">0${i + 1}</span><span class="power-art" aria-hidden="true"></span>${skillIcon(id)}<span class="power-rank">RANK ${rank(world.player.skills, id) + 1}</span><strong>${SKILLS[id].name}</strong><span class="power-description">${SKILLS[id].description}</span><span class="power-effect">${SKILLS[id].rank.replace(" per rank", "")}</span><span class="power-take">CHOOSE UPGRADE <span>↗</span></span></button>`,
     )
     .join("");
   for (const button of cards.querySelectorAll<HTMLButtonElement>("button"))
@@ -392,7 +392,7 @@ function updateHud(dt: number) {
       ? "TAKE A VOW"
       : world.phase === "cleared"
         ? "ENTER THE GATE"
-        : `WAVE ${world.wave + 1} / ${world.wavesInFloor} · ${world.enemies.length} REMAIN`;
+        : world.bossEncounter === "active" ? "BOSS CHAMBER" : `WAVE ${world.wave + 1} / ${world.wavesInFloor} · ${world.enemies.length} REMAIN`;
   if (world.mode === "duel") {
     $("circle").textContent = "DUEL / THE CHALLENGE";
     $("wave").textContent =
@@ -412,6 +412,13 @@ function updateHud(dt: number) {
     }
   }
   $("portal-hint").classList.toggle("hidden", world.phase !== "cleared");
+  $("portal-hint").textContent = world.floor === FLOORS ? "ENTER THE LIT GATE TO FINISH" : "ENTER THE LIT GATE TO DESCEND";
+  const gateReady = nearBossGate(world);
+  $("boss-gate-prompt").classList.toggle("hidden", !bossAvailable(world) || world.phase !== "cleared");
+  $("boss-enter").toggleAttribute("disabled", !gateReady);
+  $("boss-gate-name").textContent = BOSSES[(["warden", "witness", "cantor"] as const)[BOSS_FLOORS.indexOf(world.floor as 2|4|5)] ?? "warden"].name;
+  $("boss-gate-help").textContent = gateReady ? "Optional encounter" : "Optional boss · Approach the carved door";
+  $("gate-veil").style.opacity = world.gateTransition > 0 ? String(Math.sin(Math.PI * (1-world.gateTransition/54))) : "0";
   const seconds = Math.floor(world.tick / 60);
   $("run-time").textContent =
     `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -452,6 +459,10 @@ async function verifyRun(checkingPending = false) {
         ? `${response.receipt.result.awardedCoins} coin saved · Daily limit reached`
         : `${response.receipt.result.awardedCoins} coin saved to your champion`;
     resultPending = !!champion.chain?.pending;
+    if(world.mode !== "duel") {
+      $("end-coins").textContent = String(response.receipt.result.awardedCoins);
+      $("end-coins-label").textContent = resultPending ? "COIN PENDING" : "COIN SAVED";
+    }
     $("receipt-status").classList.toggle("verified", !resultPending);
     if (world.mode === "duel")
       $("receipt-status").textContent =
@@ -489,7 +500,7 @@ function showEnd(won: boolean) {
   const duel = world.mode === "duel";
   $("same-seed").classList.toggle("hidden", duel);
   $("again").textContent = duel ? "FIND ANOTHER RIVAL ↗" : "DESCEND AGAIN ↗";
-  $("end-coins-label").textContent = duel ? "COIN AT STAKE" : "COIN EARNED";
+  $("end-coins-label").textContent = duel ? "COIN AT STAKE" : "COIN COLLECTED";
   $("end-kills-label").textContent = duel ? "RIVAL DEFEATED" : "ENEMIES SLAIN";
   $("end-floor-label").textContent = duel ? "DUEL TIME" : "CIRCLES REACHED";
   if (duel) {
@@ -753,8 +764,8 @@ function showMarketTab(exchange: boolean) {
     ? "THE ASH EXCHANGE."
     : "THE RELIQUARY.";
   document.querySelector<HTMLElement>(".market-fine")!.textContent = exchange
-    ? "Prices are in free test NEAR. A sale transfers the same weapon NFT and records its previous owner. Seller proceeds remain withdrawable to the seller’s account; 10% supports the game treasury."
-    : "Mint a new weapon with 10 earned coin + 0.01 test NEAR. Keep it, upgrade it, or choose to list it on the player market. Every new mint needs its own coin reservation.";
+    ? "The same NFT, with its upgrades and history. Seller receives 90%; game treasury receives 10%. Test NEAR only."
+    : "10 coin + 0.01 test NEAR per weapon. Equip, upgrade, or resell.";
 }
 function renderExchange() {
   if (!marketState || !champion) return;
@@ -763,7 +774,7 @@ function renderExchange() {
     owner = champion.chain?.accountId;
   const entries = marketState.listings ?? [];
   $("exchange-listings").innerHTML = !ready
-    ? "<p>The marketplace opens after the testnet update.</p>"
+    ? `<p>${champion.chain ? "Trading is not available on this testnet contract yet." : "Connect testnet to browse and trade player relics."}</p>`
     : entries.length
       ? entries
           .map((l) => {
@@ -1126,8 +1137,8 @@ $("claim-account").addEventListener("input", () => {
 async function renderNft() {
   const view = await api.nft();
   $("nft-intro").textContent = view.onChain
-    ? "These are NFTs on NEAR testnet. The champion carries its gear, its coin vault and its record; whoever holds it holds all of that."
-    : "Local preview: nothing is minted. With a testnet connection each of these is an NFT, and the champion carries its gear, vault and record with it.";
+    ? "Your champion, equipment and history. NEAR testnet."
+    : "Local preview · Connect testnet to mint and trade.";
   $("nft-tokens").innerHTML = view.tokens
     .map((token) => {
       const x = token.extra as Record<string, unknown>;
@@ -1186,7 +1197,9 @@ async function renderNft() {
         !isChampion && view.features?.includes("market") && available
           ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || x.listing || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${x.listing ? "LISTED · CANCEL IN MARKET" : equipped ? "UNEQUIP" : "EQUIP"}</button>`
           : "";
-      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${!isChampion && identity !== "starter" ? `${relicImage(identity, weapon(identity).name)}` : ""}<strong>${escapeHtml(token.title)}</strong><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${gearButton}</article>`;
+      const primaryRows = rows.filter(([key],i)=>isChampion ? i<3 : ['Level','Damage','Kills'].includes(key));
+      const otherRows = rows.filter(row=>!primaryRows.includes(row));
+      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${!isChampion && identity !== "starter" ? `${relicImage(identity, weapon(identity).name)}` : `<div class="nft-crest" aria-hidden="true">${skillIcon(isChampion ? "ember" : x.kind === "armor" ? "iron" : "sword-1")}</div>`}<strong>${escapeHtml(token.title)}</strong><dl>${primaryRows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl><details class="token-details"><summary>Details & ownership</summary><dl>${otherRows.map(([k,v])=>`<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl></details>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${gearButton}</article>`;
     })
     .join("");
   paintRelics($("nft-tokens"));
@@ -1579,7 +1592,7 @@ function frame(now: number) {
               choice: choiceQueued,
             }
           : automated
-            ? bot(world)
+            ? bot(world, params.get("bosses") === "1")
             : readInput();
       choiceQueued = 0;
       const packed = packInput(input);
@@ -1591,7 +1604,7 @@ function frame(now: number) {
       for (const e of world.events) {
         if (e.type === "floor")
           showBanner(
-            `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
+            world.bossEncounter === "active" ? BOSSES[(["warden","witness","cantor"] as const)[BOSS_FLOORS.indexOf(world.floor as 2|4|5)]].name.toUpperCase() : `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
           );
         if (e.type === "hit") {
           chain += 1;

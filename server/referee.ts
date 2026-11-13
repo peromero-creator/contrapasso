@@ -18,7 +18,7 @@ import {
 } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createWorld, createDuelWorld, step } from "../src/sim/world.ts";
+import { createWorld, createDuelWorld, nearBossGate, step } from "../src/sim/world.ts";
 import { SIM_VERSION, unpackInput } from "../src/sim/input.ts";
 import {
   SKILL_IDS,
@@ -769,7 +769,7 @@ export class Referee {
         "Replay continues after the end.",
       );
       demand(
-        world.phase === "reward" ? !!input.choice : !input.choice,
+        world.phase === "reward" ? !!input.choice : !input.choice || (input.choice === 1 && nearBossGate(world)),
         "Invalid power selection.",
       );
       const tick = world.tick;

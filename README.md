@@ -25,7 +25,7 @@ Escape pauses; losing focus also pauses. 1–4 trigger learned techniques for th
 
 ## Features and status
 
-- Deterministic 60 Hz combat, five circles, enemy waves and Warden.
+- Deterministic 60 Hz combat, five circles, enemy waves and three optional bosses.
 - Forty-two coin-funded unlocks: 28 weapon techniques, 12 soul vows and two additional Q spells, plus three core attunements unlocked by those vows. The atlas supports pan, zoom, all-paths overview and silent in-hand previews. Bounded coin earning and replay verification remain in place.
 - Replay-verifying referee, Ed25519 receipts and durable transaction retries.
 - Dynamic champion/gear NFTs, coin-funded + upgrades, transfer-aware inventory, wallet claiming, coin and native prize vaults.
@@ -67,3 +67,9 @@ For a production-bundle preview, run `npm run referee` and `npm run preview` in 
 TypeScript, Vite, three.js, NEAR SDK JS / contract standards / near-api-js / near-workspaces, glTF Transform and meshoptimizer. Typography: Cinzel, Barlow and Barlow Condensed via Google Fonts.
 
 The title illustration, weapon and ambient-creature concepts, five painted floors and character concept images were generated with Google Flow (Nano Banana 2.1). The hero and enemy models, rigs and animation clips were generated with Meshy from those concepts (`art/source/`). Interface icons, effects and fallback placeholder actors were created for this project. The Divine Comedy provides public-domain circle names and the contrapasso idea; the protagonist and game are original. Preserve actual asset licenses when adding exports. Source code is [MIT licensed](LICENSE), © 2026 peromero-creator. Generated project art retains the applicable Flow/Meshy service terms; third-party dependencies retain their own licenses.
+
+### Optional bosses and training
+
+Clear circle II, IV or V, choose your upgrade, then approach the carved double door and press **E** (or select **Enter**). Defeat its boss to return with one extra run upgrade. The ordinary lit exit skips the encounter; on circle V it finishes the descent. Boss gates are optional and cannot be repeated within a circle.
+
+Open **Skill Tree** to see all 42 learnable skills on one map. Drag or scroll to explore, select a weapon category to focus its region, and use **All paths** to fit the whole atlas. Hold **Learn** to spend the displayed earned-coin cost; releasing early cancels. Q and R selections share existing training where indicated.

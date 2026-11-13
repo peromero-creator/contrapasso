@@ -1,6 +1,6 @@
 import type { Input } from "./world.ts";
 
-export const SIM_VERSION = "0.11.0";
+export const SIM_VERSION = "0.12.0";
 /** A jump rides in the technique field: slots are 1..4, so 5 was free and the replay stays 30 bits. */
 const JUMP_CODE = 5;
 export const MAX_PACKED_INPUT = 0x3fffffff;

@@ -1,10 +1,10 @@
 import { weaponTechniques, TECHNIQUES } from "../sim/techniques.ts";
 import { weapon } from "../sim/weapons.ts";
 // A development-only input source. It follows the same rules as a player.
-import { PORTAL, type Input, type World } from "../sim/world.ts";
+import { BOSS_GATE, bossAvailable, nearBossGate, PORTAL, type Input, type World } from "../sim/world.ts";
 import { dirIndex } from "../sim/dirs.ts";
 
-export function bot(w: World): Input {
+export function bot(w: World, visitBosses = false): Input {
   const p = w.player;
   if (w.phase === "reward")
     return {
@@ -15,7 +15,9 @@ export function bot(w: World): Input {
       choice: 1 + (w.floor % Math.max(1, w.offers.length)),
     };
   if (w.phase === "cleared") {
-    const a = dirIndex(-p.x, PORTAL.z - p.z);
+    const target = visitBosses && bossAvailable(w) ? BOSS_GATE : PORTAL;
+    const a = dirIndex(target.x-p.x, target.z - p.z);
+    if(visitBosses && nearBossGate(w))return {move:-1,aim:a,attack:false,dash:false,choice:1};
     return { move: a, aim: a, attack: false, dash: false };
   }
   let target = null as null | { d: number; x: number; z: number };

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Referee, DAILY_CAP } from "../server/referee.ts";
 import { createWorld, step } from "../src/sim/world.ts";
-import { packInput } from "../src/sim/input.ts";
+import { packInput, unpackInput } from "../src/sim/input.ts";
 import { SKILLS, SKILL_IDS } from "../src/sim/skills.ts";
 import { bot } from "../src/dev/bot.ts";
 
@@ -88,4 +88,26 @@ try {
   assert.throws(() => forge.upgrade(smith, "weapon"), /coin/);
   assert.throws(() => forge.upgrade(smith, "ring"), /Unknown gear/);
   console.log("Referee: PASS (replay, ownership, signatures, tampering, idempotency, persistence, training, gear upgrades, daily cap, expiry)");
+  // Both complete routes must verify: skip every boss or take all three gates.
+  const gates = new Referee({directory:join(directory,"gates"),now:()=>now,seed:()=>5});
+  for(const visit of [false,true]) {
+    const player=gates.createSession().owner;
+    const fixture=(gates as unknown as {state:{accounts:Record<string,any>}}).state.accounts[player];
+    fixture.skills=[...SKILL_IDS];fixture.build.weaponLevel=3;fixture.build.armorLevel=3;fixture.build.core='ember';
+    const challenge=gates.begin(player), w=createWorld(challenge.seed,challenge.skills,challenge.equipment);
+    const replay:number[]=[], bosses=new Set<string>();
+    for(let i=0;i<30000 && w.phase!=='won' && w.phase!=='dead';i++) {
+      const input=packInput(bot(w,visit));replay.push(input);step(w,unpackInput(input));
+      for(const e of w.enemies)if(e.boss)bosses.add(e.boss);
+      w.events.length=0;
+    }
+    assert.equal(w.phase,'won');assert.deepEqual([...bosses],visit?['warden','witness','cantor']:[]);
+    now+=Math.ceil(w.tick/60*1000);
+    const result=gates.submit(player,challenge.id,replay);
+    assert.equal(result.receipt.result.outcome,'won');
+    assert.equal(result.champion.victories,1);
+    assert.deepEqual(gates.submit(player,challenge.id,replay),result,'optional bosses cannot pay twice');
+  }
+  console.log('Optional boss routes: PASS (all three gates and all skips replayed by the referee; one settlement)');
+
 } finally { rmSync(directory, { recursive: true, force: true }); }

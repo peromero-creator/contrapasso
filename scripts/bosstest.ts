@@ -3,7 +3,7 @@ import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {MeshoptDecoder} from 'meshoptimizer';
 import assert from 'node:assert/strict';
-import { createWorld, step, DT, type Enemy, type Input } from '../src/sim/world.ts';
+import { createWorld, step, DT, BOSS_GATE, BOSS_FLOORS, PORTAL, nearBossGate, type Enemy, type Input } from '../src/sim/world.ts';
 import { BOSS_IDS, bossMove, bossWindup, GAZE_HALF_WIDTH, SLAM_RADIUS, type BossId } from '../src/sim/bosses.ts';
 import { WEAPON_IDS } from '../src/sim/weapons.ts';
 import { SKILL_IDS } from '../src/sim/skills.ts';
@@ -15,10 +15,25 @@ function arena(boss:BossId,pattern=1){
   const w=createWorld(73);w.spawnDelay=999;w.player.x=6;w.player.z=0;
   const e:Enemy={id:90,kind:'warden',boss,x:0,z:0,hp:900,maxHp:900,r:1.5,state:'windup',t:0,cd:0,dx:1,dz:0,hitDone:false,pattern,flash:0,spawn:0,burnT:0,burnCd:0};e.t=bossWindup(e);w.enemies=[e];return w;
 }
-for(let seed=0;seed<3;seed++){
-  const w=createWorld(seed);w.floor=5;w.wavesInFloor=1;w.spawnDelay=DT/2;step(w,idle);
-  assert.equal(w.enemies.find(e=>e.kind==='warden')?.boss,BOSS_IDS[seed]);
+// Bosses are opt-in, near a distinct gate, once per eligible floor.
+for(const floor of [1,2,3,4,5]) {
+  const w=createWorld(91);w.floor=floor;w.phase='cleared';w.player.x=BOSS_GATE.x;w.player.z=BOSS_GATE.z;
+  const available=([2,4,5]).includes(floor);assert.equal(nearBossGate(w),available);
+  step(w,unpackInput(packInput({...idle,choice:1})));
+  assert.equal(w.bossEncounter,available?'active':'waiting');
+  if(available){
+    for(let i=0;i<110;i++)step(w,idle);
+    assert.equal(w.enemies.length,1);
+    assert.equal(w.enemies[0].boss,BOSS_IDS[BOSS_FLOORS.indexOf(floor as 2|4|5)]);
+    const hp=w.player.hp;w.enemies[0].hp=0;step(w,idle);
+    assert.equal(w.bossEncounter,'defeated');for(let i=0;i<54;i++)step(w,idle);assert.equal(w.phase,'cleared');
+    const coins=w.player.coins;for(let i=0;i<60;i++)step(w,{...idle,choice:1});
+    assert.equal(w.bossEncounter,'defeated');assert.equal(w.enemies.length,0);assert.equal(w.player.coins,coins);
+  }
+  const skip=createWorld(91);skip.floor=floor;skip.phase='cleared';skip.player.x=PORTAL.x;skip.player.z=PORTAL.z;
+  step(skip,idle);assert.equal(skip.phase,floor===5?'won':'fight');assert.equal(skip.floor,floor===5?5:floor+1);
 }
+const remote=createWorld(2);remote.floor=2;remote.phase='cleared';step(remote,{...idle,choice:1});assert.equal(remote.bossEncounter,'waiting');
 // Locked aim, exact contact shape, no early damage, a real dodge opening.
 for(const [boss,pattern] of [['witness',1],['cantor',2]] as const){
   for(const avoid of [false,true]){

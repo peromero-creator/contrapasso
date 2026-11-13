@@ -50,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.11.0` inputs, including jump and plunge actions. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.12.0` inputs, including jump, plunge and optional boss-gate entry. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -167,3 +167,5 @@ The current verification passed the full application suite, production build and
 Simulation 0.10.1 makes active core zones follow their caster. New runs use the updated client/referee rules; old in-progress 0.10.0 runs must restart. This changes replay behavior, not the NFT contract ABI or deployed contract version.
 
 Simulation 0.11.0 adds seeded Solo boss identities, boss recovery openings and a short basic-attack input buffer. New client/referee runs use these shared rules; older unfinished runs must restart. The contract ABI and deployed WASM remain unchanged by this gameplay update.
+
+Simulation 0.12.0 moves bosses behind optional gates on circles II, IV and V. The referee validates entry at the cleared gate and verifies both boss and skip routes. Existing coin caps and one-time result settlement still apply; no contract update is needed.

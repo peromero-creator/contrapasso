@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <link rel="preload" as="image" href="/art/vow-cards.jpg" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#111110" />
@@ -74,6 +75,7 @@
       <div id="portal-hint" class="hidden">
         ENTER THE LIT GATE TO DESCEND <span>↑</span>
       </div>
+      <div id="boss-gate-prompt" class="hidden"><span id="boss-gate-help"></span><strong id="boss-gate-name"></strong><button id="boss-enter" class="btn">ENTER · E</button></div>
       <div id="run-info">
         <span id="run-time">0:00</span><span id="run-seed"></span>
       </div>
@@ -93,6 +95,7 @@
       </div>
     </div>
 
+    <div id="gate-veil" aria-hidden="true"></div>
     <section
       id="reward"
       class="overlay hidden"
@@ -102,7 +105,7 @@
     >
       <div class="reward-inner">
         <span class="eyebrow" id="reward-circle">CIRCLE I CLEARED</span>
-        <h2 id="reward-title">TAKE A VOW.</h2>
+        <h2 id="reward-title">GROW STRONGER.</h2>
         <p id="reward-sub">
           Take one power into the next circle. Choose carefully.
         </p>
@@ -309,7 +312,7 @@
       <div class="forge-inner market-inner">
         <div class="forge-heading">
           <div>
-            <span class="eyebrow">EARN YOUR PLACE · NEAR TESTNET</span>
+            <span class="eyebrow">ARMORY · NEAR TESTNET</span>
             <h2 id="market-title">THE RELIQUARY.</h2>
           </div>
           <button id="market-close" class="btn ghost">
@@ -335,10 +338,10 @@
                 id="relic-stage"
                 aria-label="Selected weapon attack animation preview"
               ></canvas>
-              <span id="relic-motion">IN-GAME MODEL / SILENT PREVIEW</span>
+              <span id="relic-motion">ATTACK PREVIEW</span>
             </div>
             <div class="relic-detail">
-              <span class="eyebrow">MINT IT. WIELD IT. MAKE IT YOURS.</span>
+              <span class="eyebrow">NEW WEAPON</span>
               <h3 id="relic-title">CINDER REQUIEM</h3>
               <p id="relic-description">
                 A free-trading blade forged from the first circle. Starts at +0;
@@ -348,7 +351,7 @@
               <div id="market-actions" class="market-actions"></div>
             </div>
           </div>
-          <div class="raffle-panel">
+          <details class="treasury-details"><summary>Game treasury</summary><div class="raffle-panel">
             <div>
               <span class="eyebrow">EVERY MINT SUPPORTS THE WORLD</span>
               <h3>THE INFERNAL TREASURY</h3>
@@ -361,7 +364,7 @@
             <div id="raffle-actions" class="market-actions"></div>
             <div id="raffle-winners"></div>
           </div>
-        </div>
+        </details></div>
         <section
           id="exchange-panel"
           class="hidden"
@@ -416,7 +419,7 @@
       <div class="mode-inner">
         <div class="mode-heading">
           <span class="wordmark">CONTRAPASSO<span> / </span></span
-          ><span class="eyebrow">THE THRESHOLD / PREPARE YOUR DESCENT</span>
+          ><span class="eyebrow">PREPARE YOUR DESCENT</span>
         </div>
         <div class="champion-panel">
           <div class="champion-sigil">V</div>

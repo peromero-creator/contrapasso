@@ -69,10 +69,6 @@ export class Underworld {
       const foundation = this.mesh(g,new THREE.PlaneGeometry(64,48),this.dark,0,-.12,0);
       foundation.rotation.x = -Math.PI/2;
       for(const side of [-1,1]) {
-        for(let i=0;i<7;i++) {
-          const h=1.4+(i%3)*.4;
-          this.box(g,4.8,h,1.4,side*(4+i*4.4),h/2-.2,-ARENA_HZ-4.8,this.dark);
-        }
         this.box(g,1.2,1.3,28,side*(ARENA_HX+5.8),.4,0,this.dark);
       }
       // A low masonry shelf grounds scenery in the painted arena without covering combat.
@@ -159,8 +155,11 @@ export class Underworld {
       }
       this.populate(g, circle);
       // Broken reliefs at the far wall form a backdrop, not a row of obstacles.
-      this.box(g, 7, 0.4, 1.6, -8, 0.1, -ARENA_HZ - 1.1, this.dark);
-      this.box(g, 3.5, 0.9, 0.8, -9, 0.55, -ARENA_HZ - 1.4, this.stone);
+      // Keep the optional doorway and the crypt return threshold unobstructed.
+      if (circle === 2) {
+        this.box(g, 7, 0.4, 1.6, -8, 0.1, -ARENA_HZ - 1.1, this.dark);
+        this.box(g, 3.5, 0.9, 0.8, -9, 0.55, -ARENA_HZ - 1.4, this.stone);
+      }
       this.box(g, 4, 0.35, 1.3, 9, 0.1, -ARENA_HZ - 1, this.stone);
     }
     for (const group of [...this.censers, ...this.souls]) batchScenery(group, new Set());
@@ -485,7 +484,7 @@ export class Underworld {
     seal.position.set(0, 0.025, 0);
     g.add(seal);
   }
-  sync(w: World, dt: number) {
+  sync(w: World, dt: number, visualCircle = w.floor - 1) {
     this.time += dt;
     for (const soul of this.souls) {
       soul.position.y =
@@ -497,7 +496,7 @@ export class Underworld {
     for (const [i, c] of this.censers.entries())
       c.rotation.z = Math.sin(this.time * 0.45 + i) * 0.04;
     this.root.visible = w.mode === "solo";
-    const circle = Math.max(0, Math.min(4, w.floor - 1));
+    const circle = Math.max(0, Math.min(4, visualCircle));
     this.circles.forEach((g, i) => {
       g.visible = i === circle;
     });

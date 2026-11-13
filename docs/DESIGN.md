@@ -17,7 +17,7 @@ In Dante's poem a _contrapasso_ is a punishment that mirrors the sin. In this ga
 
 ## Solo
 
-A run is five floors, one circle each. Each floor is one arena with waves of enemies; one of three bosses waits on the fifth floor. After a floor the player chooses an offered rank for an already unlocked power; with no eligible power, the gate opens immediately. Solo is where coin is earned.
+A run is five floors, one circle each. Each floor has waves of enemies. Floors II, IV and V also contain an optional boss gate. After a floor the player chooses an offered rank for an already unlocked power; with no eligible power, the gate opens immediately. Solo is where coin is earned.
 
 ## Duel
 
@@ -196,8 +196,16 @@ Cues follow the displayed enemy position independently of body shake and recoil.
 
 ## Boss encounters and combo openings (simulation 0.11)
 
-The final Solo wave selects one of three bosses deterministically from the run seed. The Warden keeps its charge/radial pattern. The Hollow Witness fixes a narrow gaze lane before striking, alternating with slow radial volleys. The Cinder Cantor alternates a fixed-aim projectile fan, a close circular slam and a charge. Below half life the two ritual bosses add projectiles; the phase is captured at the start of a warning, so taking damage cannot widen a volley mid-warning. Damage geometry and floor tells share the same constants. The arena and existing wave rewards stay unchanged.
+Optional gates on floors II, IV and V lead to the Warden, Hollow Witness and Cinder Cantor respectively. The Warden keeps its charge/radial pattern. The Hollow Witness fixes a narrow gaze lane before striking, alternating with slow radial volleys. The Cinder Cantor alternates a fixed-aim projectile fan, a close circular slam and a charge. Below half life the two ritual bosses add projectiles; the phase is captured at the start of a warning, so taking damage cannot widen a volley mid-warning. Damage geometry and floor tells share the same constants. Regular waves and circle rewards remain available when a boss is skipped.
 
 A boss's recovery is a visible opening. The first weapon finisher (every third basic strike or shot) to hit during that recovery gains 20% damage and extends recovery by 0.18 seconds. Further hits cannot extend it again. Techniques and passive damage do not consume the opening. A compact boss bar names the opponent and signals the opening.
 
-Basic attack taps are retained for up to ten simulation ticks, letting a slightly early second or third press begin when the weapon is ready. The queued attack keeps its aim, executes once, and is cancelled by a dash, jump or committed ability. This does not shorten weapon cooldowns or grant new powers. Client and referee both use simulation 0.11.0; older unfinished runs must restart. NFT ownership, traits, payouts and contract ABI are unchanged.
+Basic attack taps are retained for up to ten simulation ticks, letting a slightly early second or third press begin when the weapon is ready. The queued attack keeps its aim, executes once, and is cancelled by a dash, jump or committed ability. This does not shorten weapon cooldowns or grant new powers. Client and referee both use simulation 0.12.0; older unfinished runs must restart. NFT ownership, traits, payouts and contract ABI are unchanged.
+
+## Optional chambers and unified atlas (0.12)
+
+After clearing an eligible circle and choosing its rank upgrade, approach the carved gate and press E or use its Enter button. The ordinary lit exit always remains available, including on floor V. A boss cannot be entered during waves, from a distance, or twice on one floor. Entry opens painted door leaves and fades through darkness to a separate crypt presentation using the existing Limbo environment. Boss life is 600 / 750 / 900. Victory returns to the cleared circle and offers one additional rank for already learned powers; boss kills use the existing 60-coin award and daily cap. Death remains a normal Solo loss. Skipping every boss is a valid descent and still unlocks mint access on completion. Inputs remain 30-bit; the choice field also records gate entry. There is no new contract ABI or paid boss entry.
+
+The skill atlas shows every real path on one pannable map: seven weapon families, Q, R and soul vows, with consistent circles and colored regions. Category buttons focus a region without removing the others. All paths fits the complete map. Only actual prerequisites have connecting lines. There are 42 learnable skills; spell/core representations can share an existing skill rather than adding purchases. Hold-to-learn, costs and authoritative ownership checks are unchanged.
+
+Reward cards use four original Flow illustrations, a distinct skill icon, the effect and its rank increase. Inventory cards emphasize practical stats, with token identifiers and ownership in expandable details. Market fees, testnet denomination and transfer consequences remain available. The rejected procedural bell hall is no longer used; original circle floors and scenery are restored.

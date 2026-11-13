@@ -36,6 +36,10 @@ export const DT = 1 / TICK_HZ;
 export const ARENA_HX = 17;
 export const ARENA_HZ = 11;
 export const FLOORS = 5;
+export const BOSS_GATE = { x: -10, z: -7.5, r: 2.5 };
+export const BOSS_FLOORS = [2, 4, 5] as const;
+export function bossAvailable(w: World): boolean { return w.mode !== "duel" && (BOSS_FLOORS as readonly number[]).includes(w.floor) && w.bossEncounter === "waiting"; }
+export function nearBossGate(w: World): boolean { return bossAvailable(w) && w.phase === "cleared" && (w.player.x-BOSS_GATE.x)**2+(w.player.z-BOSS_GATE.z)**2 < BOSS_GATE.r**2; }
 export const PORTAL = { x: 0, z: -ARENA_HZ + 1.6, r: 1.5 };
 
 export interface Input {
@@ -193,6 +197,9 @@ export interface World {
   wave: number;
   wavesInFloor: number;
   spawnDelay: number;
+  bossEncounter: "waiting" | "active" | "defeated";
+  gateTransition: number;
+  gateDirection: "enter" | "return" | null;
   phase: Phase;
   player: Player;
   enemies: Enemy[];
@@ -276,6 +283,9 @@ export function createWorld(
     wave: 0,
     wavesInFloor: wavesFor(1),
     spawnDelay: 0.9,
+    bossEncounter: "waiting",
+    gateTransition: 0,
+    gateDirection: null,
     phase: "fight",
     player: {
       ...abilityState(equipment.core, skills, equipment.spell),
@@ -372,17 +382,11 @@ export function createDuelWorld(
   return w;
 }
 
-function waveSpec(floor: number, wave: number, last: boolean): EnemyKind[] {
+function waveSpec(floor: number, wave: number): EnemyKind[] {
   const out: EnemyKind[] = [];
   const push = (k: EnemyKind, n: number) => {
     for (let i = 0; i < n; i++) out.push(k);
   };
-  if (floor === FLOORS && last) {
-    push("warden", 1);
-    push("imp", 3);
-    push("archer", 2);
-    return out;
-  }
   push("imp", 2 + floor + wave);
   push("archer", Math.max(0, floor - 1 + (wave > 0 ? 1 : 0)));
   push(
@@ -439,8 +443,7 @@ function spawnEnemy(w: World, kind: EnemyKind) {
 }
 
 function spawnWave(w: World) {
-  const last = w.wave === w.wavesInFloor - 1;
-  for (const k of waveSpec(w.floor, w.wave, last)) spawnEnemy(w, k);
+  for (const k of waveSpec(w.floor, w.wave)) spawnEnemy(w, k);
 }
 
 function hurtPlayer(w: World, dmg: number, dot = false): boolean {
@@ -554,7 +557,7 @@ function offerSkills(w: World) {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   w.offers = pool.slice(0, 3);
-  w.phase = w.offers.length ? "reward" : w.floor === FLOORS ? "won" : "cleared";
+  w.phase = w.offers.length ? "reward" : "cleared";
   if (!w.offers.length)
     w.events.push({
       type: w.phase as "won" | "cleared",
@@ -575,9 +578,9 @@ function chooseSkill(w: World, choice: number) {
   }
   w.offers = [];
   w.events.push({ type: "skill", x: p.x, z: p.z, amount: choice });
-  w.phase = w.floor === FLOORS ? "won" : "cleared";
+  w.phase = "cleared";
   w.events.push({
-    type: w.phase === "won" ? "won" : "cleared",
+    type: "cleared",
     x: PORTAL.x,
     z: PORTAL.z,
   });
@@ -1531,6 +1534,31 @@ export function step(w: World, input: Input): void {
   }
   w.tick += 1;
   const p = w.player;
+  if (w.gateTransition > 0) {
+    w.gateTransition -= 1;
+    if(w.gateTransition === 27) {
+      p.x = w.gateDirection === "enter" ? 0 : BOSS_GATE.x;
+      p.z = w.gateDirection === "enter" ? ARENA_HZ - 2.5 : BOSS_GATE.z + 3;
+      w.events.push({type:"floor",x:p.x,z:p.z,amount:w.floor});
+    }
+    if(w.gateTransition === 0) {
+      if(w.gateDirection === "return") offerSkills(w);
+      w.gateDirection = null;
+    }
+    return;
+  }
+  if (input.choice === 1 && nearBossGate(w)) {
+    w.bossEncounter = "active";
+    w.gateTransition = 54;
+    w.gateDirection = "enter";
+    w.phase = "fight";
+    w.shots = []; w.zones = []; w.techniques = []; w.pickups = [];
+    p.attackQueue = 0; p.pendingStrike = false; p.swingT = 0;
+    p.dashT = 0; p.jumpT = 0; p.plunge = false; p.burnT = 0;
+    p.castT = 0; p.castId = null; p.castPending = false;
+    w.spawnDelay = 0.7;
+    return;
+  }
 
   stepPlayer(w, input);
   if (p.burnT > 0 && p.hp > 0) {
@@ -1688,9 +1716,21 @@ export function step(w: World, input: Input): void {
   if (w.phase === "fight") {
     if (w.spawnDelay > 0) {
       w.spawnDelay -= DT;
-      if (w.spawnDelay <= 0) spawnWave(w);
+      if (w.spawnDelay <= 0) {
+        if (w.bossEncounter === "active") {
+          spawnEnemy(w, "warden");
+          const boss = w.enemies[w.enemies.length - 1];
+          boss.boss = BOSS_IDS[BOSS_FLOORS.indexOf(w.floor as 2 | 4 | 5)];
+          boss.hp = boss.maxHp = w.floor === 2 ? 600 : w.floor === 4 ? 750 : 900;
+        } else spawnWave(w);
+      }
     } else if (w.enemies.length === 0) {
-      if (w.wave + 1 < w.wavesInFloor) {
+      if (w.bossEncounter === "active") {
+        w.bossEncounter = "defeated";
+        w.gateTransition = 54;
+        w.gateDirection = "return";
+        w.shots = []; w.zones = []; w.techniques = [];
+      } else if (w.wave + 1 < w.wavesInFloor) {
         w.wave += 1;
         w.spawnDelay = 0.9;
       } else {
@@ -1701,7 +1741,13 @@ export function step(w: World, input: Input): void {
     const dx = p.x - PORTAL.x;
     const dz = p.z - PORTAL.z;
     if (dx * dx + dz * dz < PORTAL.r * PORTAL.r) {
+      if (w.floor === FLOORS) {
+        w.phase = "won";
+        w.events.push({type:"won",x:p.x,z:p.z});
+        return;
+      }
       w.floor += 1;
+      w.bossEncounter = "waiting";
       w.pickups = [];
       w.zones = [];
       w.wave = 0;
