@@ -15,7 +15,9 @@ export class PresentationSample {
     return {
       x: this.previous.x + (this.current.x-this.previous.x)*t,
       z: this.previous.z + (this.current.z-this.previous.z)*t,
-      motion: motion ? { ...motion, elapsed: elapsed+(motion.elapsed-elapsed)*t } : undefined,
+      // Recovery may be advanced by the render clock. Hold the tick's endpoint
+      // steady or a 120 Hz screen alternates a double step with a repeated pose.
+      motion: motion ? { ...motion, elapsed: elapsed+(this.current.elapsed-elapsed)*t } : undefined,
     };
   }
 }

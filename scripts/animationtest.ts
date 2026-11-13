@@ -205,7 +205,7 @@ assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(shown)<1e-7,'actual mixer
 continuous.update(.05);const recovering=continuous.bone('Wrist')!.quaternion.clone();
 continuous.play('idle');continuous.update(0);
 assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(recovering)<1e-7,'actual attack-to-idle transition has no pose pop');
-continuous.update(.13);assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(new THREE.Quaternion())<1e-7);
+continuous.update(.24);assert.ok(continuous.bone('Wrist')!.quaternion.angleTo(new THREE.Quaternion())<1e-7,'the longer recovery bridge still settles within a quarter second');
 continuous.dispose();
 console.log('Mixer continuity: PASS (same clip restart and recovery preserve the displayed wrist, then settle to the target)');
 

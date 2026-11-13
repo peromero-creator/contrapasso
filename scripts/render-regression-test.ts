@@ -65,6 +65,10 @@ const halfway=sample.sample(2,1,2,'attack-1',{weapon:'starter',combo:1,elapsed:1
 assert.equal(halfway.x,.5);assert.equal(halfway.z,1);assert.equal(halfway.motion!.elapsed,1/120);
 const repeated=sample.sample(2,1,2,'attack-1',{weapon:'starter',combo:1,elapsed:1/60},.9);
 assert.ok(repeated.motion!.elapsed>halfway.motion!.elapsed && repeated.motion!.elapsed<1/60);
+const carried=sample.sample(2,1,2,'attack-1',{weapon:'starter',combo:1,elapsed:1/60+1/120},1);
+assert.equal(carried.motion!.elapsed,1/60,'render-time recovery cannot move a tick interpolation endpoint');
+const nextCarry=sample.sample(3,1,2,'attack-1',{weapon:'starter',combo:1,elapsed:2/60},.5);
+assert.ok(Math.abs(nextCarry.motion!.elapsed-carried.motion!.elapsed-1/120)<1e-9,'recovery advances evenly on the next half-frame');
 const reset=sample.sample(0,20,10,'attack-2',undefined,.2);assert.equal(reset.x,20);
 
 // Windup life is authoritative, including pauses; actor attachment uses the drawn

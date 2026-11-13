@@ -4,7 +4,7 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 import { abilityContact, abilityDuration } from "../sim/abilities.ts";
-import { combatLift, combatPose, motionClock, staffGesture, piercingGesture, crossbowRecoil, type CombatMotion } from "./combat-motion.ts";
+import { clipContact, combatLift, combatPose, motionClock, staffGesture, piercingGesture, crossbowRecoil, type CombatMotion } from "./combat-motion.ts";
 
 import { PoseTransition } from "./pose-transition.ts";
 
@@ -180,13 +180,28 @@ export class AnimatedModel {
   bone(name: string): THREE.Object3D | null {
     return this.joints.get(name) ?? null;
   }
-  play(state: string, seconds?: number, restart = false) {
+  play(state: string, seconds?: number, restart = false, skillBridge?: number) {
     const next =
       this.actions.get(state) ??
       this.actions.get("idle") ??
       this.actions.values().next().value;
     if (!next || (next === this.active && !restart)) return;
-    if (this.active) this.transition.begin(state === "dash" ? .045 : state === "run" || state === "idle" ? .12 : Math.min(.08, (seconds ?? .4) * .2));
+    if (this.active) {
+      const action = (name: string) => name.startsWith("attack") || name.startsWith("ultimate") || name === "cast";
+      const leaving = action(this.active.getClip().name.toLowerCase()), length = seconds ?? .4;
+      if (state === "dash") this.transition.begin(.045);
+      else if (state === "run" || state === "idle") this.transition.begin(leaving ? (state === "idle" ? .22 : .18) : .12);
+      // Chained strikes and strike-to-skill: carry the previous follow-through into the new
+      // wind-up, but always arrive before the blow lands so the contact pose stays crisp.
+      // Heavy two-handed clips end far from their next wind-up and gather for longer, so they
+      // get a longer bridge; the grip is reseated through both palms after every blend.
+      else if (leaving && skillBridge !== undefined) this.transition.begin(skillBridge);
+      else if (leaving) {
+        const heavy = ["attack-hammer", "attack-axe", "attack-axe-heavy", "ultimate-slam", "ultimate-iron"].includes(state);
+        this.transition.begin(Math.min(Math.max(.06, length * (heavy ? .48 : .38)), heavy ? .19 : .1, Math.max(.05, clipContact(state) * length)));
+      }
+      else this.transition.begin(Math.min(.08, length * .2));
+    }
     this.transition.restore();
     // Restore procedural corrections before unbinding the previous action.
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
@@ -244,6 +259,8 @@ export class AnimatedModel {
     this.aimHeldWeapon(motion);
     this.alignHeavyGrip(motion);
     this.transition.apply(dt);
+    // A blend moves both hands; seat the shaft through both palms again in the pose actually shown.
+    this.alignHeavyGrip(motion);
     this.updateStaffFocus(motion);
   }
   /** Gathering pigment is attached to the actual staff crown, never the actor origin. */
@@ -283,7 +300,8 @@ export class AnimatedModel {
     const hand=this.bone('RightHand');if(!hand?.parent)return;
     const contact=abilityContact(motion.ability), t=motion.elapsed/contact;
     const turn=Math.max(0,Math.min(1,(t-.65)/.35));
-    const weight=Math.min(1,motion.elapsed/.12)*Math.min(1,(abilityDuration(motion.ability)-motion.elapsed)/.12);
+    const weight=Math.max(0,Math.min(1,motion.elapsed/.12)*Math.min(1,(abilityDuration(motion.ability)-motion.elapsed)/.12));
+    if(weight<=0)return;
     this.root.updateWorldMatrix(true,true);
     const target=new THREE.Vector3(.65,1-turn*1.85,0).normalize().transformDirection(this.root.matrixWorld);
     const world=hand.getWorldQuaternion(new THREE.Quaternion());

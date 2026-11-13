@@ -2,7 +2,14 @@ import { weapon, type WeaponId } from '../sim/weapons.ts';
 import { abilityContact, abilityDuration, type AbilityId } from '../sim/abilities.ts';
 import { familyOf, techniqueId, TECHNIQUES } from '../sim/techniques.ts';
 
-export interface CombatMotion { weapon: WeaponId; elapsed: number; combo: number; ability?: AbilityId | null }
+/** `tail` is presentation only: the follow-through may keep playing into the recovery
+ * window after the authoritative swing has ended, so chained strikes flow into each other. */
+export interface CombatMotion { weapon: WeaponId; elapsed: number; combo: number; ability?: AbilityId | null; tail?: number }
+/** Longest stretch of recovery, in seconds, that a follow-through is carried across. */
+export const CARRY_LIMIT = .22;
+/** Techniques, spells and ultimates settle over this long after their cast time ends. */
+export const SKILL_CARRY = .18;
+export const skillTail = (id: AbilityId) => abilityDuration(id) + SKILL_CARRY;
 export type JointPose = Record<string, [number, number, number]>;
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (v: number) => { const t = clamp(v); return t * t * (3 - 2 * t); };
@@ -15,8 +22,15 @@ export const clipContact = (clip?: string) => ({
 export function motionClock(m: CombatMotion, clip?: string) {
   const spec = weapon(m.weapon), duration = m.ability ? abilityDuration(m.ability) : spec.swing;
   const contact = m.ability ? abilityContact(m.ability) : spec.impactDelay;
-  const t = clamp(m.elapsed / duration);
-  if (!contact) return t;
+  const t = clamp(m.elapsed / duration), tail = Math.max(duration, m.tail ?? duration);
+  if (!contact) {
+    // Instant weapons keep their original pace up to the visible strike; only the
+    // follow-through eases out across the carried recovery.
+    const at = clipContact(clip) * duration;
+    if (tail <= duration || m.elapsed <= at) return t;
+    const q = clamp((m.elapsed - at) / (tail - at));
+    return at / duration + (1 - at / duration) * (1 - (1 - q) * (1 - q));
+  }
   const c = contact / duration, strike = clipContact(clip);
   const family=familyOf(m.weapon),heavy=family==='hammer'||family==='axe';
   const gather=heavy?.78:family==='dagger'?.55:family==='spear'?.62:.72;
@@ -26,7 +40,7 @@ export function motionClock(m: CombatMotion, clip?: string) {
     return strike * (.62*smooth(q/gather) + .38*Math.pow(clamp((q-gather)/(1-gather)),2));
   }
   const hold=Math.min(heavy?.06:family==='dagger'||family==='crossbow'?.012:family==='spear'?.018:.045, (duration-contact)*.16);
-  return strike+(1-strike)*smooth((m.elapsed-contact-hold)/(duration-contact-hold));
+  return strike+(1-strike)*smooth((m.elapsed-contact-hold)/(tail-contact-hold));
 }
 /** Small additive accents on the existing rig: no detached hand or scaled anatomy. */
 export function combatPose(m: CombatMotion): JointPose {
@@ -87,13 +101,21 @@ export function combatLift(m?: CombatMotion) {
   return height * (spec.impactDelay ? leapArc(m.elapsed / spec.impactDelay) : Math.sin(Math.PI * Math.pow(clamp(m.elapsed / spec.swing), .8)));
 }
 
+function motionRecovery(m:CombatMotion,duration:number) {
+  const extended=!!m.ability;
+  return {start:duration-(extended?.2:.12),length:extended?.2+SKILL_CARRY:.12};
+}
+
 /** Staff choreography in actor-local space (+X is the committed aim). */
 export function staffGesture(m: CombatMotion) {
   const duration=m.ability?abilityDuration(m.ability):weapon(m.weapon).swing;
   const contact=m.ability?abilityContact(m.ability):duration*.35;
   const q=clamp(m.elapsed/contact), snap=smooth((q-.65)/.35);
   const recovery=smooth((m.elapsed-contact)/(duration-contact));
-  const weight=smooth(m.elapsed/.09)*(1-smooth((m.elapsed-duration+.12)/.12));
+  // Release the aimed hand through recovery; a short IK fade can whip the wrist
+  // back to the source clip even when its animation clock is continuous.
+  const settle=motionRecovery(m,duration);
+  const weight=smooth(m.elapsed/.09)*(1-smooth((m.elapsed-settle.start)/settle.length));
   const ground=['staff-2','ember','nova-spell'].includes(m.ability??'');
   const harvest=['staff-3','iron'].includes(m.ability??'');
   const orbit=m.ability==='ash';
