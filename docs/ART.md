@@ -1,6 +1,6 @@
 # Art pipeline
 
-Shipped art: a title illustration, five painted floors and concept images from Google Flow, plus animated characters and a blade prop from Meshy (`scripts/meshy.mjs` runs image-to-3D, rigging and preset animations through the Meshy API and needs `MESHY_API_KEY` in `.env`; it spends credits). `npm run assets` only processes local files: it does not call any service or read keys. Placeholder shapes remain as the fallback when a model is missing.
+Shipped art: a title illustration, eight painted floors, five north-wall backdrops and concept images from Google Flow, plus animated characters and a blade prop from Meshy (`scripts/meshy.mjs` runs image-to-3D, rigging and preset animations through the Meshy API and needs `MESHY_API_KEY` in `.env`; it spends credits). `npm run assets` only processes local files: it does not call any service or read keys. Placeholder shapes remain as the fallback when a model is missing.
 
 Per model, `art.config.json` may also set `textureSize` (downscale textures; uses macOS `sips`) and `windows` (seconds of a clip to keep per state, for example `{ "attack": [0.35, 0.85] }`). At load time the game removes horizontal root motion from the `Hips` bone so characters stay on their simulation position.
 
@@ -39,9 +39,9 @@ Keep source files outside the web build, for example under `art/source/`. Config
 }
 ```
 
-A clip specification can also select a named or indexed animation: `{ "file": "art/source/actions.glb", "clip": "Run" }`. Runtime model keys are `hero`, `imp`, `archer`, `brute`, `warden`, `sword`, `hammer`, `dagger`, `shore-spider`, `ferryman`, `crossbow`, `staff` and `funerary-arch`. Additional packed props require explicit placement.
+A clip specification can also select a named or indexed animation: `{ "file": "art/source/actions.glb", "clip": "Run" }`. Runtime model keys and credits are recorded in `public/assets/manifest.json`. Additional packed props require explicit placement.
 
-Painted floors cover one complete 34 × 22 arena. Supported circle keys are `LIMBO`, `LUST`, `GLUTTONY`, `GREED`, and `WRATH`; supported images are PNG, JPG and WebP. Keep perspective out of the painted image because the game camera supplies it.
+Painted floors cover one complete 34 × 22 arena. Supported floor keys are `LIMBO`, `LUST`, `GLUTTONY`, `GREED`, `WRATH`, `BOSS_WARDEN`, `BOSS_WITNESS`, and `BOSS_CANTOR`; supported images are PNG, JPG and WebP. Keep perspective out of the painted image because the game camera supplies it.
 
 ## Build
 
@@ -94,7 +94,7 @@ Blood textures and stone-chamber geometry are original procedural art. Direction
 
 The same Meshy hero rig adds Charged Spell Cast (125), Mage Spell Cast 3 (132) and Sword Judgment (102), in `art/source/hero-soul-actions.glb`. Contact-sheet inspection selected cast 0.35–1.45 seconds, charged ultimate 1.25–2.10 and judgment 0.70–1.70. Runtime durations match deterministic windup/contact/recovery. No new character or third-party game art is used.
 
-`src/render/soul-fx.ts` draws original layered flame textures, seals, tapering orbit blades, lance streaks and ward facets. Effects use normal transparency and bounded lifetimes, with at most 32 motifs. Dash echoes copy the current posed hero and fade over 0.3 seconds. The skill-tree preview uses the same rig and effects; it has no gameplay, payment or audio side effects. The environment's new catacomb foundations and perimeter props are original procedural geometry. The ambient hooded figures are stylized scenery, not full new animated character assets.
+`src/render/soul-fx.ts` draws original layered flame textures, seals, tapering orbit blades, lance streaks and ward facets. Effects use normal transparency and bounded lifetimes, with at most 32 motifs. Dash echoes copy the current posed hero and fade over 0.3 seconds. The skill-tree preview uses the same rig and effects; it has no gameplay, payment or audio side effects. The earlier procedural perimeter filler has been replaced by authored props and ashen static poses from the existing enemy rigs.
 
 ## Weapon mastery presentation (0.10)
 
@@ -157,3 +157,25 @@ Outline thickness is supplied per material rather than baked into a shared shade
 `public/art/penitent-gate.jpg` and `public/art/vow-cards.jpg` are original Google Flow / Nano Banana illustrations generated for Contrapasso. The gate uses the established palm-eye/ivory/bronze direction; the card atlas contains weapon, spell, soul-core and endurance motifs. Social-media reference screenshots are not distributed as game assets.
 
 The gate is a painted 2.5D prop, not a newly rigged 3D model: one image mapped onto a silhouette frame and two hinged leaves with a dark aperture. It adds four opaque meshes and no lights. Card panels are selected with CSS, while skill names, effects, costs and input cues remain live text. Original circle artwork is retained; the experimental primitive bell-hall scene was withdrawn. No additional Meshy generation was used for this revision.
+
+
+## Authored perimeter and contact ink
+
+The pilgrim exit (`public/art/pilgrim-exit.jpg`), five `wall-*.jpg` backdrops, `stone-border.jpg` and three `art/source/floor-*.jpg` boss floors are original Google Flow / Nano Banana 2.1 exports. North-wall UVs align their painted openings with the actual gates. One silhouette cutout supplies the exit; four repeated textured strips supply the border. No additional lights or postprocessing are used.
+
+Six original Flow concepts were converted with Meshy image-to-3D. Their source JPG/GLB files are retained under `art/source/`; shipped files use Meshopt compression and 512px textures:
+
+| Prop | Triangles | Packed bytes |
+| --- | ---: | ---: |
+| Funerary brazier | 4,044 | 208,388 |
+| Gate threshold | 3,076 | 142,476 |
+| Lust niche | 2,927 | 181,200 |
+| Gluttony cauldron | 2,981 | 157,660 |
+| Greed chest | 2,791 | 158,888 |
+| Wrath column | 3,182 | 168,500 |
+
+Planted weapon props are grounded blade-first. Static enemy figures use cached grayscale versions of their authored textures, with their emissive contribution removed, to distinguish stone scenery from living enemies. These props load before shader preparation.
+
+Contact ink is drawn once into cached 256px masks: blade cuts, hammer/axe fractures, dagger/orbit arcs, spear/bolt lanes, staff seals and three distinct core marks. Marks have a six-slot pool. The weapon-tip trail uses one mesh with six ribbon segments; older strokes recede and enemy warning materials draw above them. These textures are original procedural illustration, not copied game sprites. Hidden camp and preview canvases skip rendering.
+
+The ten new painted environment and boss images retain their original pixel dimensions and use JPEG quality 85 for delivery (11.03 MB total, down from 26.73 MB). Full-quality downloads stay in the ignored raw art folder.

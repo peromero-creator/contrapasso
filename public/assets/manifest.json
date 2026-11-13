@@ -340,6 +340,84 @@
         "license": "Project asset",
         "source": "Original Google Flow concept (art/source/hollow-witness.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
       }
+    },
+    "funerary-brazier": {
+      "file": "/assets/models/funerary-brazier-6079b3034121.glb",
+      "height": 1.7,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 208388,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/funerary-brazier.jpg), Meshy image-to-3D. Carved bone-hand bronze brazier."
+      }
+    },
+    "gate-threshold": {
+      "file": "/assets/models/gate-threshold-612dc4931ab2.glb",
+      "height": 0.85,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 142476,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/gate-threshold.jpg), Meshy image-to-3D."
+      }
+    },
+    "lust-niche": {
+      "file": "/assets/models/lust-niche-2ba507875478.glb",
+      "height": 3.5,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 181200,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/lust-niche.jpg), Meshy image-to-3D."
+      }
+    },
+    "gluttony-cauldron": {
+      "file": "/assets/models/gluttony-cauldron-4b551763777f.glb",
+      "height": 2.4,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 157660,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/gluttony-cauldron.jpg), Meshy image-to-3D."
+      }
+    },
+    "greed-chest": {
+      "file": "/assets/models/greed-chest-195dab534909.glb",
+      "height": 1.7,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 158888,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/greed-chest.jpg), Meshy image-to-3D."
+      }
+    },
+    "wrath-column": {
+      "file": "/assets/models/wrath-column-886247055fd3.glb",
+      "height": 3.2,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 168500,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Original Google Flow concept (art/source/wrath-column.jpg), Meshy image-to-3D."
+      }
     }
   },
   "floors": {
@@ -347,6 +425,9 @@
     "LUST": "/assets/floors/lust-45fee903f3f0.jpg",
     "GLUTTONY": "/assets/floors/gluttony-399fcad758a9.jpg",
     "GREED": "/assets/floors/greed-3bcae3a8b157.jpg",
-    "WRATH": "/assets/floors/wrath-a03e39664315.jpg"
+    "WRATH": "/assets/floors/wrath-a03e39664315.jpg",
+    "BOSS_WARDEN": "/assets/floors/boss_warden-ba809aee21a2.jpg",
+    "BOSS_WITNESS": "/assets/floors/boss_witness-65185328d761.jpg",
+    "BOSS_CANTOR": "/assets/floors/boss_cantor-9827672f5724.jpg"
   }
 }

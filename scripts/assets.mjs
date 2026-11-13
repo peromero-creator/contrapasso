@@ -87,7 +87,7 @@ export async function buildAssets(configFile) {
     manifest.models[name] = { file: `/assets/${file}`, height: spec.height ?? 2.2, rotationY: spec.rotationY ?? 90, clips: document.getRoot().listAnimations().map(a => a.getName()), bytes: binary.byteLength, windows: spec.windows ?? {}, credit: spec.credit ?? null };
   }
   for (const [name, file] of Object.entries(config.floors ?? {})) {
-    if (!["LIMBO", "LUST", "GLUTTONY", "GREED", "WRATH"].includes(name)) throw new Error(`Unknown circle: ${name}`);
+    if (!["LIMBO", "LUST", "GLUTTONY", "GREED", "WRATH", "BOSS_WARDEN", "BOSS_WITNESS", "BOSS_CANTOR"].includes(name)) throw new Error(`Unknown circle: ${name}`);
     const extension = extname(file).toLowerCase();
     if (![".png", ".jpg", ".jpeg", ".webp"].includes(extension)) throw new Error(`Unsupported floor image: ${file}`);
     await mkdir(resolve(output, "floors"), { recursive: true });
