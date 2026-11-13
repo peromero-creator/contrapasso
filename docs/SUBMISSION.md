@@ -8,6 +8,8 @@ The champion is also a dynamic NEAR NFT: it carries equipped NFTs, its earned co
 
 Tracks: `games` and `nfts`.
 
+Public source: [github.com/peromero-creator/contrapasso](https://github.com/peromero-creator/contrapasso).
+
 ## Five-minute demo sequence
 
 1. Open the title screen, take the descent, and show movement, aiming, a heavy third swing, dash and the vitality bar.
@@ -58,9 +60,10 @@ Checked against the [organizer’s live rules](https://nearhackathon.com/HACKATH
 - [x] Healing pickups, ambient inhabitants and dressed catacomb perimeters.
 - [x] Original project art, optimized models and painted floors.
 - [x] MIT code license and dependency/art credits.
-- [ ] Record and upload the final video.
+- [x] Record a silent gameplay and NFT-interface showcase for owner review.
+- [ ] Publish the reviewed video in the owner's X demo post.
 - [ ] Select hosting or provide local demo instructions with the video.
-- [ ] Publish the repository and add its actual URL.
+- [x] Publish the repository and add its actual URL.
 - [x] Review the organizer’s current requirements (2026-11-13); recheck immediately before submitting.
 - [ ] Collect owner-provided team/contact details, prize address and contact consent privately.
 - [ ] Obtain the public X demo-post URL and review the final submission payload with the owner.
