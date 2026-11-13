@@ -1,3 +1,5 @@
+import { SKILL_CARRY, skillTail } from "./combat-motion";
+import { SkillWeight } from "./skill-weight";
 import { TECHNIQUES, techniqueId } from "../sim/techniques";
 import { abilityClip } from "./weapon-pose";
 import { SoulFx } from "./soul-fx";
@@ -70,7 +72,7 @@ async function portrait(id: WeaponId) {
   const promise = queue
     .then(async () => {
       const spec = weapon(id),
-        model = await models.create(spec.model, spec.height);
+        model = spec.model ? await models.create(spec.model, spec.height) : (()=>{const root=starterWeapon();return {root,dispose:()=>root.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();(o.material as THREE.Material).dispose();}})};})();
       if (!model) return empty;
       const renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -141,6 +143,7 @@ export class RelicStage {
   private renderer: THREE.WebGLRenderer;
   private scene = chamber();
   private fx = new SoulFx(this.scene);
+  private weight = new SkillWeight(this.scene);
   private previewWorld = createWorld(1);
   private ability: AbilityId | null = null;
   private elapsed = 0;
@@ -162,6 +165,7 @@ export class RelicStage {
   constructor(
     private canvas: HTMLCanvasElement,
     private label: HTMLElement,
+    private showcase = false,
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
@@ -182,6 +186,13 @@ export class RelicStage {
       }
       hero.play("idle");
     });
+    if(this.showcase) {
+      let drag:number|null=null;
+      canvas.style.touchAction='none';canvas.style.cursor='grab';
+      canvas.addEventListener('pointerdown',e=>{drag=e.clientX;canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';});
+      canvas.addEventListener('pointermove',e=>{if(drag===null||!this.hero)return;this.hero.root.rotation.y+=(e.clientX-drag)*.009;drag=e.clientX;});
+      const end=()=>{drag=null;canvas.style.cursor='grab';};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+    }
     this.tick = this.tick.bind(this);
     requestAnimationFrame(this.tick);
   }
@@ -190,7 +201,7 @@ export class RelicStage {
     this.ability = ability;
     this.timer = 0;
     this.playing = false;
-    this.fx.clear();
+    this.fx.clear();this.weight.clear();
 
   }
   async select(id: WeaponId) {
@@ -198,7 +209,7 @@ export class RelicStage {
     this.loading = true;
     this.starter.visible = false;
     if (this.blade) this.blade.root.visible = false;
-    this.fx.clear();
+    this.fx.clear();this.weight.clear();
     const revision = ++this.generation;
     this.label.textContent = "Loading moves…";
     await this.ready;
@@ -229,9 +240,9 @@ export class RelicStage {
   }
   private tick(time: number) {
     requestAnimationFrame(this.tick);
-    const dt = Math.min(0.05, (time - this.last) / 1000 || 0) * this.speed;
+    const dt = document.documentElement.classList.contains("calm") ? 0 : Math.min(0.05, (time - this.last) / 1000 || 0) * this.speed;
     this.last = time;
-    if (!this.canvas.checkVisibility() || document.hidden) return;
+    if (!this.canvas.checkVisibility({opacityProperty:true,visibilityProperty:true}) || this.canvas.closest("[inert]") || document.hidden) return;
     const width = this.canvas.clientWidth,
       height = this.canvas.clientHeight;
     if (this.loading || !width || !height || !this.hero || (!this.blade && this.identity !== "starter")) return;
@@ -248,6 +259,11 @@ export class RelicStage {
       this.camera.lookAt(expanded ? 1 : .35, 1, 0);
       this.camera.updateProjectionMatrix();
     }
+    if(this.showcase) {
+      this.hero.play('idle');this.hero.update(document.documentElement.classList.contains('calm')?0:dt);
+      this.label.textContent=`${weapon(this.identity).name} · Drag to turn`;
+      this.renderer.render(this.scene,this.camera);return;
+    }
     const wide = width > 850;
     const airborne = this.ability==='sword-4' || this.ability==='hammer-4';
     const expansive = airborne || !!this.ability && ['staff-2','staff-3','ember','ash','iron','nova-spell'].includes(this.ability);
@@ -255,7 +271,7 @@ export class RelicStage {
     this.camera.lookAt(wide ? 1 : .35, airborne ? 1.4 : 1, 0);
     this.previewWorld.player.core = coreId(this.ability);
     this.previewWorld.player.wardT = this.ability === "iron" && this.elapsed > CORE_CONTACT && this.elapsed < 4 ? 1 : 0;
-    this.fx.sync(this.previewWorld, dt);
+    this.fx.sync(this.previewWorld, dt);this.weight.update(dt);
     if (this.ability) {
       this.timer -= dt;
       const duration = abilityDuration(this.ability);
@@ -269,6 +285,7 @@ export class RelicStage {
           abilityClip(this.ability, this.identity),
           duration,
           true,
+          Math.min(.22,abilityContact(this.ability)*.8),
         );
         this.fx.event({
           type: "ability",
@@ -294,13 +311,14 @@ export class RelicStage {
           z: 0,
           amount: this.ability === "ember" ? 3.5 + this.emitted : undefined,
         }, this.identity);
+        this.weight.event({type:'ability',ability:this.ability,stage:isSpell(this.ability)?'release':'pulse',x:0,z:0,amount:this.ability==='ember'?3.5+this.emitted:undefined});
         this.emitted++;
       }
-      if (this.playing && this.elapsed > duration) {
+      if (this.playing && this.elapsed > duration + SKILL_CARRY) {
         this.hero.play("idle");
         this.playing = false;
       }
-    this.hero.update(dt, this.playing ? { weapon: this.identity, ability: this.ability, elapsed: this.elapsed, combo: Number(this.ability.split('-')[1]) || 1 } : undefined);
+    this.hero.update(dt, this.playing ? { weapon: this.identity, ability: this.ability, elapsed: this.elapsed, tail: skillTail(this.ability), combo: Number(this.ability.split('-')[1]) || 1 } : undefined);
       this.renderer.render(this.scene, this.camera);
       return;
     }

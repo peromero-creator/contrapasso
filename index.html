@@ -13,6 +13,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/src/ui/style.css" />
+    <link rel="stylesheet" href="/src/ui/camp.css" />
   </head>
   <body>
     <canvas id="game" aria-label="Contrapasso combat arena"></canvas>
@@ -20,6 +21,7 @@
     <div id="hurt-veil" aria-hidden="true"></div>
     <div id="notice" class="hidden" role="status"></div>
 
+    <!-- Combat instruments: life and location on top, every ability in one bar below. -->
     <div id="hud" class="hidden">
       <div class="hud-left">
         <div id="vital">
@@ -32,37 +34,18 @@
             <div id="hp-fill"></div>
           </div>
         </div>
-        <div class="combat-ready">
-          <div id="dash-pip" class="ready">
-            <kbd>SHIFT</kbd><span>DASH</span><i><b id="dash-meter"></b></i>
-          </div>
-          <div id="jump-pip" class="ready" title="Jump, then attack to plunge">
-            <kbd>SPACE</kbd><span id="jump-label">JUMP</span><i><b id="jump-meter"></b></i>
-          </div>
-          <div class="combo">
-            <i id="combo-1"></i><i id="combo-2"></i><i id="combo-3"></i
-            ><span id="combo-instruction">I → II → III</span>
-          </div>
+        <div id="held-weapon"></div>
+        <div class="combo">
+          <i id="combo-1"></i><i id="combo-2"></i><i id="combo-3"></i
+          ><span id="combo-instruction">I → II → III</span>
         </div>
-        <div class="ability-bar">
-          <div id="cast-slot">
-            <kbd>Q</kbd><span id="cast-label">SOUL LANCE</span
-            ><i><b id="cast-meter"></b></i>
-          </div>
-          <div id="core-slot">
-            <kbd>R</kbd><span id="core-label">ATTUNE A CORE</span
-            ><i><b id="core-meter"></b></i>
-          </div>
-        </div>
-        <div class="ability-bar technique-bar"><div id="technique-1"><kbd>1</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-2"><kbd>2</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-3"><kbd>3</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-4"><kbd>4</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div></div>
-        <div id="held-weapon" class="eyebrow"></div>
         <div id="powers" aria-label="Active powers"></div>
       </div>
       <div id="chain" aria-hidden="true"><b id="chain-count">0</b><span>HITS</span><i id="chain-rank"></i></div>
       <div class="hud-right">
         <span class="eyebrow">THE DESCENT</span>
         <div id="circle">I / LIMBO</div>
-        <div id="wave">WAVE 1 / 2</div>
+        <div id="wave">WAVE 1 / 2</div><div id="wave-progress" aria-hidden="true"><i></i></div>
         <div id="coins">
           <span class="coin"></span><b id="coin-n">0</b><span>COIN</span>
         </div>
@@ -76,22 +59,39 @@
         ENTER THE LIT GATE TO DESCEND <span>↑</span>
       </div>
       <div id="boss-gate-prompt" class="hidden"><span id="boss-gate-help"></span><strong id="boss-gate-name"></strong><button id="boss-enter" class="btn">ENTER · E</button></div>
-      <div id="run-info">
-        <span id="run-time">0:00</span><span id="run-seed"></span>
-      </div>
-      <div id="run-controls">
-        <button
-          id="sound-toggle"
-          class="hud-button"
-          aria-pressed="false"
-          aria-label="Unmute sound (M)"
-        >
-          SOUND OFF · M</button
-        ><button id="pause-toggle" class="hud-button">PAUSE · ESC</button>
-      </div>
+      <div id="flow" aria-hidden="true"><b id="flow-count">×2</b><span>FLOW</span></div>
+      <div id="first-technique-hint" hidden>YOUR TECHNIQUE IS READY · PRESS 1</div>
       <div id="help">
-        <kbd>WASD</kbd> move <kbd>HOLD CLICK</kbd> attack <kbd>SPACE</kbd> jump <kbd>SHIFT</kbd> dash
-        <kbd>1–4</kbd> techniques <kbd>Q</kbd> cast <kbd>R</kbd> core
+        <kbd>WASD</kbd> move <kbd>HOLD CLICK</kbd> attack <kbd>ESC</kbd> pause · settings
+      </div>
+      <div class="hud-bottom">
+        <div id="run-info">
+          <span id="run-time">0:00</span><span id="run-seed"></span>
+        </div>
+        <div id="action-bar" aria-label="Abilities">
+          <div class="action-group move-group">
+            <div id="dash-pip" class="ready">
+              <kbd>SHIFT</kbd><span>DASH</span><i><b id="dash-meter"></b></i>
+            </div>
+            <div id="jump-pip" class="ready" title="Jump, then attack to plunge">
+              <kbd>SPACE</kbd><span id="jump-label">JUMP</span><i><b id="jump-meter"></b></i>
+            </div>
+          </div>
+          <div class="action-group ability-bar technique-bar"><div id="technique-1"><kbd>1</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-2"><kbd>2</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-3"><kbd>3</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-4"><kbd>4</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div></div>
+          <div class="action-group ability-bar soul-bar">
+            <div id="cast-slot">
+              <kbd>Q</kbd><span id="cast-label">SOUL LANCE</span
+              ><i><b id="cast-meter"></b></i>
+            </div>
+            <div id="core-slot">
+              <kbd>R</kbd><span id="core-label">ATTUNE A CORE</span
+              ><i><b id="core-meter"></b></i>
+            </div>
+          </div>
+        </div>
+        <div id="run-controls">
+          <button id="pause-toggle" class="hud-button">PAUSE · ESC</button>
+        </div>
       </div>
     </div>
 
@@ -105,13 +105,11 @@
     >
       <div class="reward-inner">
         <span class="eyebrow" id="reward-circle">CIRCLE I CLEARED</span>
-        <h2 id="reward-title">GROW STRONGER.</h2>
-        <p id="reward-sub">
-          Take one power into the next circle. Choose carefully.
-        </p>
+        <h2 id="reward-title">TAKE A VOW</h2>
+        <p id="reward-sub">Choose one upgrade for this descent.</p>
         <div id="reward-cards"></div>
         <p class="reward-hint">
-          Choose one · Keys 1 / 2 / 3 · Powers last for this descent
+          Press 1, 2 or 3 · The vow lasts until this descent ends
         </p>
       </div>
     </section>
@@ -124,10 +122,14 @@
       aria-labelledby="pause-title"
     >
       <span class="eyebrow">THE DESCENT CAN WAIT</span>
-      <h2 id="pause-title">TAKE A BREATH.</h2>
-      <p>Your descent is paused.</p>
-      <button id="resume" class="btn">RESUME <span>↗</span></button
-      ><button id="pause-menu" class="btn ghost">BACK TO MODES</button>
+      <h2 id="pause-title">PAUSED</h2>
+      <p id="pause-where">Your descent is paused.</p>
+      <div id="pause-build" class="end-build"></div>
+      <div class="pause-actions">
+        <button id="resume" class="btn">RESUME <span>↗</span></button>
+        <button id="pause-settings" class="btn ghost">SETTINGS &amp; CONTROLS</button>
+        <button id="pause-menu" class="btn ghost">LEAVE · RETURN TO CAMP</button>
+      </div>
     </section>
 
     <section
@@ -152,6 +154,8 @@
           ><span id="end-floor-label">CIRCLES REACHED</span>
         </div>
       </div>
+      <div id="end-build"></div>
+      <div class="end-next"><button id="end-skills" class="btn ghost">LEARN SKILLS ↗</button><button id="end-inventory" class="btn ghost">TEMPER GEAR ↗</button></div>
       <p id="receipt-status" role="status"></p>
       <button id="retry-verification" class="btn ghost hidden">
         VERIFY AGAIN
@@ -159,341 +163,370 @@
       <div class="end-actions">
         <button id="again" class="btn">DESCEND AGAIN <span>↗</span></button
         ><button id="same-seed" class="btn ghost">TRY SAME DESCENT</button
-        ><button id="to-menu" class="text-button">BACK TO CHAMPION</button>
+        ><button id="to-menu" class="text-button">RETURN TO CAMP</button>
       </div>
     </section>
 
-    <section
-      id="duel-lobby"
-      class="overlay hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="duel-title"
-    >
-      <div class="duel-inner">
-        <div class="forge-heading">
-          <div>
-            <span class="eyebrow">THEY BUILT THEIR PUNISHMENT</span>
-            <h2 id="duel-title">FACE THE SINNER.</h2>
-          </div>
-          <button id="duel-close" class="btn ghost">BACK <span>×</span></button>
-        </div>
-        <p class="duel-rules">
-          Your deepest build against theirs. Both vaults stake 10 coin. The
-          winner takes the pool. You have 90 seconds; forfeiting or leaving the
-          match unfinished counts as a loss.
-        </p>
-        <div class="duel-account">
-          <div>
-            <span class="coin"></span><b class="champion-coins">0</b> COIN
-            <span id="duel-record">0 W / 0 L</span>
-          </div>
-          <button id="defense-toggle" class="btn ghost" aria-pressed="false">
-            ENABLE DEFENSE
-          </button>
-        </div>
-        <p class="defense-help">
-          Defense lets other players challenge your champion while you are away.
-          Each accepted challenge risks 10 coin from your vault.
-        </p>
-        <button id="duel-resume" class="btn hidden">
-          REJOIN ACTIVE DUEL <span>↗</span>
+    <!-- The camp: one place between descents. A fixed bar on top, one page at a time below. -->
+    <div id="camp" data-page="modes" inert>
+      <header id="camp-bar">
+        <button id="camp-home" class="camp-wordmark" aria-label="Contrapasso · Descent">
+          CONTRAPASSO<span> /</span>
         </button>
-        <div class="section-label">
-          <span>MATCHED CHAMPIONS</span><i></i
-          ><button id="duel-refresh" class="text-button">REFRESH</button>
-        </div>
-        <div id="duel-opponents"></div>
-        <p id="duel-empty" class="hidden">
-          No matched defenders are available. Enable your defense or check again
-          after another champion finishes a descent.
-        </p>
-      </div>
-    </section>
-
-    <section
-      id="forge"
-      class="overlay hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="forge-title"
-    >
-      <div class="forge-inner">
-        <div class="forge-heading">
-          <div>
-            <span class="eyebrow">TRAIN WITH EARNED COIN</span>
-            <h2 id="forge-title">SKILL TREE</h2>
-          </div>
-          <button id="forge-close" class="btn ghost">
-            BACK <span>×</span>
-          </button>
-        </div>
-        <p>
-          Spend Solo coin to learn weapon techniques, spells and soul vows.
-          Your champion remembers what you learn. Gear keeps its own level and
-          history.
-        </p>
-        <div class="forge-balance">
-          <span class="coin"></span><b class="champion-coins">0</b> COIN
-          <span id="daily-coin"></span>
-        </div>
-        <span class="eyebrow forge-section"
-          >SKILL TREE · UNLOCK WITH EARNED COIN</span
-        >
-        <div id="forge-cards"></div>
-        <div class="skill-theatre">
-          <div>
-            <canvas
-              id="skill-stage"
-              aria-label="Silent skill animation preview"
-            ></canvas
-            ><button id="skill-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="skill-preview-label">SILENT PREVIEW</span><button id="skill-preview-expand" class="preview-expand" aria-label="Expand animation preview" aria-pressed="false">⛶</button>
-          </div>
-          <article>
-            <span class="eyebrow">YOUR BODY IS THE WEAPON</span>
-            <h3 id="skill-preview-name">Soul Lance</h3>
-            <p id="skill-preview-description"></p>
-
-          </article>
-        </div>
-        <span class="eyebrow forge-section">TEMPER YOUR GEAR</span>
-        <div id="gear-cards"></div>
-      </div>
-    </section>
-
-    <section
-      id="nft"
-      class="overlay hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="nft-title"
-    >
-      <div class="forge-inner">
-        <div class="forge-heading">
-          <div>
-            <span class="eyebrow">CHAMPION AND GEAR</span>
-            <h2 id="nft-title">WHAT YOU OWN.</h2>
-          </div>
-          <button id="nft-close" class="btn ghost">BACK <span>×</span></button>
-        </div>
-        <p id="nft-intro"></p>
-        <div id="nft-tokens"></div>
-        <p id="nft-action-result" role="status" aria-live="polite"></p>
-        <div id="claim-box" class="claim-box hidden">
-          <span class="eyebrow">TAKE IT TO YOUR OWN WALLET</span>
-          <p>
-            Your champion, its equipped gear and its coin vault move together to
-            the NEAR testnet account you name. This guest session then starts a
-            new champion: the one you claim can no longer be played from here.
-          </p>
-          <div class="claim-row">
-            <input
-              id="claim-account"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="yourname.testnet"
-              aria-label="Your NEAR testnet account"
-            />
-            <button id="claim-button" class="btn">CLAIM TO WALLET</button>
-          </div>
-          <p id="claim-result" class="claim-result"></p>
-        </div>
-      </div>
-    </section>
-
-    <section
-      id="market"
-      class="overlay hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="market-title"
-    >
-      <div class="forge-inner market-inner">
-        <div class="forge-heading">
-          <div>
-            <span class="eyebrow">ARMORY · NEAR TESTNET</span>
-            <h2 id="market-title">THE RELIQUARY.</h2>
-          </div>
-          <button id="market-close" class="btn ghost">
-            BACK <span>×</span>
-          </button>
-        </div>
-        <div class="market-banner">
-          TESTNET EDITION · Demo funds only · No real money
-        </div>
-        <nav class="market-tabs" aria-label="Relic trading">
-          <button id="tab-mint" class="btn ghost" aria-pressed="true">
-            MINT NEW RELICS
-          </button>
-          <button id="tab-exchange" class="btn ghost" aria-pressed="false">
-            PLAYER LISTINGS
-          </button>
+        <nav id="camp-nav" aria-label="Camp">
+          <button id="nav-descent" data-camp="modes" aria-current="page"><small>01</small><span>DESCENT</span><i>Choose how you fight</i></button>
+          <button id="train" data-camp="forge"><small>02</small><span>SKILLS</span><i>Learn and equip</i></button>
+          <button id="nft-open" data-camp="nft"><small>03</small><span>INVENTORY</span><i>Champion and gear</i></button>
+          <button id="market-open" data-camp="market"><small>04</small><span>MARKET</span><i>Mint and trade relics</i></button>
+          <i id="camp-nav-mark" aria-hidden="true"></i>
         </nav>
-        <div id="mint-panel">
-          <div id="arsenal-choices" aria-label="Choose a weapon"></div>
-          <div class="market-layout">
-            <div class="relic-art">
-              <canvas
-                id="relic-stage"
-                aria-label="Selected weapon attack animation preview"
-              ></canvas>
-              <span id="relic-motion">ATTACK PREVIEW</span>
+        <div class="camp-status">
+          <div class="camp-coin" title="Coin in your champion's vault">
+            <span class="coin"></span><b class="champion-coins">0</b><small>COIN</small>
+          </div>
+          <button id="settings-open" class="camp-tool" aria-haspopup="dialog">SETTINGS</button>
+        </div>
+      </header>
+
+      <section id="modes" class="camp-page" aria-labelledby="modes-title">
+        <div class="camp-inner hub">
+          <div class="hub-stage">
+            <canvas id="hub-stage" aria-label="Your champion with the weapon in hand"></canvas>
+            <span id="hub-stage-label" class="eyebrow"></span>
+          </div>
+          <div class="hub-side">
+            <header class="hub-champion">
+              <span class="eyebrow">GUEST CHAMPION</span>
+              <h2 id="modes-title">THE UNFORGIVEN</h2>
+              <p id="champion-progress">0 DESCENTS · 0 VICTORIES</p>
+            </header>
+            <div class="hub-build" aria-label="Your build">
+              <button data-camp-link="nft">
+                <span>WEAPON</span><b id="hub-weapon">Cinder Blade +0</b><i>↗</i>
+              </button>
+              <button data-camp-link="nft">
+                <span>ARMOR</span><b id="hub-armor">Ash Armor +0</b><i>↗</i>
+              </button>
+              <button data-camp-link="forge">
+                <span>SKILLS</span><b id="hub-skills">0 / 42 learned</b><i>↗</i>
+              </button>
+              <div><span>DEEPEST CIRCLE</span><b id="hub-depth">— / V</b></div>
+              <div><span>EARNED TODAY</span><b id="daily-coin">0 / 300 coin</b></div>
             </div>
-            <div class="relic-detail">
-              <span class="eyebrow">NEW WEAPON</span>
-              <h3 id="relic-title">CINDER REQUIEM</h3>
-              <p id="relic-description">
-                A free-trading blade forged from the first circle. Starts at +0;
-                your earned coin gives it power.
-              </p>
-              <div id="market-stats"></div>
-              <div id="market-actions" class="market-actions"></div>
+            <div class="champion-chain">
+              <span id="chain-status">PREPARING CHAMPION</span
+              ><a
+                id="chain-link"
+                class="hidden"
+                target="_blank"
+                rel="noopener noreferrer"
+                >VIEW NFT OWNER ↗</a
+              >
+            </div>
+            <div class="cards">
+              <button class="card" id="mode-solo">
+                <span class="card-k">THE FIVE CIRCLES</span
+                ><span class="card-t">SOLO</span
+                ><span class="card-d"
+                  >Earn coin. Take a vow. Build the champion hell deserves.</span
+                ><span class="card-action">CHOOSE YOUR WEAPON <b>↘</b></span></button
+              ><button class="card locked" id="mode-duel" disabled>
+                <span class="card-k">ANOTHER SINNER</span
+                ><span class="card-t">DUEL</span
+                ><span class="card-d"
+                  >Their champion. Your punishment. Risk 10 coin, claim the
+                  pool.</span
+                ><span id="duel-card-action" class="card-action"
+                  >CONNECTING CHAMPION</span
+                >
+              </button>
             </div>
           </div>
-          <details class="treasury-details"><summary>Game treasury</summary><div class="raffle-panel">
+        </div>
+      </section>
+
+      <section id="preparation" class="camp-page hidden" aria-labelledby="preparation-title">
+        <div class="camp-inner preparation-inner">
+          <header class="page-head">
+            <button id="preparation-close" class="page-back" aria-label="Back to Descent">←</button>
             <div>
-              <span class="eyebrow">EVERY MINT SUPPORTS THE WORLD</span>
-              <h3>THE INFERNAL TREASURY</h3>
-              <p>
-                Native mint revenue stays in a transparent application fund,
-                controlled by the project owner for the game.
-              </p>
+              <span class="eyebrow">DESCENT · SOLO · STEP 1 OF 2</span>
+              <h2 id="preparation-title">CHOOSE YOUR WEAPON</h2>
             </div>
-            <div id="raffle-stats"></div>
-            <div id="raffle-actions" class="market-actions"></div>
-            <div id="raffle-winners"></div>
+          </header>
+          <div class="preparation-grid">
+            <div class="preparation-theatre"><canvas id="loadout-stage" aria-label="Selected weapon held by your champion"></canvas><button id="loadout-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="loadout-preview-label" class="eyebrow">YOUR CHAMPION · YOUR WEAPON</span></div>
+            <div class="preparation-build"><span class="eyebrow">FROM YOUR INVENTORY</span><div id="loadout-weapons" role="group" aria-label="Owned weapons"></div><h3 id="loadout-name"></h3><p id="loadout-description"></p><div id="loadout-stats"></div><span class="eyebrow">WEAPON TECHNIQUES · CLICK TO PREVIEW</span><div id="loadout-techniques"></div><button id="loadout-train" class="btn ghost">OPEN THIS WEAPON'S SKILLS <span>↗</span></button></div>
           </div>
-        </details></div>
-        <section
-          id="exchange-panel"
-          class="hidden"
-          aria-label="Player marketplace"
-        >
-          <div class="exchange-intro">
-            <span class="eyebrow">RELICS WITH A HISTORY</span>
-            <p>
-              Buy the actual weapon NFT. Its upgrades, kills and ownership
-              history travel with it.
+          <footer class="preparation-footer"><div><p id="loadout-status" role="status" aria-live="polite">Your equipped weapon determines your active techniques.</p><small>WASD move · Mouse aim / attack · Space jump · Shift dash · 1–4 techniques · Q spell · R ultimate</small></div><button id="loadout-start" class="btn big">TAKE THE DESCENT ↘</button></footer>
+        </div>
+      </section>
+
+      <section id="duel-lobby" class="camp-page hidden" aria-labelledby="duel-title">
+        <div class="camp-inner duel-inner">
+          <header class="page-head">
+            <button id="duel-close" class="page-back" aria-label="Back to Descent">←</button>
+            <div>
+              <span class="eyebrow">DESCENT · DUEL</span>
+              <h2 id="duel-title">FACE THE SINNER</h2>
+            </div>
+            <p class="page-lede duel-rules">
+              Your deepest build against theirs. Both vaults stake 10 coin and
+              the winner takes the pool. You have 90 seconds; forfeiting or
+              leaving unfinished counts as a loss.
             </p>
-          </div>
-          <div id="exchange-balance"></div>
-          <div id="exchange-listings" class="exchange-grid"></div>
-          <form id="sale-form" class="sale-form">
-            <h3>OFFER A RELIC</h3>
-            <p>
-              Unequip a tradable weapon first. Listed gear stays locked until
-              sold or cancelled.
+          </header>
+          <div class="duel-account">
+            <div>
+              <span class="eyebrow">YOUR RECORD</span>
+              <b id="duel-record">0 W / 0 L</b>
+            </div>
+            <p class="defense-help">
+              Defense lets other players challenge your champion while you are
+              away. Each accepted challenge risks 10 coin from your vault.
             </p>
-            <label>Weapon<select id="sale-token" required></select></label>
-            <label
-              >Price · test NEAR<input
-                id="sale-price"
-                type="text"
-                inputmode="decimal"
-                value="0.015"
-                pattern="(0|1)([.][0-9]{1,3})?"
-                required
-            /></label>
-            <p id="sale-net">
-              90% to your sale balance · 10% to the game treasury.
-            </p>
-            <button id="sale-submit" class="btn" type="submit">
-              LIST WEAPON ↗
+            <button id="defense-toggle" class="btn ghost" aria-pressed="false">
+              ENABLE DEFENSE
             </button>
-          </form>
-        </section>
-        <div id="prize-vault" class="claim-box"></div>
-        <p id="market-result" role="status" aria-live="polite"></p>
-        <button id="market-refresh" class="btn ghost">REFRESH TESTNET ↻</button>
-        <p class="market-fine">
-          Earn access with 10 Solo coin, then pay the native NEAR mint price.
-          Unpaid reservations can be cancelled for a full coin refund. Testnet
-          uses free test NEAR. Marketplace pricing is set by buyers and sellers;
-          a mint does not promise profit or rewards.
-        </p>
-      </div>
-    </section>
-
-    <section id="modes" inert>
-      <div class="mode-inner">
-        <div class="mode-heading">
-          <span class="wordmark">CONTRAPASSO<span> / </span></span
-          ><span class="eyebrow">PREPARE YOUR DESCENT</span>
-        </div>
-        <div class="champion-panel">
-          <div class="champion-sigil">V</div>
-          <div>
-            <span class="eyebrow">GUEST CHAMPION</span>
-            <h2>THE UNFORGIVEN</h2>
-            <p id="champion-progress">0 DESCENTS · 0 VICTORIES</p>
           </div>
-          <div class="champion-bank">
-            <span class="coin"></span><b class="champion-coins">0</b
-            ><span>COIN</span>
-          </div>
-        </div>
-        <div class="champion-chain">
-          <span id="chain-status">PREPARING CHAMPION</span
-          ><a
-            id="chain-link"
-            class="hidden"
-            target="_blank"
-            rel="noopener noreferrer"
-            >VIEW NFT OWNER ↗</a
-          >
-        </div>
-        <p id="champion-gear" class="gear-summary">Cinder blade · Ash armor</p>
-        <nav class="camp-links" aria-label="Champion and relics">
-          <button id="train" class="btn ghost">SKILL TREE <span>↗</span></button>
-          <button id="nft-open" class="btn ghost">INVENTORY <span>↗</span></button>
-          <button id="market-open" class="btn ghost">MINT RELICS <span>↗</span></button>
-          <button id="exchange-open" class="btn ghost">MARKETPLACE <span>↗</span></button>
-        </nav>
-        <div class="section-label">
-          <span>CHOOSE YOUR DESCENT</span><i></i><span>01 — 02</span>
-        </div>
-        <div class="cards">
-          <button class="card" id="mode-solo">
-            <span class="card-k">01 / THE FIVE CIRCLES</span
-            ><span class="card-t">SOLO</span
-            ><span class="card-d"
-              >Earn coin. Take a vow.<br /> Build the champion hell
-              deserves.</span
-            ><span class="card-action">CHOOSE YOUR WEAPON <b>↗</b></span></button
-          ><button class="card locked" id="mode-duel" disabled>
-            <span class="card-k">02 / ANOTHER SINNER</span
-            ><span class="card-t">DUEL</span
-            ><span class="card-d"
-              >Their champion. Your punishment.<br /> Risk 10 coin. Claim the
-              pool.</span
-            ><span id="duel-card-action" class="card-action"
-              >CONNECTING CHAMPION <b>×</b></span
-            >
+          <button id="duel-resume" class="btn hidden">
+            REJOIN ACTIVE DUEL <span>↗</span>
           </button>
+          <div class="section-label">
+            <span>MATCHED CHAMPIONS</span><i></i
+            ><button id="duel-refresh" class="text-button">REFRESH ↻</button>
+          </div>
+          <div id="duel-opponents"></div>
+          <p id="duel-empty" class="hidden">
+            No matched defenders are available. Enable your defense or check again
+            after another champion finishes a descent.
+          </p>
         </div>
-        <div class="training-link">
+      </section>
+
+      <section id="forge" class="camp-page hidden" aria-labelledby="forge-title">
+        <div class="camp-inner wide forge-inner">
+          <header class="page-head">
+            <div>
+              <span class="eyebrow">TRAIN WITH EARNED COIN</span>
+              <h2 id="forge-title">SKILLS</h2>
+            </div>
+            <div id="forge-summary" class="tree-summary" aria-live="polite"></div>
+            <button id="forge-close" class="btn ghost hidden">← BACK TO YOUR WEAPON</button>
+          </header>
+          <div id="forge-cards"></div>
+          <div class="skill-theatre">
+            <div>
+              <canvas
+                id="skill-stage"
+                aria-label="Silent skill animation preview"
+              ></canvas
+              ><button id="skill-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="skill-preview-label">SILENT PREVIEW</span><button id="skill-preview-expand" class="preview-expand" aria-label="Expand animation preview" aria-pressed="false">⛶</button>
+            </div>
+            <article>
+              <span class="eyebrow">YOUR BODY IS THE WEAPON</span>
+              <h3 id="skill-preview-name">Soul Lance</h3>
+              <p id="skill-preview-description"></p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="nft" class="camp-page hidden" aria-labelledby="nft-title">
+        <div class="camp-inner forge-inner">
+          <header class="page-head">
+            <div>
+              <span class="eyebrow">CHAMPION AND GEAR</span>
+              <h2 id="nft-title">INVENTORY</h2>
+            </div>
+            <p id="nft-intro" class="page-lede"></p>
+          </header>
+          <div id="nft-tokens"></div>
+          <p id="nft-action-result" role="status" aria-live="polite"></p>
+          <details id="claim-box" class="claim-box hidden">
+            <summary>Take this champion to your own wallet</summary>
+            <p>
+              Your champion, its equipped gear and its coin vault move together to
+              the NEAR testnet account you name. This guest session then starts a
+              new champion: the one you claim can no longer be played from here.
+            </p>
+            <div class="claim-row">
+              <input
+                id="claim-account"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="yourname.testnet"
+                aria-label="Your NEAR testnet account"
+              />
+              <button id="claim-button" class="btn">CLAIM TO WALLET</button>
+            </div>
+            <p id="claim-result" class="claim-result"></p>
+          </details>
+        </div>
+      </section>
+
+      <section id="market" class="camp-page hidden" aria-labelledby="market-title">
+        <div class="camp-inner forge-inner market-inner">
+          <header class="page-head">
+            <div>
+              <span class="eyebrow">NEAR TESTNET · DEMO FUNDS ONLY</span>
+              <h2 id="market-title">THE RELIQUARY</h2>
+            </div>
+            <nav class="market-tabs" aria-label="Relic trading">
+              <button id="tab-mint" aria-pressed="true">MINT NEW RELICS</button>
+              <button id="tab-exchange" aria-pressed="false">PLAYER LISTINGS</button>
+            </nav>
+            <button id="market-refresh" class="camp-tool">REFRESH ↻</button>
+          </header>
+          <div id="mint-panel">
+            <div id="arsenal-choices" aria-label="Choose a weapon"></div>
+            <div class="market-layout">
+              <div class="relic-art">
+                <canvas
+                  id="relic-stage"
+                  aria-label="Selected weapon attack animation preview"
+                ></canvas>
+                <span id="relic-motion">ATTACK PREVIEW</span>
+              </div>
+              <div class="relic-detail">
+                <span class="eyebrow">NEW WEAPON</span>
+                <h3 id="relic-title">CINDER REQUIEM</h3>
+                <p id="relic-description">
+                  A free-trading blade forged from the first circle. Starts at +0;
+                  your earned coin gives it power.
+                </p>
+                <div id="market-stats"></div>
+                <ol id="mint-steps" aria-label="Mint progress"></ol>
+                <div id="market-actions" class="market-actions"></div>
+              </div>
+            </div>
+            <details class="treasury-details"><summary>Game treasury</summary><div class="raffle-panel">
+              <div>
+                <span class="eyebrow">EVERY MINT SUPPORTS THE WORLD</span>
+                <h3>THE INFERNAL TREASURY</h3>
+                <p>
+                  Native mint revenue stays in a transparent application fund,
+                  controlled by the project owner for the game.
+                </p>
+              </div>
+              <div id="raffle-stats"></div>
+              <div id="raffle-actions" class="market-actions"></div>
+              <div id="raffle-winners"></div>
+            </div>
+          </details></div>
+          <section
+            id="exchange-panel"
+            class="hidden"
+            aria-label="Player marketplace"
+          >
+            <div id="exchange-balance"></div>
+            <div id="exchange-listings" class="exchange-grid"></div>
+            <form id="sale-form" class="sale-form">
+              <h3>OFFER A RELIC</h3>
+              <p>
+                Unequip a tradable weapon first. Listed gear stays locked until
+                sold or cancelled.
+              </p>
+              <label>Weapon<select id="sale-token" required></select></label>
+              <label
+                >Price · test NEAR<input
+                  id="sale-price"
+                  type="text"
+                  inputmode="decimal"
+                  value="0.015"
+                  pattern="(0|1)([.][0-9]{1,3})?"
+                  required
+              /></label>
+              <p id="sale-net">
+                90% to your sale balance · 10% to the game treasury.
+              </p>
+              <button id="sale-submit" class="btn" type="submit">
+                LIST WEAPON ↗
+              </button>
+            </form>
+          </section>
+          <div id="prize-vault" class="claim-box"></div>
+          <p id="market-result" role="status" aria-live="polite"></p>
+          <p class="market-fine">
+            Earn access with 10 Solo coin, then pay the native NEAR mint price.
+            Unpaid reservations can be cancelled for a full coin refund. Testnet
+            uses free test NEAR. Marketplace pricing is set by buyers and sellers;
+            a mint does not promise profit or rewards.
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Settings slide in beside wherever you are: the camp or a paused descent. -->
+    <div id="settings" class="hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-scrim" data-settings-close></div>
+      <div class="settings-sheet">
+        <header>
           <div>
-            <span class="eyebrow">SKILL TREE</span>
-            <div id="trained-powers">
-              No vows taken. Your story starts below.
+            <span class="eyebrow">CONTRAPASSO</span>
+            <h2 id="settings-title">SETTINGS</h2>
+          </div>
+          <button id="settings-close" class="camp-tool" data-settings-close>CLOSE · ESC</button>
+        </header>
+        <section aria-labelledby="settings-sound">
+          <h3 id="settings-sound">SOUND</h3>
+          <div class="setting-row">
+            <div><b>Sound effects</b><small id="sound-note">Off by default. Press M at any time.</small></div>
+            <button
+              id="sound-toggle"
+              class="setting-switch"
+              role="switch"
+              aria-checked="false"
+              aria-label="Sound effects (M)"
+            >
+              <i></i><span>OFF</span>
+            </button>
+          </div>
+          <div class="setting-row">
+            <label for="setting-volume"><b>Volume</b><small>Applies when sound is on.</small></label>
+            <div class="setting-range"><input id="setting-volume" type="range" min="0" max="100" step="5" value="100" /><output id="setting-volume-value">100%</output></div>
+          </div>
+        </section>
+        <section aria-labelledby="settings-display">
+          <h3 id="settings-display">DISPLAY</h3>
+          <div class="setting-row"><div><b>Graphics</b><small>Resolution; combat stays the same.</small></div><div class="setting-choice" role="group" aria-label="Graphics quality"><button data-quality="1">LOW</button><button data-quality="1.5">BALANCED</button><button data-quality="2">HIGH</button></div></div>
+          <div class="setting-row"><b>Display mode</b><button id="setting-fullscreen" class="camp-tool">FULL SCREEN</button></div>
+          <div class="setting-row">
+            <div><b>Screen shake</b><small>Camera kick on heavy hits.</small></div>
+            <div class="setting-choice" role="group" aria-label="Screen shake">
+              <button data-shake="1" aria-pressed="true">FULL</button><button data-shake="0.4" aria-pressed="false">LOW</button><button data-shake="0" aria-pressed="false">OFF</button>
             </div>
           </div>
-          <span class="camp-hint">Choose a weapon. Shape its skills. Take the descent.</span>
-        </div>
+          <div class="setting-row">
+            <div><b>Menu motion</b><small>Page and card transitions in the camp.</small></div>
+            <button id="setting-motion" class="setting-switch" role="switch" aria-checked="true" aria-label="Menu motion"><i></i><span>ON</span></button>
+          </div>
+          <div class="setting-row">
+            <div><b>Control hints</b><small>The small key reminder above the ability bar.</small></div>
+            <button id="setting-hints" class="setting-switch" role="switch" aria-checked="true" aria-label="Control hints"><i></i><span>ON</span></button>
+          </div>
+        </section>
+        <section aria-labelledby="settings-controls">
+          <h3 id="settings-controls">CONTROLS</h3>
+          <dl class="controls-list">
+            <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move</dd></div>
+            <div><dt><kbd>MOUSE</kbd></dt><dd>Aim</dd></div>
+            <div><dt><kbd>HOLD CLICK</kbd> <kbd>J</kbd></dt><dd>Attack · three-hit combo</dd></div>
+            <div><dt><kbd>SHIFT</kbd> <kbd>RIGHT CLICK</kbd></dt><dd>Dash</dd></div>
+            <div><dt><kbd>SPACE</kbd></dt><dd>Jump · attack in the air to plunge</dd></div>
+            <div><dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></dt><dd>Weapon techniques</dd></div>
+            <div><dt><kbd>Q</kbd></dt><dd>Spell</dd></div>
+            <div><dt><kbd>R</kbd></dt><dd>Ultimate · needs a full soul core</dd></div>
+            <div><dt><kbd>E</kbd></dt><dd>Enter a boss gate</dd></div>
+            <div><dt><kbd>ESC</kbd></dt><dd>Pause · back</dd></div>
+            <div><dt><kbd>M</kbd></dt><dd>Sound on / off</dd></div>
+            <div><dt><kbd>N</kbd></dt><dd>Restart with a new descent</dd></div>
+          </dl>
+        </section>
+        <p class="settings-foot">Testnet edition · Settings are kept on this device.</p>
       </div>
-    </section>
-
-    <section id="preparation" class="hidden" role="dialog" aria-modal="true" aria-labelledby="preparation-title">
-      <div class="preparation-inner">
-        <header class="preparation-heading"><div><span class="eyebrow">BEFORE THE FIRST CIRCLE</span><h2 id="preparation-title">CHOOSE YOUR WEAPON</h2></div><button id="preparation-close" class="btn ghost">BACK ↵</button></header>
-        <div class="preparation-grid">
-          <div class="preparation-theatre"><canvas id="loadout-stage" aria-label="Selected weapon held by your champion"></canvas><button id="loadout-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="loadout-preview-label" class="eyebrow">YOUR CHAMPION · YOUR WEAPON</span></div>
-          <div class="preparation-build"><span class="eyebrow">FROM YOUR INVENTORY</span><div id="loadout-weapons" role="group" aria-label="Owned weapons"></div><h3 id="loadout-name"></h3><p id="loadout-description"></p><div id="loadout-stats"></div><span class="eyebrow">WEAPON TECHNIQUES · PREVIEW</span><div id="loadout-techniques"></div><button id="loadout-train" class="btn ghost">EXPLORE THIS SKILL TREE ↗</button></div>
-        </div>
-        <footer class="preparation-footer"><div><p id="loadout-status" role="status" aria-live="polite">Your equipped weapon determines your active techniques.</p><small>WASD move · Mouse aim / attack · Space jump · Shift dash · 1–4 techniques · Q spell · R ultimate</small></div><button id="loadout-start" class="btn big">TAKE THE DESCENT ↘</button></footer>
-      </div>
-    </section>
+    </div>
 
     <section id="landing">
       <div class="hell-disc" aria-hidden="true"></div>

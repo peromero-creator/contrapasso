@@ -1,3 +1,4 @@
+import { FX_ORDER } from "./effect-policy.ts";
 import { bossMove, bossWindup, GAZE_LENGTH, GAZE_HALF_WIDTH, SLAM_RADIUS } from '../sim/bosses.ts';
 import * as T from 'three';
 import { ARENA_HX, ARENA_HZ, type Enemy } from '../sim/world.ts';
@@ -49,7 +50,7 @@ for (let i = 0; i < 8; i++) {
   for (const [x,z] of [[1.05,-.07],[1.3,0],[1.05,.07]]) rayVertices.push(x*c-z*s,0,x*s+z*c);
 }
 rays.setAttribute('position',new T.Float32BufferAttribute(rayVertices,3));
-const paint = (opacity: number) => new T.MeshBasicMaterial({ color: 0xb97660, transparent: true, opacity, depthWrite: false, side: T.DoubleSide, forceSinglePass: true, toneMapped: false });
+const paint = (opacity: number) => new T.MeshBasicMaterial({ color: 0xb97660, transparent: true, opacity, depthWrite: false, depthTest: false, side: T.DoubleSide, forceSinglePass: true, toneMapped: false });
 
 export class EnemyThreat {
   readonly root = new T.Group();
@@ -59,12 +60,21 @@ export class EnemyThreat {
   constructor() {
     this.root.name = 'enemy-threat';
     this.root.add(this.fill, this.border, this.tip);
+    for (const mesh of [this.fill,this.border,this.tip]) mesh.renderOrder = FX_ORDER.warning;
     this.root.visible = false;
     this.fill.position.y = .045;
     this.border.position.y = .05;
     this.tip.position.y = .055;
   }
   sync(e: Enemy, position: { x: number; z: number }) {
+    const opening=e.kind==='warden'&&e.state==='recover'&&!e.openingSpent&&(e.impactT??0)<=0;
+    if(opening){
+      this.root.visible=true;this.root.position.set(position.x,.02,position.z);this.root.rotation.y=0;
+      this.fill.visible=this.tip.visible=false;this.border.visible=true;this.border.geometry=ring;
+      this.border.scale.setScalar(e.r+1);this.border.material.color.setHex(0xb6b08c);this.border.material.opacity=.36;
+      return;
+    }
+    this.border.material.color.setHex(0xb97660);
     const cue = enemyThreat(e);
     this.root.visible = !!cue;
     if (!cue) return;

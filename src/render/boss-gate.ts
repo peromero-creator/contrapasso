@@ -2,15 +2,22 @@ import * as THREE from 'three';
 import { ARENA_HZ, BOSS_GATE, bossAvailable, type World } from '../sim/world';
 
 // Painted geometry: the silhouette and hinged leaves share one Flow illustration.
-// Four opaque draws; no lights, particles, per-frame geometry or alpha overdraw.
+// Four opaque draws plus two soft ground shadows; no lights, particles or per-frame geometry.
+// The painting itself is never altered: it is only seated in the room with shade and the circle's light.
 export class BossGate {
   readonly root = new THREE.Group();
   private leaves: THREE.Group[] = [];
   private opening = 0;
+  private material: THREE.MeshBasicMaterial;
+  private tint = new THREE.Color(0xffffff);
   readonly ready: Promise<void>;
+  /** Let the unlit painting take a little of the room's light so it belongs to each circle. */
+  setTint(light: number) {
+    this.material.color.copy(this.tint.set(0xffffff).lerp(new THREE.Color(light), 0.3)).multiplyScalar(0.94);
+  }
   constructor() {
     this.root.position.set(BOSS_GATE.x, 0, -ARENA_HZ);
-    const material = new THREE.MeshBasicMaterial({color:0xffffff, side:THREE.DoubleSide});
+    const material = this.material = new THREE.MeshBasicMaterial({color:0xffffff, side:THREE.DoubleSide});
     this.ready = new THREE.TextureLoader().loadAsync('/art/penitent-gate.jpg').then(texture=>{
       texture.colorSpace=THREE.SRGBColorSpace; texture.anisotropy=4;
       material.map=texture; material.needsUpdate=true;
@@ -28,6 +35,19 @@ export class BossGate {
       const g=geometry(new THREE.Shape(points.map(point)));g.translate(-hinge,0,0);
       pivot.add(new THREE.Mesh(g,material));pivot.position.set(hinge,0,.015);this.root.add(pivot);this.leaves.push(pivot);
     }
+    // Grounding: a contact shadow where the jambs meet the floor, and a pocket of
+    // darkness behind the arch so the bone frame reads against depth, not open ground.
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=128;
+    const ink=canvas.getContext('2d')!,fade=ink.createRadialGradient(64,64,6,64,64,64);
+    fade.addColorStop(0,'rgba(0,0,0,1)');fade.addColorStop(.55,'rgba(0,0,0,.55)');fade.addColorStop(1,'rgba(0,0,0,0)');
+    ink.fillStyle=fade;ink.fillRect(0,0,128,128);
+    const shade=new THREE.CanvasTexture(canvas);
+    const pool=(w:number,d:number,y:number,z:number,opacity:number)=>{
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshBasicMaterial({map:shade,color:0x050403,transparent:true,opacity,depthWrite:false}));
+      m.rotation.x=-Math.PI/2;m.position.set(0,y,z);m.renderOrder=-1;this.root.add(m);
+    };
+    pool(7.4,3.4,.02,.75,.62);
+    pool(13,9,-.02,-3.6,.9);
     this.root.visible=false;
   }
   update(w:World,dt:number){

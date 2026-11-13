@@ -1,7 +1,10 @@
+import { DescentTransition } from "./ui/descent-transition";
 import { BOSSES } from './sim/bosses.ts';
 import { SkillInputBuffer } from "./ui/skill-input";
 import { loadoutWeapons } from "./ui/loadout";
 import { SkillTree } from "./ui/skill-tree";
+import { Camp, type CampPage } from "./ui/camp";
+import { SettingsPanel } from "./ui/settings";
 import { TECHNIQUES, techniqueId, weaponTechniques } from "./sim/techniques";
 import {
   SPELLS, spellId, isSpell, availableSpell,
@@ -67,6 +70,10 @@ const automated = import.meta.env.DEV && params.get("autoplay") === "1";
 const silent = params.get("silent") === "1" || automated;
 const view = new View($<HTMLCanvasElement>("game"));
 const sound = new Sound(silent);
+const camp = new Camp();
+const descentTransition = new DescentTransition();
+let entranceT=0, rewardPicking=false;
+const runVows: string[] = [];
 let world: World = createWorld(1);
 let mode: "menu" | "run" = "menu";
 let ended = false,
@@ -75,6 +82,7 @@ let ended = false,
   verifying = false;
 let resultPending = false;
 let champion: Champion | null = null;
+let hubStage: RelicStage | null = null;
 let championRequest: Promise<void> | null = null;
 let challenge: RunChallenge | null = null;
 let previousRunId: string | undefined;
@@ -89,6 +97,7 @@ let checkpointPromise: Promise<void> | null = null;
 let activeDuel: RunChallenge | null = null;
 let choiceQueued = 0;
 let shownPowers = "";
+let shownFlow = 0;
 let acc = 0,
   freeze = 0,
   slow = 0,
@@ -116,14 +125,12 @@ function clearInput() {
 }
 function reflectSound() {
   const button = $<HTMLButtonElement>("sound-toggle");
-  button.textContent = sound.muted ? "SOUND OFF · M" : "SOUND ON · M";
-  button.setAttribute("aria-pressed", String(!sound.muted));
-  button.setAttribute(
-    "aria-label",
-    sound.muted ? "Unmute sound (M)" : "Mute sound (M)",
-  );
+  button.setAttribute("aria-checked", String(!sound.muted));
+  button.querySelector("span")!.textContent = sound.muted ? "OFF" : "ON";
   button.disabled = silent;
-  if (document.activeElement === button) button.blur();
+  $("sound-note").textContent = silent
+    ? "Locked off for this silent session."
+    : "Off by default. Press M at any time.";
 }
 function skillBadge(
   skills: import("./sim/skills").Skills,
@@ -137,12 +144,17 @@ function refreshChampion() {
     el.textContent = String(champion.coins);
   $("champion-progress").textContent =
     `${champion.runs} DESCENTS · ${champion.victories} VICTORIES`;
-  $("trained-powers").innerHTML = skillBadge(
-    champion.build.skills,
-    champion.skills,
-  );
+  $("hub-weapon").textContent =
+    `${weapon(champion.build.weaponId).name} +${champion.build.weaponLevel}`;
+  $("hub-armor").textContent = `Ash Armor +${champion.build.armorLevel}`;
+  hubStage ??= new RelicStage($<HTMLCanvasElement>("hub-stage"), $("hub-stage-label"), true);
+  void hubStage.select(champion.build.weaponId ?? "starter");
+  $("hub-skills").textContent =
+    `${champion.skills.length} / ${SKILL_IDS.length} learned`;
+  $("hub-depth").textContent =
+    `${champion.bestFloor ? ROMAN[champion.bestFloor - 1] : "—"} / V`;
   $("daily-coin").textContent =
-    `${champion.earnedToday} / ${champion.dailyCap} earned today`;
+    `${champion.earnedToday} / ${champion.dailyCap} coin`;
   const chain = champion.chain;
   $("chain-status").textContent = chain
     ? chain.pending
@@ -153,14 +165,12 @@ function refreshChampion() {
   link.classList.toggle("hidden", !chain);
   if (chain)
     link.href = `https://testnet.nearblocks.io/address/${chain.accountId}`;
-  $("champion-gear").textContent =
-    `${weapon(champion.build.weaponId).name} +${champion.build.weaponLevel} · Ash armor +${champion.build.armorLevel} · Deepest circle ${champion.bestFloor} / 5`;
   const duel = $<HTMLButtonElement>("mode-duel");
   duel.disabled = !chain || chain.pending;
   duel.classList.toggle("locked", duel.disabled);
   $("duel-card-action").textContent =
     chain && !chain.pending
-      ? "OPEN DUEL LOBBY ↗"
+      ? "FIND A RIVAL ↘"
       : chain
         ? "SAVING CHAMPION…"
         : "TESTNET CONNECTION REQUIRED";
@@ -210,7 +220,18 @@ function readInput(): Input {
 }
 function choose(choice: number) {
   if (world.phase !== "reward" || paused || choiceQueued) return;
-  choiceQueued = choice;
+  if(rewardPicking || !world.offers[choice-1])return;
+  rewardPicking=true;
+  const skill=world.offers[choice-1];
+  const card=document.querySelector<HTMLElement>(`[data-choice="${choice}"]`)!;
+  card.classList.add('chosen');card.parentElement!.classList.add('decided');
+  const duration=document.documentElement.classList.contains('calm')?0:360;
+  if(duration) {
+    const icon=card.querySelector('.skill-icon')?.cloneNode(true) as HTMLElement | undefined;
+    const target=$(techniqueId(skill)?'technique-'+skill.slice(-1):skill.endsWith('-spell')?'cast-slot':['ember','ash','iron'].includes(skill)?'core-slot':'powers');
+    if(icon){const a=card.getBoundingClientRect(),b=target.getBoundingClientRect();icon.classList.add('reward-flight');document.body.append(icon);icon.style.left=`${a.x+a.width/2}px`;icon.style.top=`${a.y+200}px`;const animation=icon.animate([{transform:'translate(-50%,-50%) scale(1)',opacity:1},{transform:`translate(${b.x+b.width/2-a.x-a.width/2}px,${b.y+b.height/2-a.y-200}px) scale(.4)`,opacity:.1}],{duration:440,easing:'cubic-bezier(.4,0,.2,1)'});animation.onfinish=()=>icon.remove();}
+  }
+  window.setTimeout(()=>{if(world.phase==='reward'&&mode==='run'){choiceQueued=choice;runVows.push(SKILLS[skill].name);}rewardPicking=false;},duration);
   for (const button of document.querySelectorAll<HTMLButtonElement>(
     ".power-choice",
   ))
@@ -299,12 +320,21 @@ function setPaused(value: boolean) {
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       ".power-choice",
     ))
-      button.disabled = false;
+      button.disabled = rewardPicking || !!choiceQueued;
   sound.setPaused(value);
   $("hud").inert = value || world.phase === "reward";
   $("reward").inert = value;
   $("pause").classList.toggle("hidden", !value);
-  if (value) $("resume").focus();
+  if (value)
+    $("pause-where").textContent =
+      world.mode === "duel"
+        ? "Your duel is paused. Leaving now forfeits the stake."
+        : `Circle ${ROMAN[world.floor - 1]} · ${CIRCLES[world.floor - 1].name} · ${world.player.coins} coin collected. Leaving ends this descent.`;
+  if (value) {
+    const p=world.player;
+    $('pause-build').innerHTML=`<strong>${weapon(p.weaponId).name} +${p.weaponLevel}</strong><p>${weaponTechniques(p.weaponId).filter(id=>rank(p.skills,id)>0).map(id=>TECHNIQUES[id].name).join(' · ')||'No techniques learned'}</p><div>${runVows.map(v=>`<span>${escapeHtml(v)}</span>`).join('')}</div>`;
+    $('resume').focus();
+  }
   else {
     sound.unlock();
     if (world.phase === "reward")
@@ -317,10 +347,11 @@ $("boss-enter").onclick = () => { if (!paused && nearBossGate(world)) choiceQueu
 function showReward() {
   if (world.phase !== "reward" || !world.offers.length) return;
   clearInput();
+  rewardPicking=false;
+  $("reward-cards").classList.remove("decided");
   acc = freeze = slow = 0;
   $("hud").inert = true;
   $("reward-circle").textContent = world.bossEncounter === "defeated" ? "BOSS DEFEATED" : `CIRCLE ${ROMAN[world.floor - 1]} CLEARED`;
-  $("reward-sub").textContent = "Choose one upgrade for this descent.";
   const cards = $("reward-cards");
   cards.innerHTML = world.offers
     .map(
@@ -335,8 +366,19 @@ function showReward() {
   $("reward").classList.remove("hidden");
   document.querySelector<HTMLButtonElement>(".power-choice")?.focus();
 }
+let waveKey='',wavePeak=0;
+for(const id of ['cast-slot','technique-1','technique-2','technique-3','technique-4']){const number=document.createElement('output');number.className='cooldown-number';number.setAttribute('aria-hidden','true');$(id).append(number);}
 function updateHud(dt: number) {
   const p = world.player;
+  const key=`${world.floor}:${world.wave}:${world.bossEncounter}`;
+  if(waveKey!==key){waveKey=key;wavePeak=0;}
+  wavePeak=Math.max(wavePeak,world.enemies.length);
+  $('wave-progress').style.setProperty('--remaining',String(wavePeak?world.enemies.length/wavePeak:0));
+  $('wave-progress').hidden=world.phase!=='fight'||world.bossEncounter==='active'||world.mode==='duel';
+  for(const [i,id]of ['cast-slot','technique-1','technique-2','technique-3','technique-4'].entries()){
+    const cd=i===0?p.spellCd:p.techniqueCd[i-1];$(id).querySelector('output')!.textContent=cd>.05?cd.toFixed(1):'';
+  }
+  $('first-technique-hint').hidden=!settings.values.hints||!!champion?.runs||p.castN>0||!weaponTechniques(p.weaponId).some(id=>rank(p.skills,id)>0)||world.phase!=='fight';
   hpFill.style.width = `${(p.hp / p.maxHp) * 100}%`;
   $("hp-lag").style.width = hpFill.style.width;
   $("vital").classList.toggle("critical", p.hp > 0 && p.hp <= p.maxHp * 0.25);
@@ -384,6 +426,16 @@ function updateHud(dt: number) {
         : p.swingN % 3 === 2
           ? "NEXT · FINISHER"
           : "I → II → III";
+  if (view.flow !== shownFlow) {
+    shownFlow = view.flow;
+    $("flow").classList.toggle("show", shownFlow >= 2);
+    $("flow").classList.toggle("strong", shownFlow >= 3);
+    $("flow").classList.toggle("master", shownFlow >= 5);
+    if (shownFlow >= 2) {
+      $("flow-count").textContent = `×${shownFlow}`;
+      restartAnimation($("flow"), "pop");
+    }
+  }
   $("coin-n").textContent = String(p.coins);
   $("circle").textContent =
     `${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`;
@@ -460,7 +512,7 @@ async function verifyRun(checkingPending = false) {
         : `${response.receipt.result.awardedCoins} coin saved to your champion`;
     resultPending = !!champion.chain?.pending;
     if(world.mode !== "duel") {
-      $("end-coins").textContent = String(response.receipt.result.awardedCoins);
+      countCoins(response.receipt.result.awardedCoins);
       $("end-coins-label").textContent = resultPending ? "COIN PENDING" : "COIN SAVED";
     }
     $("receipt-status").classList.toggle("verified", !resultPending);
@@ -485,6 +537,13 @@ async function verifyRun(checkingPending = false) {
       $<HTMLButtonElement>(id).disabled = false;
   }
 }
+let coinAnimation=0;
+function countCoins(value:number) {
+  cancelAnimationFrame(coinAnimation);
+  const start=Number($('end-coins').textContent)||0,at=performance.now(),duration=document.documentElement.classList.contains('calm')?0:650;
+  const tick=(now:number)=>{const t=duration?Math.min(1,(now-at)/duration):1;$('end-coins').textContent=String(Math.round(start+(value-start)*(1-(1-t)**3)));if(t<1)coinAnimation=requestAnimationFrame(tick);};
+  coinAnimation=requestAnimationFrame(tick);
+}
 function showEnd(won: boolean) {
   ended = true;
   clearInput();
@@ -492,9 +551,10 @@ function showEnd(won: boolean) {
   $("reward").classList.add("hidden");
   $("end-title").textContent = won ? "HELL REMEMBERS" : "NOT FORGIVEN";
   $("end-sub").textContent = won
-    ? "Five circles behind you. Your champion carries every vow."
+    ? "Five circles behind you. Return to camp and prepare your next descent."
     : `${CIRCLES[world.floor - 1].name} keeps you. The next descent is yours.`;
-  $("end-coins").textContent = `${world.player.coins}`;
+  $("end-coins").textContent="0"; countCoins(world.player.coins);
+  $("end-build").innerHTML=`<p>${weapon(world.player.weaponId).name} · ${Math.floor(world.tick/3600)}:${String(Math.floor(world.tick/60)%60).padStart(2,'0')} · Best FLOW ×${view.bestFlow}</p><div>${runVows.map(name=>`<span>${escapeHtml(name)}</span>`).join('') || '<span>No vows taken this descent</span>'}</div>`;
   $("end-kills").textContent = `${world.player.kills}`;
   $("end-floor").textContent = `${world.floor} / 5`;
   const duel = world.mode === "duel";
@@ -539,6 +599,7 @@ function enterRun(next: RunChallenge) {
   if (next.version !== SIM_VERSION)
     throw new Error("The game has updated. Reload to continue.");
   resultPending = false;
+  runVows.length=0;rewardPicking=false;
   challenge = next;
   view.useWeapon(
     next.equipment.weaponId ?? "starter",
@@ -566,16 +627,15 @@ function enterRun(next: RunChallenge) {
   resetCombatFeedback();
   shownPowers = "";
   acc = freeze = slow = 0;
-  ended = paused = false;
+  ended = paused = false;enragedBoss=null;waveKey='';wavePeak=0;
   mode = "run";
   sound.setPaused(false);
   sound.unlock();
-  for (const id of ["end", "pause", "reward", "forge", "duel-lobby", "preparation"])
-    $(id).classList.add("hidden");
+  for (const id of ["end", "pause", "reward"]) $(id).classList.add("hidden");
   $("landing").classList.add("up");
   $("landing").inert = true;
-  $("modes").classList.add("gone");
-  $("modes").inert = true;
+  entranceT=descentTransition.play(next.mode === "duel" ? "THE DUEL" : "CIRCLE I · LIMBO");
+  camp.leave();
   $("hud").classList.remove("hidden");
   $("hud").inert = false;
   if (document.activeElement instanceof HTMLElement)
@@ -583,7 +643,7 @@ function enterRun(next: RunChallenge) {
   $("duel-boss").classList.toggle("hidden", next.mode !== "duel");
   $("duel-boss-name").textContent = next.opponent?.name ?? "RIVAL CHAMPION";
   $("pause-menu").textContent =
-    next.mode === "duel" ? "FORFEIT · LOSE 10 COIN" : "BACK TO MODES";
+    next.mode === "duel" ? "FORFEIT · LOSE 10 COIN" : "LEAVE · RETURN TO CAMP";
   showBanner(
     next.mode === "duel"
       ? "THEY BECAME YOUR PUNISHMENT"
@@ -601,10 +661,10 @@ function toMenu() {
   paused = false;
   mode = "menu";
   sound.setPaused(true);
-  for (const id of ["pause", "end", "hud", "reward", "duel-lobby"])
+  for (const id of ["pause", "end", "hud", "reward"])
     $(id).classList.add("hidden");
-  $("modes").classList.remove("gone");
-  $("modes").inert = false;
+  descentTransition.play("RETURN TO CAMP",true);
+  camp.enter("modes");
   refreshChampion();
   $("mode-solo").focus();
 }
@@ -636,7 +696,7 @@ function renderLobby() {
     button.className = "opponent-card";
     button.dataset.opponent = opponent.id;
     button.disabled = busy || !!champion.lockedBy || champion.coins < 10;
-    button.innerHTML = `<span class="eyebrow">MATCHED POWER / ${buildPower(opponent.build)}</span><strong></strong><span>${opponent.wins} W / ${opponent.losses} L · Blade +${opponent.build.weaponLevel} / Armor +${opponent.build.armorLevel}</span><span class="opponent-powers">SKILLS · ${Object.keys(opponent.build.skills).length}</span>`;
+    button.innerHTML = `<span class="eyebrow">MATCHED POWER / ${buildPower(opponent.build)}</span><strong></strong><span>${opponent.wins} W / ${opponent.losses} L · Blade +${opponent.build.weaponLevel} / Armor +${opponent.build.armorLevel}</span><span class="opponent-powers">SKILLS · ${Object.keys(opponent.build.skills).length}</span><span class="opponent-fight">CHALLENGE · 10 COIN <b>↘</b></span>`;
     button.querySelector("strong")!.textContent = opponent.name;
     button.addEventListener("click", () => void startDuel(opponent.id));
     grid.appendChild(button);
@@ -650,14 +710,14 @@ async function refreshLobby() {
   refreshChampion();
   renderLobby();
 }
-async function openLobby() {
+async function openLobby(turn = navigation) {
   if (busy || verifying) return;
   busy = true;
   notice("Finding matched champions…");
   try {
     await refreshLobby();
-    $("modes").inert = true;
-    $("duel-lobby").classList.remove("hidden");
+    if (turn !== navigation) return;
+    camp.show("duel-lobby");
     $("duel-close").focus();
     notice("");
   } catch (e) {
@@ -684,12 +744,13 @@ async function startDuel(opponentId: string) {
     renderLobby();
   }
 }
-$("mode-duel").addEventListener("click", () => void openLobby());
-$("duel-close").addEventListener("click", () => {
-  $("duel-lobby").classList.add("hidden");
-  $("modes").inert = false;
+$("mode-duel").addEventListener("click", () => void navigate("duel-lobby"));
+function closeLobby() {
+  if (busy) return;
+  camp.show("modes");
   $("mode-duel").focus();
-});
+}
+$("duel-close").addEventListener("click", closeLobby);
 $("duel-refresh").addEventListener("click", () => void openLobby());
 $("duel-resume").addEventListener("click", () => {
   if (activeDuel?.opponent) void startDuel(activeDuel.opponent.id);
@@ -730,6 +791,13 @@ function checkpointDuel() {
     });
 }
 const EXPLORER = "https://testnet.nearblocks.io";
+/** Restart a one-shot CSS animation class on an element. */
+function restartAnimation(el: Element | null, name: string) {
+  if (!el) return;
+  el.classList.remove(name);
+  void (el as HTMLElement).offsetWidth;
+  el.classList.add(name);
+}
 const escapeHtml = (text: unknown) =>
   String(text).replace(
     /[&<>"']/g,
@@ -761,8 +829,8 @@ function showMarketTab(exchange: boolean) {
   $("tab-mint").setAttribute("aria-pressed", String(!exchange));
   $("tab-exchange").setAttribute("aria-pressed", String(exchange));
   $("market-title").textContent = exchange
-    ? "THE ASH EXCHANGE."
-    : "THE RELIQUARY.";
+    ? "THE ASH EXCHANGE"
+    : "THE RELIQUARY";
   document.querySelector<HTMLElement>(".market-fine")!.textContent = exchange
     ? "The same NFT, with its upgrades and history. Seller receives 90%; game treasury receives 10%. Test NEAR only."
     : "10 coin + 0.01 test NEAR per weapon. Equip, upgrade, or resell.";
@@ -850,6 +918,8 @@ function renderMarket() {
     selected.description +
     " Starts at +0. Each upgrade adds 2 damage; level and kill history travel with the NFT.";
   const reserved = reservation?.status === "reserved";
+  const mintStep=reservation?.status==='minted'?2:reserved?1:0;
+  $('mint-steps').innerHTML=['Reserve','Pay test NEAR','Minted'].map((name,i)=>`<li class="${i<mintStep?'done':i===mintStep?'current':''}" ${i===mintStep?'aria-current="step"':''}><b>${i<mintStep?'✓':i+1}</b>${name}</li>`).join('');
   const choice = reserved
     ? (reservation.weaponId ?? selectedRelic)
     : selectedRelic;
@@ -881,7 +951,7 @@ function renderMarket() {
     reservation?.status === "minted" &&
     !champion.chain?.features?.includes("repeat_mint")
   )
-    actions = "Your relic is minted. Equip it from What You Own.";
+    actions = "Your relic is minted. Equip it from Inventory.";
   else if (reservation?.status === "reserved") {
     actions =
       marketButton(
@@ -1010,25 +1080,16 @@ async function doMarket(
     renderMarket();
   }
 }
-async function openMarket(exchange = false) {
-  try {
-    notice("");
-    await loadChampion();
-    marketState = await api.market();
-    saleInventory = (await api.nft()).tokens;
-    showMarketTab(exchange);
-    if (pendingMarket?.championId !== champion?.id) pendingMarket = null;
-    renderMarket();
-    $("modes").inert = true;
-    $("market").classList.remove("hidden");
-    $("market-close").focus();
-  } catch (e) {
-    notice((e as Error).message);
-  }
+async function openMarket() {
+  await loadChampion();
+  marketState = await api.market();
+  saleInventory = (await api.nft()).tokens;
+  showMarketTab(exchangeOpen);
+  if (pendingMarket?.championId !== champion?.id) pendingMarket = null;
+  renderMarket();
 }
 $("tab-mint").addEventListener("click", () => showMarketTab(false));
 $("tab-exchange").addEventListener("click", () => showMarketTab(true));
-$("exchange-open").addEventListener("click", () => void openMarket(true));
 $("sale-price").addEventListener("input", () => {
   const v = $<HTMLInputElement>("sale-price").value;
   if (!/^(0|1)(\.[0-9]{1,3})?$/.test(v)) return;
@@ -1067,12 +1128,6 @@ $("exchange-listings").addEventListener("click", (e) => {
       : {}),
   });
 });
-$("market-open").addEventListener("click", () => void openMarket());
-$("market-close").addEventListener("click", () => {
-  $("market").classList.add("hidden");
-  $("modes").inert = false;
-  $(exchangeOpen ? "exchange-open" : "market-open").focus();
-});
 $("market-refresh").addEventListener("click", async () => {
   if (busy) return;
   if (pendingMarket)
@@ -1093,6 +1148,8 @@ $("market").addEventListener("click", (e) => {
   if (choice && !choice.disabled) {
     selectedRelic = weaponId(choice.dataset.relic);
     renderMarket();
+    restartAnimation(document.querySelector('.relic-detail'), 'swap');
+    restartAnimation(document.querySelector('.relic-art'), 'flash');
     return;
   }
   const button = (e.target as HTMLElement).closest<HTMLButtonElement>(
@@ -1107,6 +1164,10 @@ $("market").addEventListener("click", (e) => {
   void doMarket(operation, data);
 });
 $("nft-tokens").addEventListener("click", (e) => {
+  const upgrade = (e.target as HTMLElement).closest<HTMLButtonElement>(
+    "button[data-temper]",
+  );
+  if (upgrade && !upgrade.disabled) return void temper(upgrade.dataset.temper as GearSlot);
   const button = (e.target as HTMLElement).closest<HTMLButtonElement>(
     "button[data-equip]",
   );
@@ -1134,11 +1195,11 @@ $("claim-account").addEventListener("input", () => {
   $("claim-button").textContent = "CLAIM TO WALLET";
   $("claim-result").textContent = "";
 });
-async function renderNft() {
+async function renderNft(flash?: { slot: GearSlot; held: boolean }) {
   const view = await api.nft();
   $("nft-intro").textContent = view.onChain
-    ? "Your champion, equipment and history. NEAR testnet."
-    : "Local preview · Connect testnet to mint and trade.";
+    ? "Your champion, equipment and history, saved on NEAR testnet. Temper equipped gear with Solo coin."
+    : "Local preview. Temper equipped gear with Solo coin; connect testnet to mint and trade.";
   $("nft-tokens").innerHTML = view.tokens
     .map((token) => {
       const x = token.extra as Record<string, unknown>;
@@ -1199,7 +1260,8 @@ async function renderNft() {
           : "";
       const primaryRows = rows.filter(([key],i)=>isChampion ? i<3 : ['Level','Damage','Kills'].includes(key));
       const otherRows = rows.filter(row=>!primaryRows.includes(row));
-      return `<article class="nft-card"><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? "EQUIPPED GEAR" : "GEAR"}</span>${!isChampion && identity !== "starter" ? `${relicImage(identity, weapon(identity).name)}` : `<div class="nft-crest" aria-hidden="true">${skillIcon(isChampion ? "ember" : x.kind === "armor" ? "iron" : "sword-1")}</div>`}<strong>${escapeHtml(token.title)}</strong><dl>${primaryRows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl><details class="token-details"><summary>Details & ownership</summary><dl>${otherRows.map(([k,v])=>`<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl></details>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${gearButton}</article>`;
+      const flashed = !isChampion && equipped && flash?.slot === slot ? ` data-flash="${flash.held ? "held" : "burned"}"` : "";
+      return `<article class="nft-card${isChampion ? " champion" : equipped ? " equipped" : ""}"${flashed}><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? `IN USE · ${slot.toUpperCase()}` : slot === "weapon" ? "WEAPON" : "ARMOR"}</span>${!isChampion && x.kind === "weapon" ? `${relicImage(identity, weapon(identity).name)}` : `<div class="nft-crest" aria-hidden="true">${skillIcon(isChampion ? "ember" : x.kind === "armor" ? "iron" : "sword-1")}</div>`}<strong>${escapeHtml(token.title)}</strong><dl>${primaryRows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl><details class="token-details"><summary>Details & ownership</summary><dl>${otherRows.map(([k,v])=>`<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl></details>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${!isChampion && equipped ? temperHtml(slot) : ""}${flash?.slot===slot&&equipped?`<p class="temper-outcome ${flash.held?'held':'failed'}" role="status">${flash.held?'TEMPER HELD':'TEMPER FAILED'}<small>+${x.level} ${flash.held?'FORGED':'UNCHANGED'}</small></p>`:""}${gearButton}</article>`;
     })
     .join("");
   paintRelics($("nft-tokens"));
@@ -1213,26 +1275,14 @@ async function renderNft() {
     !view.onChain || !view.features?.includes("claim"),
   );
 }
-$("nft-open").addEventListener("click", async () => {
-  try {
-    await loadChampion();
-    await renderNft();
-    claimArmed = false;
-    claimSourceId = champion?.id ?? null;
-    $("claim-button").textContent = "CLAIM TO WALLET";
-    $("claim-result").textContent = "";
-    $("modes").inert = true;
-    $("nft").classList.remove("hidden");
-    $("nft-close").focus();
-  } catch (e) {
-    notice((e as Error).message);
-  }
-});
-$("nft-close").addEventListener("click", () => {
-  $("nft").classList.add("hidden");
-  $("modes").inert = false;
-  $("nft-open").focus();
-});
+async function openInventory() {
+  await loadChampion();
+  await renderNft();
+  claimArmed = false;
+  claimSourceId = champion?.id ?? null;
+  $("claim-button").textContent = "CLAIM TO WALLET";
+  $("claim-result").textContent = "";
+}
 $("claim-button").addEventListener("click", async () => {
   const receiver = $<HTMLInputElement>("claim-account")
     .value.trim()
@@ -1291,62 +1341,59 @@ function saveUpgradeIntent() {
     else sessionStorage.removeItem("contrapasso-upgrade");
   } catch { /* The server still retains the action id. */ }
 }
-function renderGear() {
-  if (!champion) return;
-  const grid = $("gear-cards");
-  grid.innerHTML = (["weapon", "armor"] as const)
-    .map((slot) => {
-      const level =
-        champion!.build[slot === "weapon" ? "weaponLevel" : "armorLevel"];
-      const max = level >= MAX_GEAR_LEVEL;
-      const cost = upgradeCost(level);
-      const odds = upgradeChance(level);
-      const available =
-        (!champion!.chain || champion!.chain.features?.includes("upgrade")) &&
-        !!champion!.equipped?.[slot];
-      const confirming = pendingUpgrade?.championId === champion!.id && pendingUpgrade.slot === slot;
-      const otherPending = pendingUpgrade?.championId === champion!.id && !confirming;
-      const blocked = busy || otherPending || (!confirming && (max || champion!.coins < cost || !available));
-      return `<button class="training-card gear-card${max ? " learned" : ""}" data-slot="${slot}" ${blocked ? "disabled" : ""}><span class="gear-level">+${level}</span><strong>${gearName(slot)}</strong><span>${GEAR[slot].effect(level)}${max ? "" : ` → ${GEAR[slot].effect(level + 1)}`}</span><span>${max ? "Nothing left to temper." : odds === 100 ? "Always holds." : `${odds}% to hold. A failure burns only the coin.`}</span><b>${confirming ? "CONFIRM UPGRADE" : !available ? "NOT AVAILABLE" : max ? "AT ITS LIMIT" : `TEMPER · ${cost} COIN`}</b></button>`;
-    })
-    .join("");
-  for (const button of grid.querySelectorAll<HTMLButtonElement>("button"))
-    button.addEventListener("click", async () => {
-      if (busy) return;
-      busy = true;
-      renderForge();
-      notice("");
-      try {
-        const slot = button.dataset.slot as GearSlot;
-        if (!pendingUpgrade || pendingUpgrade.championId !== champion!.id)
-          pendingUpgrade = { id: crypto.randomUUID(), championId: champion!.id, slot };
-        saveUpgradeIntent();
-        const response = await api.upgrade(slot, pendingUpgrade.id);
-        champion = response.champion;
-        refreshChampion();
-        if (champion.chain?.pending) {
-          notice("Upgrade sent. Confirm it before tempering again.");
-          return;
-        }
-        pendingUpgrade = null;
-        saveUpgradeIntent();
-        notice(response.upgrade.error ?? (
-          response.upgrade.success
-            ? `The ${gearName(slot)} holds. It is now +${response.upgrade.level}.`
-            : `The coin burns. The ${gearName(slot)} stays +${response.upgrade.level}.`),
-        );
-      } catch (e) {
-        // Validation refused the action before enqueueing it. Transport/relay uncertainty keeps the ID.
-        if (e instanceof ApiError && e.status === 400) {
-          pendingUpgrade = null;
-          saveUpgradeIntent();
-        }
-        notice((e as Error).message);
-      } finally {
-        busy = false;
-        renderForge();
-      }
-    });
+/** The temper action lives on the equipped item it changes. */
+function temperHtml(slot: GearSlot) {
+  if (!champion) return "";
+  const level = champion.build[slot === "weapon" ? "weaponLevel" : "armorLevel"];
+  const max = level >= MAX_GEAR_LEVEL;
+  const cost = upgradeCost(level);
+  const odds = upgradeChance(level);
+  const available =
+    (!champion.chain || champion.chain.features?.includes("upgrade")) &&
+    !!champion.equipped?.[slot];
+  const confirming = pendingUpgrade?.championId === champion.id && pendingUpgrade.slot === slot;
+  const otherPending = pendingUpgrade?.championId === champion.id && !confirming;
+  const blocked = busy || otherPending || (!confirming && (max || champion.coins < cost || !available));
+  const short = !max && available && !confirming && champion.coins < cost;
+  return `<div class="temper"><span class="eyebrow">TEMPER</span><div class="temper-step"><b>+${level}</b>${max ? "" : `<i>→</i><b>+${level + 1}</b>`}<span>${GEAR[slot].effect(level)}${max ? "" : ` → ${GEAR[slot].effect(level + 1)}`}</span></div><small>${max ? "Nothing left to temper." : short ? `${cost - champion.coins} more coin needed. Earn coin in Solo.` : odds === 100 ? "Always holds." : `${odds}% to hold. A failure burns only the coin.`}</small><button class="btn" data-temper="${slot}" ${blocked ? "disabled" : ""}>${confirming ? "CONFIRM UPGRADE" : !available ? "NOT AVAILABLE" : max ? "AT ITS LIMIT" : `TEMPER · ${cost} COIN`}</button></div>`;
+}
+async function temper(slot: GearSlot) {
+  if (busy || !champion) return;
+  busy = true;
+  for (const button of $("nft-tokens").querySelectorAll<HTMLButtonElement>("button"))
+    button.disabled = true;
+  notice("");
+  let flash: { slot: GearSlot; held: boolean } | undefined;
+  try {
+    if (!pendingUpgrade || pendingUpgrade.championId !== champion.id)
+      pendingUpgrade = { id: crypto.randomUUID(), championId: champion.id, slot };
+    saveUpgradeIntent();
+    const response = await api.upgrade(slot, pendingUpgrade.id);
+    champion = response.champion;
+    refreshChampion();
+    if (champion.chain?.pending) {
+      notice("Upgrade sent. Confirm it before tempering again.");
+      return;
+    }
+    pendingUpgrade = null;
+    saveUpgradeIntent();
+    if (!response.upgrade.error) flash = { slot, held: response.upgrade.success };
+    notice(response.upgrade.error ?? (
+      response.upgrade.success
+        ? `The ${gearName(slot)} holds. It is now +${response.upgrade.level}.`
+        : `The coin burns. The ${gearName(slot)} stays +${response.upgrade.level}.`),
+    );
+  } catch (e) {
+    // Validation refused the action before enqueueing it. Transport/relay uncertainty keeps the ID.
+    if (e instanceof ApiError && e.status === 400) {
+      pendingUpgrade = null;
+      saveUpgradeIntent();
+    }
+    notice((e as Error).message);
+  } finally {
+    busy = false;
+    await renderNft(flash).catch(() => {});
+  }
 }
 let loadoutStage: RelicStage | null = null;
 let loadoutOptions: ReturnType<typeof loadoutWeapons> = [];
@@ -1360,31 +1407,41 @@ function renderPreparation() {
   $<HTMLButtonElement>('preparation-close').disabled=preparationBusy;
   $<HTMLButtonElement>('loadout-train').disabled=preparationBusy;
   const selected = selectedLoadout(), identity=selected?.identity ?? champion.build.weaponId ?? 'starter', spec=weapon(identity);
-  $('loadout-weapons').innerHTML = loadoutOptions.map(t=>`<button data-loadout="${escapeHtml(t.tokenId)}" aria-pressed="${t.tokenId===loadoutToken}" ${preparationBusy||t.blocked?'disabled':''}><strong>${weapon(t.identity).name} <em>+${t.level}</em></strong><small>${t.blocked?'Unavailable · listed or equipped elsewhere':t.tokenId===champion!.equipped?.weapon?'IN HAND':weapon(t.identity).className}</small></button>`).join('') || '<p>Your starting blade is ready.</p>';
+  $('loadout-weapons').innerHTML = loadoutOptions.map(t=>`<button data-loadout="${escapeHtml(t.tokenId)}" aria-pressed="${t.tokenId===loadoutToken}" ${preparationBusy||t.blocked?'disabled':''}>${relicImage(t.identity,weapon(t.identity).name)}<strong>${weapon(t.identity).name} <em>+${t.level}</em></strong><small>${t.blocked?'Unavailable · listed or equipped elsewhere':t.tokenId===champion!.equipped?.weapon?'IN HAND':weapon(t.identity).className}</small></button>`).join('') || '<p>Your starting blade is ready.</p>';
+  const build = document.querySelector<HTMLElement>('.preparation-build')!;
+  if (build.dataset.weapon !== identity) {
+    build.dataset.weapon = identity;
+    restartAnimation(build, 'swap');
+    restartAnimation(document.querySelector('.preparation-theatre'), 'flash');
+  }
+  void paintRelics($('loadout-weapons'));
   $('loadout-name').textContent=spec.name;
   $('loadout-description').textContent=spec.description;
-  $('loadout-stats').innerHTML=`<span><b>${spec.damage+(selected?.level??champion.build.weaponLevel)*2}</b> damage</span><span><b>${spec.reach}m</b> reach</span><span><b>${selected?.kills??0}</b> kills</span>`;
-  $('loadout-techniques').innerHTML=weaponTechniques(identity).map((id,i)=>`<button data-loadout-preview="${id}" title="Preview ${TECHNIQUES[id].name}"><kbd>${i+1}</kbd><span>${TECHNIQUES[id].name}<small>${champion!.skills.includes(id)?'LEARNED':'PREVIEW · LEARN IN SKILL TREE'}</small></span></button>`).join('');
+  const equipped=weapon(champion.build.weaponId),damageDiff=spec.damage+(selected?.level??champion.build.weaponLevel)*2-(equipped.damage+champion.build.weaponLevel*2),rangeDiff=spec.reach-equipped.reach;
+  const delta=(n:number)=>n?`<em class="${n>0?'better':'worse'}">${n>0?'+':''}${Number(n.toFixed(1))}</em>`:'';
+  $('loadout-stats').innerHTML=`<span><b>${spec.damage+(selected?.level??champion.build.weaponLevel)*2}</b> damage ${delta(damageDiff)}</span><span><b>${spec.reach}m</b> reach ${delta(rangeDiff)}</span><span><b>${selected?.kills??0}</b> kills</span>`;
+  $('loadout-techniques').innerHTML=weaponTechniques(identity).map((id,i)=>`<button data-loadout-preview="${id}" title="Preview ${TECHNIQUES[id].name}"><kbd>${i+1}</kbd><span>${TECHNIQUES[id].name}<small>${champion!.skills.includes(id)?'LEARNED':'NOT LEARNED · PREVIEW ONLY'}</small></span></button>`).join('');
   loadoutStage ??= new RelicStage($<HTMLCanvasElement>('loadout-stage'),$('loadout-preview-label'));
   void loadoutStage.select(identity); loadoutStage.preview(null);
   $<HTMLButtonElement>('loadout-start').disabled=preparationBusy||!!champion.chain?.pending||!!selected?.blocked;
   $('loadout-start').textContent=preparationBusy?'PREPARING…':pendingMarket?'CHECK PENDING ACTION ↻':'TAKE THE DESCENT ↘';
 }
-async function openPreparation() {
+async function openPreparation(turn = navigation) {
   if(busy||verifying)return;
   notice('');
   try {
     await loadChampion(); const inventory=await api.nft();
+    if (turn !== navigation) return;
     loadoutOptions=loadoutWeapons(inventory.tokens,champion!.id);
     loadoutToken=champion!.equipped?.weapon ?? loadoutOptions.find(t=>!t.blocked)?.tokenId ?? null;
-    $('modes').inert=true; $('preparation').classList.remove('hidden');
+    camp.show('preparation');
     $('loadout-status').textContent='Choose your weapon and preview its techniques. Locked skills must be learned before use.';
     renderPreparation(); $('preparation-close').focus();
   } catch(e){notice((e as Error).message);}
 }
 function closePreparation() {
   if(busy||preparingRun)return;
-  $('preparation').classList.add('hidden'); $('modes').inert=false; $('mode-solo').focus();
+  camp.show('modes'); $('mode-solo').focus();
 }
 $('preparation-close').onclick=closePreparation;
 $('loadout-weapons').onclick=e=>{
@@ -1394,7 +1451,9 @@ $('loadout-weapons').onclick=e=>{
 };
 $('loadout-techniques').onclick=e=>{
   const button=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-loadout-preview]');
-  if(button)loadoutStage?.preview(button.dataset.loadoutPreview as AbilityId);
+  if(!button)return;
+  for(const other of $('loadout-techniques').querySelectorAll('button'))other.classList.toggle('previewing',other===button);
+  loadoutStage?.preview(button.dataset.loadoutPreview as AbilityId);
 };
 $('loadout-start').onclick=async()=>{
   if(busy||preparingRun||!champion)return;
@@ -1415,11 +1474,8 @@ $('loadout-train').onclick=()=>{
   if(!champion||busy||preparingRun)return;
   forgeFromPreparation=true;
   skillTree.focusWeapon(selectedLoadout()?.identity ?? champion.build.weaponId ?? 'starter');
-  renderForge(); $('preparation').classList.add('hidden'); $('forge').classList.remove('hidden'); $('forge-close').focus();
+  renderForge(); $('forge-close').classList.remove('hidden'); camp.show('forge'); $('forge-close').focus();
 };
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'&&!$('preparation').classList.contains('hidden')){e.preventDefault();closePreparation();}
-});
 
 let skillStage: RelicStage | null = null;
 for(const id of ['loadout-slow','skill-slow']) $(id).onclick=()=>{
@@ -1452,27 +1508,63 @@ const skillTree = new SkillTree($("forge-cards"), {
 });
 function renderForge() {
   if (!champion) return;
-  renderGear();
   skillTree.render(champion, busy);
 }
-$("train").addEventListener("click", async () => {
-  forgeFromPreparation=false;
-  try {
-    await loadChampion();
-    renderForge();
-    $("modes").inert = true;
-    $("forge").classList.remove("hidden");
-    $("forge-close").focus();
-  } catch (e) {
-    notice((e as Error).message);
-  }
-});
 $("forge-close").addEventListener("click", () => {
+  if (!forgeFromPreparation || busy) return;
+  forgeFromPreparation = false;
+  $("forge-close").classList.add("hidden");
   skillTree.close();
-  $("forge").classList.add("hidden");
-  if(forgeFromPreparation) { $('preparation').classList.remove('hidden'); renderPreparation(); $('loadout-train').focus(); }
-  else { $("modes").inert = false; $("train").focus(); }
+  renderPreparation();
+  camp.show("preparation");
+  $("loadout-train").focus();
 });
+
+/** Open the destination immediately; keep its controls inert while data arrives. */
+let navigation = 0;
+async function navigate(page: CampPage) {
+  if (mode !== "menu" || preparingRun || verifying) return;
+  if (page === camp.page) return;
+  const turn = ++navigation;
+  const nav = $("camp-nav");
+  nav.dataset.loading = camp.tab(page);
+  const destination=$(page);
+  camp.show(page);
+  destination.inert=true;
+  destination.setAttribute('aria-busy','true');
+  destination.dataset.load=String(turn);
+  const placeholder=document.createElement('div');placeholder.className='page-loading';placeholder.setAttribute('role','status');placeholder.innerHTML='<span>Gathering your champion…</span><i></i><i></i><i></i>';destination.append(placeholder);
+  notice("");
+  try {
+    if (page !== "forge" || !forgeFromPreparation) {
+      if (page !== "forge") skillTree.close();
+      forgeFromPreparation = false;
+      $("forge-close").classList.add("hidden");
+    }
+    if (page === "forge") {
+      await loadChampion();
+      if (turn === navigation) renderForge();
+    } else if (page === "nft") await openInventory();
+    else if (page === "market") await openMarket();
+    else if (page === "preparation") return void (await openPreparation());
+    else if (page === "duel-lobby") return void (await openLobby());
+    if (turn === navigation) camp.show(page);
+  } catch (e) {
+    if (turn === navigation) notice((e as Error).message);
+  } finally {
+    placeholder.remove();
+    if (destination.dataset.load === String(turn)) {
+      destination.removeAttribute("aria-busy");delete destination.dataset.load;
+      destination.inert=camp.page!==page;
+    }
+    if (turn === navigation) delete nav.dataset.loading;
+  }
+}
+for (const button of document.querySelectorAll<HTMLElement>("[data-camp],[data-camp-link]"))
+  button.addEventListener("click", () =>
+    void navigate((button.dataset.camp ?? button.dataset.campLink) as CampPage),
+  );
+$("camp-home").addEventListener("click", () => void navigate("modes"));
 let previewInert: [HTMLElement, boolean][] = [];
 $("skill-preview-expand").onclick = () => {
   const theatre = document.querySelector('.skill-theatre')!;
@@ -1503,11 +1595,11 @@ for (let i = 0; i < 36; i++) {
 $("play").addEventListener("click", () => {
   $("landing").classList.add("up");
   $("landing").inert = true;
-  $("modes").inert = false;
+  camp.enter("modes");
   $("mode-solo").focus();
   void loadChampion().catch((e) => notice(e.message));
 });
-$("mode-solo").addEventListener("click", () => void openPreparation());
+$("mode-solo").addEventListener("click", () => void navigate("preparation"));
 $("again").addEventListener("click", () => {
   if (world.mode === "duel") {
     toMenu();
@@ -1517,6 +1609,9 @@ $("again").addEventListener("click", () => {
 $("same-seed").addEventListener("click", () => void startRun(challenge?.id));
 $("retry-verification").addEventListener("click", () => void verifyRun());
 $("to-menu").addEventListener("click", toMenu);
+for(const id of ['end-skills','end-inventory'])$(id).onclick=()=>{if(verifying)return;toMenu();void navigate(id==='end-skills'?'forge':'nft');};
+$('camp-nav').addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(e.key))return;const buttons=[...$('camp-nav').querySelectorAll<HTMLButtonElement>('button')];const i=buttons.indexOf(document.activeElement as HTMLButtonElement);if(i<0)return;e.preventDefault();buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(e.key==='ArrowUp'?-1:1)+buttons.length)%buttons.length].focus();});
+$('reward-cards').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;const buttons=[...$('reward-cards').querySelectorAll<HTMLButtonElement>('button')];const i=buttons.indexOf(document.activeElement as HTMLButtonElement);if(i<0)return;e.preventDefault();buttons[(i+(e.key==='ArrowLeft'?-1:1)+buttons.length)%buttons.length].focus();});
 $("pause-menu").addEventListener("click", async () => {
   if (busy) return;
   if (world.mode === "duel" && !ended && challenge) {
@@ -1540,6 +1635,34 @@ $("sound-toggle").addEventListener("click", () => {
   reflectSound();
 });
 reflectSound();
+const settings = new SettingsPanel((values) => {
+  sound.setVolume(values.volume);
+  view.setShake(values.shake);
+  view.setQuality(values.quality);
+  document.documentElement.classList.toggle("calm", !values.motion);
+  $("help").classList.toggle("hidden", !values.hints);
+});
+$("settings-open").addEventListener("click", () => settings.show($("settings-open")));
+$("pause-settings").addEventListener("click", () => settings.show($("pause-settings")));
+// Escape always steps back one level: the sheet, then a sub-page, then the tab.
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key !== "Escape") return;
+    if (settings.open) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      settings.close();
+      return;
+    }
+    if (mode !== "menu" || !camp.active || document.querySelector(".skill-theatre.expanded")) return;
+    if (camp.page === "preparation") closePreparation();
+    else if (camp.page === "duel-lobby") closeLobby();
+    else if (camp.page === "forge" && forgeFromPreparation) $("forge-close").click();
+    else if (camp.page !== "modes") void navigate("modes");
+  },
+  true,
+);
 
 /** Unbroken hits in a row: cosmetic, cleared by a pause in the assault or by being struck. */
 let chain = 0,
@@ -1567,11 +1690,13 @@ function paintChain(pop: boolean) {
   }
 }
 let hudElapsed = 0;
+let enragedBoss: number | null = null;
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (document.hidden) { requestAnimationFrame(frame); return; }
-  if (mode === "run" && !paused && !ended && !busy) {
+  entranceT=Math.max(0,entranceT-dt);
+  if (mode === "run" && !paused && !ended && !busy && entranceT<=0) {
     if (world.phase === "reward" && !choiceQueued) acc = 0;
     else if (freeze > 0) freeze -= dt;
     else acc += dt * (slow > 0 ? 0.3 : 1);
@@ -1601,6 +1726,8 @@ function frame(now: number) {
       step(world, unpackInput(packed));
       acc -= DT;
       n++;
+      const phaseBoss=world.enemies.find(e=>e.kind==='warden'&&(e.enraged||e.hp<e.maxHp*.5));
+      if(phaseBoss&&phaseBoss.id!==enragedBoss){enragedBoss=phaseBoss.id;freeze=Math.max(freeze,.09);restartAnimation($('vignette'),'ult');showBanner('THE RITUAL DEEPENS',1.25);}
       for (const e of world.events) {
         if (e.type === "floor")
           showBanner(
@@ -1609,6 +1736,11 @@ function frame(now: number) {
         if (e.type === "hit") {
           chain += 1;
           chainT = 3;
+        }
+        if (e.type === "ability" && e.side !== "enemy" && e.stage === "charge" && e.ability) {
+          const technique = techniqueId(e.ability);
+          restartAnimation(technique ? $("technique-" + technique.slice(-1)) : isSpell(e.ability) ? $("cast-slot") : $("core-slot"), "fired");
+          if (!technique && !isSpell(e.ability)) restartAnimation($("vignette"), "ult");
         }
         if (e.type === "hurt" && chain) {
           chain = 0;
@@ -1620,7 +1752,7 @@ function frame(now: number) {
           veil.classList.add("on");
         }
         // The last kill of a room lingers.
-        if (e.type === "cleared" || e.type === "won") slow = 0.42;
+        if (e.type === "cleared" || e.type === "won" || e.type === "kill" && e.kind === "warden") slow = 0.55;
         if (e.type === "cleared") {
           $("reward").classList.add("hidden");
           $("hud").inert = false;

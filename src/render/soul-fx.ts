@@ -1,3 +1,4 @@
+import { FX_ORDER, FX_ALPHA } from "./effect-policy.ts";
 import { EffectAnchor, attachmentFor, isPassivePulse } from "./effect-anchor.ts";
 import { ModelLibrary, type AnimatedModel } from "./assets";
 import { mountGrip, starterWeapon } from "./weapon-pose";
@@ -67,6 +68,8 @@ interface Motif {
   parts?: T.Mesh[];
   spinners?: T.Object3D[];
   anchor?: EffectAnchor;
+  priority?: "strike" | "previous" | "skill";
+  enemy?: boolean;
 }
 export class SoulFx {
   private motifs: Motif[] = [];
@@ -198,10 +201,13 @@ export class SoulFx {
   }
   event(e: SimEvent, identity: WeaponId = "starter") {
     const mode = this.trackActors ? attachmentFor(e, identity) : null;
-    const existing = mode ? new Set(this.motifs) : null;
+    const existing = new Set(this.motifs);
     this.emit(e, identity);
-    if (mode && existing) for (const motif of this.motifs) {
-      if (!existing.has(motif)) motif.anchor = new EffectAnchor(e, mode);
+    for (const motif of this.motifs) if (!existing.has(motif)) {
+      if (mode) motif.anchor = new EffectAnchor(e, mode);
+      motif.enemy = e.side === 'enemy';
+      motif.priority = e.type === 'swing' || e.type === 'ranged' ? 'strike' : 'skill';
+      motif.root.traverse(n => { if(n instanceof T.Mesh) n.renderOrder = FX_ORDER[motif.priority!]; });
     }
   }
   private emit(e: SimEvent, identity: WeaponId) {
@@ -455,6 +461,14 @@ export class SoulFx {
     this.motifs.push({root,life,max:life,radius:1,kind:'combo',inward:false});
     while(this.motifs.length>32)this.dispose(this.motifs.shift()!);
   }
+  /** A newer skill takes the stage: free-standing effects already playing finish sooner. */
+  recede(factor: number) {
+    for (const m of this.motifs) if (!m.enemy) {
+      m.priority = 'previous';
+      m.root.traverse(n => { if(n instanceof T.Mesh) n.renderOrder = FX_ORDER.previous; });
+      if (!m.anchor && !m.travel) m.life *= factor;
+    }
+  }
   private dispose(m: Motif) {
     this.root.remove(m.root);
     m.root.traverse((n) => {
@@ -532,7 +546,7 @@ export class SoulFx {
       }
       if(!m.parts){m.parts=[];m.root.traverse(n=>{if(n instanceof T.Mesh)m.parts!.push(n);});}
       for(const n of m.parts) {
-        (n.material as T.MeshBasicMaterial).opacity=n.userData.alpha*(n.userData.fade??(1-t)**.7);
+        (n.material as T.MeshBasicMaterial).opacity=Math.min(m.priority === "previous" ? FX_ALPHA.previous : FX_ALPHA.skill, n.userData.alpha*(n.userData.fade??(1-t)**.7));
         if(n.geometry===shard)n.position.y=.6+Math.sin(t*Math.PI)*(m.kind==='ember'?.5:.3);
       }
     }

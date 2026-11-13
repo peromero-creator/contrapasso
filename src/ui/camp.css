@@ -1,0 +1,2125 @@
+/*
+ * The camp shell: one bar, one page at a time, and directional movement between them.
+ * Loaded after style.css; the #camp prefix intentionally outranks the older per-screen rules.
+ */
+:root {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --rule: #a18a5f30;
+  --panel-soft: #1a1814d9;
+  --title: "Cinzel", Georgia, serif;
+}
+
+/* ---------- Shell ---------- */
+#camp {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
+  overflow: hidden;
+  background: #11120f;
+  transition: opacity 0.35s;
+}
+#camp.gone {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.35s,
+    visibility 0s 0.35s;
+}
+/* The same painted hall behind every page; it drifts as you move between sections. */
+#camp::before {
+  content: "";
+  position: absolute;
+  inset: -3% -6%;
+  z-index: 0;
+  background: url("/assets/ui/cover-4k.jpg") 62% center / cover no-repeat;
+  opacity: 0.34;
+  transform: translate3d(0, calc(var(--camp-tab, 0) * -1.4%), 0);
+  transition: transform 0.7s var(--ease-out);
+  pointer-events: none;
+}
+#camp[data-page="preparation"]::before,
+#camp[data-page="duel-lobby"]::before {
+  transform: translate3d(-2.2%, 0, 0) scale(1.05);
+}
+#camp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(90deg, #11120ff5 8%, #14130fd6 55%, #17130fb8),
+    radial-gradient(ellipse at 50% 120%, #2c1d14b0, transparent 60%);
+  pointer-events: none;
+}
+
+/* ---------- Rail: a game menu, read top to bottom ---------- */
+#camp-bar {
+  position: relative;
+  z-index: 3;
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 30px 0 22px;
+  border-right: 1px solid var(--rule);
+  background: linear-gradient(180deg, #0d0e0cf5, #100f0deb);
+}
+.camp-wordmark {
+  appearance: none;
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 4px 26px;
+  color: var(--bone);
+  font: 800 24px var(--heading);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+.camp-wordmark span {
+  color: var(--ember);
+}
+#camp-nav {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin-top: 40px;
+}
+#camp-nav button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 15px 26px 14px;
+  background: none;
+  border: 0;
+  color: #9c9483;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    padding-left 0.25s var(--ease-out);
+}
+#camp-nav button small {
+  font: 600 11px var(--body);
+  letter-spacing: 0.1em;
+  color: #6f685b;
+  transition: color 0.2s;
+}
+#camp-nav button span {
+  font: 700 23px / 1 var(--heading);
+  letter-spacing: 0.09em;
+}
+#camp-nav button > i {
+  grid-column: 2;
+  font: 500 12px var(--body);
+  font-style: normal;
+  color: #6f685b;
+  transition: color 0.2s;
+}
+#camp-nav button:hover {
+  color: var(--bone);
+  padding-left: 31px;
+}
+#camp-nav button[aria-current] {
+  color: var(--bone);
+  background: linear-gradient(90deg, #b18b4922, transparent 85%);
+  padding-left: 31px;
+}
+#camp-nav button[aria-current] small {
+  color: var(--gold);
+}
+#camp-nav button[aria-current] > i {
+  color: #b9b0a0;
+}
+#camp-nav button:focus-visible {
+  outline-offset: -4px;
+}
+#camp-nav-mark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: var(--h, 0);
+  background: var(--ember);
+  transform: translateY(var(--y, 0));
+  transition:
+    transform 0.4s var(--ease-out),
+    height 0.4s var(--ease-out);
+  pointer-events: none;
+}
+#camp-nav[data-loading] #camp-nav-mark {
+  animation: nav-wait 0.8s ease-in-out infinite;
+}
+@keyframes nav-wait {
+  50% {
+    opacity: 0.3;
+  }
+}
+.camp-status {
+  display: grid;
+  gap: 14px;
+  margin-top: auto;
+  padding: 18px 26px 0;
+  border-top: 1px solid var(--rule);
+}
+.camp-coin {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.camp-coin .coin {
+  align-self: center;
+}
+.camp-coin b {
+  font: 700 32px / 1 var(--heading);
+  font-variant-numeric: tabular-nums;
+}
+.camp-coin small {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.camp-tool {
+  appearance: none;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #5d5341;
+  background: #1c1a15;
+  color: #cfc4ae;
+  font: 600 11px var(--body);
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.camp-tool:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ---------- Pages and the movement between them ---------- */
+#camp .camp-page {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  grid-row: 1;
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  padding: 26px clamp(16px, 3vw, 40px) 40px;
+  background: none;
+  text-align: left;
+  opacity: 1;
+  visibility: visible;
+  overscroll-behavior: contain;
+}
+#camp .camp-inner {
+  width: min(1160px, 100%);
+  max-width: none;
+  margin-inline: auto;
+  text-align: left;
+}
+#camp .camp-inner.wide {
+  width: min(1520px, 100%);
+}
+#camp #modes .camp-inner,
+#camp #preparation .camp-inner {
+  margin-block: auto;
+}
+.camp-page[data-enter] {
+  animation: camp-in 0.36s var(--ease-out) 0.05s both;
+}
+.camp-page[data-leave] {
+  animation: camp-out 0.2s ease-in both;
+  pointer-events: none;
+}
+.camp-page[data-enter="forward"] { --from-x: 0px; --from-y: 44px; }
+.camp-page[data-enter="back"] { --from-x: 0px; --from-y: -44px; }
+.camp-page[data-enter="down"] { --from-x: 52px; --from-y: 0px; }
+.camp-page[data-enter="up"] { --from-x: -52px; --from-y: 0px; }
+.camp-page[data-leave="forward"] { --to-x: 0px; --to-y: -28px; }
+.camp-page[data-leave="back"] { --to-x: 0px; --to-y: 28px; }
+.camp-page[data-leave="down"] { --to-x: -32px; --to-y: 0px; }
+.camp-page[data-leave="up"] { --to-x: 32px; --to-y: 0px; }
+@keyframes camp-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--from-x), var(--from-y), 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes camp-out {
+  to {
+    opacity: 0;
+    transform: translate3d(var(--to-x), var(--to-y), 0);
+  }
+}
+/* Content settles a beat after its page arrives. */
+.camp-page[data-enter] .camp-inner > * {
+  animation: camp-rise 0.42s var(--ease-out) both;
+}
+.camp-page[data-enter] .camp-inner > :nth-child(1) { animation-delay: 0.06s; }
+.camp-page[data-enter] .camp-inner > :nth-child(2) { animation-delay: 0.11s; }
+.camp-page[data-enter] .camp-inner > :nth-child(3) { animation-delay: 0.16s; }
+.camp-page[data-enter] .camp-inner > :nth-child(n + 4) { animation-delay: 0.21s; }
+@keyframes camp-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- Shared page furniture ---------- */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 58px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+#camp .page-head h2 {
+  margin: 3px 0 0;
+  font: 600 clamp(22px, 2.3vw, 31px) / 1.1 var(--title);
+  letter-spacing: 0.05em;
+}
+#camp .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
+#camp .page-lede {
+  margin: 0 0 0 auto;
+  max-width: 58ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #b9b0a0;
+  text-align: right;
+}
+.page-head > .btn,
+.page-head > .camp-tool {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.page-head > .page-lede + .btn,
+.page-head > .tree-summary + .btn,
+.page-head > .market-tabs + .camp-tool {
+  margin-left: 0;
+}
+.page-back {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 1px solid #645846;
+  background: #24211b;
+  color: var(--bone);
+  font: 500 20px var(--body);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.page-back:hover {
+  border-color: var(--gold);
+  transform: translateX(-3px);
+}
+#camp .btn {
+  min-height: 44px;
+  padding: 10px 18px;
+  gap: 14px;
+  font-size: 16px;
+}
+#camp .btn span {
+  font-size: 18px;
+}
+#camp .btn.big {
+  min-height: 60px;
+  padding: 14px 26px;
+  font-size: 20px;
+}
+#camp .section-label {
+  margin: 0 0 14px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+/* ---------- Descent: your champion stands in the hall; the way down is beside them ---------- */
+#camp #modes .camp-inner {
+  width: min(1440px, 100%);
+  margin-block: 0;
+  flex: 1;
+  min-height: 0;
+}
+.hub {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
+  gap: clamp(20px, 3vw, 44px);
+  align-items: stretch;
+  min-height: 540px;
+}
+.hub-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: #151815;
+}
+#hub-stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#hub-stage-label {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+.hub-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  min-width: 0;
+}
+#camp .hub-champion h2 {
+  margin: 6px 0 8px;
+  font: 600 clamp(28px, 3vw, 40px) / 1.05 var(--title);
+  letter-spacing: 0.03em;
+}
+.hub-champion p {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.hub-build {
+  display: grid;
+  border-top: 1px solid var(--rule);
+}
+.hub-build > * {
+  appearance: none;
+  display: grid;
+  grid-template-columns: 1fr auto 16px;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: none;
+  color: var(--bone);
+  font: inherit;
+  text-align: left;
+}
+.hub-build span {
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  color: var(--muted);
+}
+.hub-build b {
+  font: 600 15px var(--body);
+  text-align: right;
+}
+.hub-build i {
+  font-style: normal;
+  color: #7d7566;
+  transition:
+    color 0.15s,
+    transform 0.15s;
+}
+.hub-build button {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.hub-build button:hover {
+  background: #b18b4914;
+}
+.hub-build button:hover i {
+  color: var(--gold);
+  transform: translate(2px, -2px);
+}
+.hub-build button:focus-visible {
+  outline-offset: -2px;
+}
+#camp .champion-chain {
+  margin: -6px 0 0;
+  font-size: 11px;
+  opacity: 0.85;
+}
+#camp .cards {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+#camp .card {
+  min-height: 0;
+  padding: 20px 24px 16px;
+  gap: 7px;
+  border-top-width: 1px;
+}
+#camp .card-k {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
+#camp .card-t {
+  font: 500 clamp(34px, 3.4vw, 46px) / 1 var(--title);
+  letter-spacing: 0.04em;
+}
+#camp #mode-duel .card-t {
+  font-size: 26px;
+}
+#camp #mode-duel .card-d {
+  display: none;
+}
+#camp .card-d {
+  max-width: 40ch;
+  font-size: 14px;
+  line-height: 1.5;
+}
+#camp .card-action {
+  margin-top: 8px;
+  padding-top: 12px;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+#camp .card-action b {
+  transition: transform 0.2s var(--ease-out);
+}
+#camp .card:hover:not(:disabled) .card-action b {
+  transform: translate(4px, 4px);
+}
+#camp .card:after {
+  font-family: var(--title);
+  font-weight: 600;
+  font-size: 150px;
+}
+
+/* ---------- Choose your weapon ---------- */
+#camp .preparation-inner {
+  width: min(1180px, 100%);
+}
+#camp #loadout-name {
+  font: 500 26px var(--title);
+}
+#camp .preparation-footer .btn {
+  font-size: 20px;
+  padding: 16px 28px;
+}
+
+/* ---------- Duel ---------- */
+#camp .duel-rules {
+  margin: 0 0 0 auto;
+}
+#camp .duel-account {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding: 16px 0;
+  border-top: 0;
+}
+#camp .duel-account > div {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+#camp #duel-record {
+  margin: 0;
+  font: 700 26px var(--heading);
+  color: var(--bone);
+}
+#camp .defense-help {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 13px;
+}
+#duel-resume {
+  margin-bottom: 20px;
+}
+
+#camp .opponent-card {
+  min-height: 210px;
+  transition:
+    transform 0.2s var(--ease-out),
+    border-color 0.2s,
+    background 0.2s;
+}
+#camp .opponent-card:hover:not(:disabled) {
+  transform: translateY(-4px);
+}
+#camp .opponent-card > strong {
+  font: 600 24px / 1.15 var(--title);
+  letter-spacing: 0.03em;
+}
+#camp .opponent-fight b {
+  font-weight: 400;
+  transition: transform 0.2s var(--ease-out);
+}
+#camp .opponent-card:hover:not(:disabled) .opponent-fight b {
+  transform: translate(4px, 4px);
+}
+.camp-page[data-enter] .opponent-card {
+  animation: card-deal 0.46s var(--ease-out) both;
+}
+.camp-page[data-enter] .opponent-card:nth-child(2) { animation-delay: 0.08s; }
+.camp-page[data-enter] .opponent-card:nth-child(n + 3) { animation-delay: 0.16s; }
+
+/* ---------- Skills ---------- */
+.tree-summary {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-left: auto;
+}
+.tree-progress {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.tree-progress > b {
+  font: 700 30px / 1 var(--heading);
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.tree-progress > span {
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  color: var(--muted);
+}
+.tree-progress > i,
+.tree-tabs button > i {
+  display: block;
+  height: 3px;
+  background: #3a3329;
+  overflow: hidden;
+}
+.tree-progress > i {
+  grid-column: 1 / -1;
+  width: 150px;
+}
+.tree-progress > i b,
+.tree-tabs button > i b {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.6s var(--ease-out);
+}
+.tree-summary p {
+  max-width: 30ch;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #b9b0a0;
+}
+.tree-summary p.ready b {
+  color: #f0d7a3;
+  font-size: 16px;
+}
+#camp .tree-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 5px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+/* A quiet rule separates the weapon paths from the soul paths. */
+.tree-tabs-label {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 6px 5px;
+  background: #a18a5f55;
+  font-size: 0;
+}
+#camp .tree-tabs button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 5px 8px;
+  flex: 1 0 auto;
+  min-height: 46px;
+  padding: 7px 8px 8px;
+  border: 1px solid #5c503b70;
+  background: #1a1814cc;
+  color: #b9b19e;
+  font: 600 12px var(--body);
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+#camp .tree-tabs button:hover {
+  border-color: var(--path-color, #b29862);
+  color: var(--bone);
+}
+#camp .tree-tabs button[aria-pressed="true"] {
+  border-color: var(--path-color, #b29862);
+  background: #362d20;
+  color: #f0d7a3;
+}
+#camp .tree-tabs button.all {
+  grid-template-columns: 1fr;
+  letter-spacing: 0.1em;
+}
+.tree-tabs button > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.tree-tabs em {
+  padding: 1px 5px;
+  border: 1px solid #8a9a6c;
+  color: #b9c99a;
+  font: 600 11px var(--body);
+  font-style: normal;
+  letter-spacing: 0.1em;
+}
+.tree-tabs small {
+  font-size: 11px;
+  color: #9c917e;
+  font-variant-numeric: tabular-nums;
+}
+#camp .tree-tabs button > i {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: 0;
+}
+#camp .tree-tabs button > i b {
+  background: var(--path-color, var(--gold));
+}
+#camp .tree-tabs button.complete small {
+  color: #b9c99a;
+}
+#camp .tree-workspace {
+  margin: 0;
+}
+#camp #forge.camp-page {
+  padding-bottom: 20px;
+}
+#camp .tree-viewport {
+  height: max(380px, calc(100dvh - 398px));
+}
+.tree-map.glide {
+  transition: transform 0.55s var(--ease-out);
+}
+.tree-legend {
+  display: flex;
+  gap: 16px;
+  margin: 0 4px 0 auto;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: #b3a58d;
+}
+.tree-legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.tree-legend li::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #c9ad72;
+}
+.tree-legend .learned::before {
+  background: #c9ad72;
+}
+.tree-legend .reachable::before {
+  box-shadow: 0 0 0 3px #c9ad7240;
+}
+.tree-legend .sealed::before {
+  border: 1px dashed #7b725f;
+}
+/* Three unmistakable states, readable even when the whole atlas is in view. */
+#camp .tree-node.learned .node-orb {
+  background: color-mix(in srgb, var(--path-color) 46%, #171715);
+  border-width: 2px;
+  color: #fff3d6;
+}
+#camp .tree-node.learned .node-orb::after {
+  content: "✓";
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #c9ad72;
+  color: #1c170e;
+  font: 700 12px var(--body);
+}
+#camp .tree-node.reachable .node-orb {
+  border-width: 2px;
+}
+#camp .tree-node.reachable:not(.costly) .node-orb {
+  animation: node-ready 2.4s ease-in-out infinite;
+}
+#camp .tree-node.sealed {
+  opacity: 0.5;
+}
+#camp .tree-node.sealed[aria-pressed="true"] {
+  opacity: 0.85;
+}
+#camp .tree-node.learned small {
+  color: #a9b98c;
+}
+@keyframes node-ready {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 5px #131311,
+      0 0 0 6px color-mix(in srgb, var(--path-color) 35%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px #131311,
+      0 0 0 11px color-mix(in srgb, var(--path-color) 55%, transparent);
+  }
+}
+#camp .tree-node.reachable[aria-pressed="true"] .node-orb {
+  animation: none;
+}
+#camp .tree-node.fresh .node-orb {
+  animation: node-bloom 1s var(--ease-out);
+}
+@keyframes node-bloom {
+  0% {
+    transform: scale(0.8);
+    box-shadow:
+      0 0 0 5px #131311,
+      0 0 0 6px #fff3d6;
+  }
+  45% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 5px #131311,
+      0 0 0 46px transparent;
+  }
+}
+.tree-links path.fresh {
+  animation: link-flare 1.1s ease-out;
+}
+@keyframes link-flare {
+  0% {
+    stroke: #fff3d6;
+    stroke-width: 7;
+    opacity: 0.2;
+  }
+  35% {
+    opacity: 1;
+  }
+}
+#tree-detail > * {
+  animation: camp-rise 0.28s var(--ease-out) both;
+}
+#camp .tree-detail h3 {
+  font: 600 25px / 1.2 var(--title);
+}
+
+/* The action bar mirrors the one in combat: the menu and the fight speak the same language. */
+.tree-loadout {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  background: #14120fd9;
+}
+.tree-loadout-title {
+  flex-shrink: 0;
+}
+.tree-loadout-title p {
+  margin-top: 3px;
+  max-width: 24ch;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #b9b0a0;
+}
+.tree-loadout-slots {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+.loadout-slot {
+  appearance: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1px 9px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 168px;
+  height: 52px;
+  padding: 6px 10px;
+  border: 1px dashed #5d5341;
+  background: #14120fe0;
+  color: #8f8777;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    transform 0.2s var(--ease-out);
+}
+.loadout-slot:nth-child(5) {
+  margin-left: 10px;
+}
+.loadout-slot kbd {
+  grid-row: span 2;
+  min-width: 24px;
+  padding: 4px 6px;
+  font: 700 12px var(--body);
+  text-align: center;
+}
+.loadout-slot span {
+  overflow: hidden;
+  font: 600 12px / 1.2 var(--body);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.loadout-slot small {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.loadout-slot.ready {
+  border: 1px solid #8f7a52;
+  background: #1d1912ea;
+  color: #ead9b9;
+}
+.loadout-slot.ready kbd {
+  color: #f0d7a3;
+  border-color: #8f7a52;
+}
+.loadout-slot.ready small {
+  color: #a9b98c;
+}
+.loadout-slot:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.loadout-slot:focus-visible {
+  outline-offset: 2px;
+}
+/* Paths read left to right; power visibly flows toward what can be learned next. */
+#camp .tree-links .grown {
+  stroke: #d9bd7c;
+  stroke-width: 3.5;
+}
+#camp .tree-links .growing {
+  stroke: #c9ad72;
+  stroke-width: 2.5;
+  stroke-dasharray: 7 9;
+  animation: link-flow 0.9s linear infinite;
+}
+@keyframes link-flow {
+  from {
+    stroke-dashoffset: 16;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+#camp .atlas-region {
+  border-radius: 6px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--path-color) 11%, transparent), transparent 80%);
+}
+#camp .atlas-region h4 {
+  margin: 18px 24px;
+  font: 600 30px var(--title);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- Inventory ---------- */
+#camp #nft-tokens {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 0 0 16px;
+  align-items: stretch;
+}
+#camp .nft-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 20px;
+  border: 1px solid #63543c;
+  border-radius: 0;
+  background: #211e18e6;
+}
+#camp .nft-card.champion {
+  border-top: 2px solid var(--ember);
+}
+#camp .nft-card.equipped {
+  border-top: 2px solid var(--gold);
+}
+#camp .nft-card > .eyebrow {
+  margin-bottom: 10px;
+}
+#camp .nft-card > strong {
+  margin: 14px 0 12px;
+  font: 600 20px / 1.2 var(--title);
+  letter-spacing: 0.03em;
+}
+#camp .nft-card img {
+  margin: 0;
+  height: 120px;
+}
+#camp .nft-card > .btn {
+  width: 100%;
+  margin-top: 12px;
+  justify-content: center;
+  font-size: 14px;
+}
+#camp .nft-card .token-details {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  font-size: 14px;
+}
+#camp .nft-card .skills-badge {
+  margin-top: 12px;
+}
+.temper {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  padding: 14px;
+  border: 1px solid #7c694450;
+  background: #17150fb8;
+}
+.nft-card > dl + .temper,
+.nft-card > .token-details + .temper {
+  margin-top: 16px;
+}
+.temper-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.temper-step b {
+  font: 700 26px / 1 var(--heading);
+  color: var(--gold);
+}
+.temper-step i {
+  font-style: normal;
+  color: #7d7566;
+}
+.temper-step span {
+  margin-left: auto;
+  font-size: 13px;
+  color: #d8ccb6;
+}
+.temper small {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+#camp .temper .btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 15px;
+}
+.nft-card[data-flash="held"] {
+  animation: temper-held 1.1s var(--ease-out);
+}
+.nft-card[data-flash="burned"] {
+  animation: temper-burned 0.6s ease-out;
+}
+@keyframes temper-held {
+  0% {
+    box-shadow: 0 0 0 0 #e9b76ecc;
+    border-color: #ffe2a8;
+  }
+  100% {
+    box-shadow: 0 0 0 26px transparent;
+  }
+}
+@keyframes temper-burned {
+  20% {
+    transform: translateX(-6px);
+    border-color: var(--blood);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+#camp details.claim-box {
+  padding: 14px 18px;
+}
+details.claim-box summary {
+  cursor: pointer;
+  color: #d2bb8f;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+details.claim-box[open] summary {
+  margin-bottom: 10px;
+}
+
+/* ---------- Market ---------- */
+#camp .market-tabs {
+  display: inline-flex;
+  gap: 0;
+  margin: 0 0 0 auto;
+  border: 1px solid #645846;
+  background: #1c1a15;
+}
+#camp .market-tabs button {
+  appearance: none;
+  min-height: 42px;
+  padding: 9px 18px;
+  border: 0;
+  background: none;
+  color: #a39b8a;
+  font: 700 15px var(--heading);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+#camp .market-tabs button:hover {
+  color: var(--bone);
+}
+#camp .market-tabs button[aria-pressed="true"] {
+  background: #3a2f20;
+  color: var(--gold);
+}
+#camp .market-tabs button:focus-visible {
+  outline-offset: -4px;
+}
+#camp #arsenal-choices {
+  margin: 0 0 16px;
+}
+#mint-panel:not(.hidden),
+#exchange-panel:not(.hidden) {
+  animation: camp-rise 0.3s var(--ease-out) both;
+}
+#camp #exchange-balance {
+  margin: 0 0 18px;
+  padding: 0 0 16px;
+  border-top: 0;
+}
+#camp .relic-detail h3 {
+  font: 600 28px / 1.15 var(--title);
+  letter-spacing: 0.03em;
+}
+#camp .sale-form h3,
+#camp .raffle-panel h3,
+#camp .exchange-card h3 {
+  font-family: var(--title);
+  font-size: 22px;
+  letter-spacing: 0.03em;
+}
+#camp #market .market-fine {
+  margin: 18px 0 0;
+  font-size: 13px !important;
+}
+
+/* ---------- Settings sheet ---------- */
+#settings {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+.settings-scrim {
+  position: absolute;
+  inset: 0;
+  background: #080807b8;
+  animation: sheet-fade 0.25s ease both;
+}
+.settings-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding: 26px 28px 30px;
+  overflow: hidden auto;
+  border-left: 1px solid #7c694470;
+  background: #151411;
+  box-shadow: -30px 0 80px #000a;
+  animation: sheet-in 0.32s var(--ease-out) both;
+}
+#settings.closing .settings-sheet {
+  animation: sheet-out 0.2s ease-in both;
+}
+#settings.closing .settings-scrim {
+  animation: sheet-fade 0.2s ease reverse both;
+}
+@keyframes sheet-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes sheet-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+.settings-sheet > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.settings-sheet h2 {
+  margin: 3px 0 0;
+  font: 600 26px / 1.1 var(--title);
+  letter-spacing: 0.05em;
+}
+.settings-sheet h3 {
+  margin: 0 0 4px;
+  font: 600 11px var(--body);
+  letter-spacing: 0.17em;
+  color: var(--gold);
+}
+.settings-sheet .eyebrow {
+  color: var(--muted);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 0;
+  border-bottom: 1px solid #ffffff10;
+}
+.setting-row b {
+  display: block;
+  font: 600 15px var(--body);
+}
+.setting-row small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.setting-switch {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 11px var(--body);
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+.setting-switch i {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  border: 1px solid #5d5341;
+  background: #24211b;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+.setting-switch i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  background: #8b8272;
+  transition:
+    transform 0.2s var(--ease-out),
+    background 0.2s;
+}
+.setting-switch span {
+  min-width: 24px;
+  text-align: left;
+}
+.setting-switch[aria-checked="true"] {
+  color: var(--gold);
+}
+.setting-switch[aria-checked="true"] i {
+  border-color: var(--gold);
+  background: #3a2f20;
+}
+.setting-switch[aria-checked="true"] i::after {
+  transform: translateX(20px);
+  background: var(--gold);
+}
+.setting-switch:disabled {
+  opacity: 0.5;
+}
+.setting-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.setting-range input {
+  width: 150px;
+  accent-color: var(--gold);
+}
+.setting-range output {
+  min-width: 42px;
+  font: 600 13px var(--body);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.setting-choice {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid #5d5341;
+}
+.setting-choice button {
+  appearance: none;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 11px var(--body);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.setting-choice button[aria-pressed="true"] {
+  background: #3a2f20;
+  color: var(--gold);
+}
+.setting-choice button:focus-visible,
+.setting-switch:focus-visible {
+  outline-offset: 2px;
+}
+.controls-list {
+  display: grid;
+  margin: 0;
+}
+.controls-list > div {
+  display: grid;
+  grid-template-columns: 158px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #ffffff10;
+}
+.controls-list dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.controls-list dd {
+  margin: 0;
+  font-size: 14px;
+  color: #d8ccb6;
+}
+.controls-list kbd {
+  font-size: 11px;
+  padding: 4px 7px;
+}
+.settings-foot {
+  margin-top: auto;
+  font-size: 12px;
+  color: #7d7566;
+}
+
+/* ---------- Combat instruments ---------- */
+#hud .hud-left {
+  gap: 9px;
+}
+#hud .vital-heading {
+  font-size: 11px;
+}
+#held-weapon {
+  font: 600 12px var(--body);
+  letter-spacing: 0.08em;
+  color: #d8ccb6;
+  text-shadow: 0 1px 3px #000;
+}
+#hud .combo {
+  gap: 5px;
+}
+#hud .combo i {
+  width: 7px;
+  height: 12px;
+}
+#hud .combo i:last-of-type {
+  width: 13px;
+}
+#hud #combo-instruction {
+  margin-left: 6px;
+  max-width: none;
+  font: 600 11px var(--body);
+  letter-spacing: 0.1em;
+  color: #c5b9a6;
+  text-shadow: 0 1px 3px #000;
+}
+#hud #wave {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+#hud #coins > span:last-child {
+  font-size: 11px;
+}
+#hud .hud-right .eyebrow {
+  font-size: 11px;
+}
+#hud #duel-boss {
+  top: 22px;
+  bottom: auto;
+  width: min(520px, 40vw);
+}
+#hud #duel-boss > span {
+  font-size: 15px;
+}
+.hud-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 16px;
+  padding: 34px 22px 16px;
+  background: linear-gradient(transparent, #0b0a08c4 62%);
+}
+#hud #run-info {
+  position: static;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #b3a996;
+  padding-bottom: 4px;
+}
+#hud #run-controls {
+  position: static;
+  justify-self: end;
+}
+#hud .hud-button {
+  min-height: 36px;
+  padding: 8px 13px;
+  font: 600 11px var(--body);
+  letter-spacing: 0.1em;
+}
+#hud #help {
+  bottom: 88px;
+  gap: 7px;
+  font-size: 11px;
+  color: #c5b9a6;
+  text-shadow: 0 1px 3px #000;
+  opacity: 0.8;
+}
+#hud #help kbd {
+  font-size: 11px;
+}
+#action-bar {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+}
+#action-bar .action-group {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  max-width: none;
+}
+/* Every slot reads the same way: key, name, cooldown underline. */
+#action-bar .action-group > div {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: clamp(104px, 9.2vw, 132px);
+  min-width: 0;
+  height: 52px;
+  padding: 6px 9px 9px;
+  border: 1px solid #4d4238;
+  background: #14120fe0;
+  font-size: inherit;
+  letter-spacing: normal;
+  color: inherit;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+#action-bar .action-group > div.unlearned {
+  display: none;
+}
+#action-bar .move-group > div {
+  width: clamp(104px, 8.4vw, 118px);
+}
+#hud #banner {
+  font: 600 clamp(24px, 3.6vw, 52px) var(--title);
+  letter-spacing: 0.08em;
+}
+#boss-gate-prompt strong {
+  font: 600 22px var(--title);
+  letter-spacing: 0.04em;
+}
+#action-bar kbd {
+  min-width: 24px;
+  padding: 4px 6px;
+  font: 700 12px var(--body);
+  text-align: center;
+  color: #a79b85;
+  transition: color 0.2s;
+}
+#action-bar .action-group > div > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font: 600 10.5px / 1.25 var(--body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8f8777;
+  transition: color 0.2s;
+}
+#action-bar .action-group > div > i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: #2c261f;
+}
+#action-bar .action-group > div > i b {
+  display: block;
+  height: 100%;
+  background: #8c7b61;
+  box-shadow: none;
+}
+#action-bar .action-group > div.ready {
+  border-color: #8f7a52;
+  background: #1d1912ea;
+}
+#action-bar .action-group > div.ready kbd {
+  color: #f0d7a3;
+  border-color: #8f7a52;
+}
+#action-bar .action-group > div.ready > span {
+  color: #ead9b9;
+}
+#action-bar .action-group > div.ready > i b {
+  background: #c9ad72;
+}
+#action-bar #cast-slot.ready > i b {
+  background: #86b0b9;
+}
+#action-bar #core-slot.ready {
+  border-color: #e0bd77;
+  animation: core-ready 1.6s ease-in-out infinite;
+}
+@keyframes core-ready {
+  50% {
+    box-shadow: 0 0 0 3px #e0bd7738;
+  }
+}
+
+/* A pressed skill answers on its slot; skills cast back to back build a visible flow. */
+#action-bar .action-group > div.fired {
+  animation: slot-fired 0.45s var(--ease-out);
+}
+#action-bar .action-group > div.fired kbd {
+  animation: key-pop 0.32s var(--ease-out);
+}
+@keyframes slot-fired {
+  0% {
+    transform: translateY(4px) scale(0.95);
+    background: #6a5028;
+    border-color: #ffe2a8;
+    box-shadow: 0 0 0 0 #e9b76eb0;
+  }
+  55% {
+    box-shadow: 0 0 0 11px transparent;
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes key-pop {
+  0% {
+    transform: scale(1.35);
+    color: #fff3d6;
+  }
+}
+#flow {
+  position: absolute;
+  left: 50%;
+  bottom: 122px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.4s;
+  font-family: var(--title);
+  color: #e8dcc5;
+  text-shadow: 0 2px 0 #18110c, 0 0 18px #000a;
+}
+#flow.show {
+  opacity: 1;
+}
+#flow b {
+  display: inline-block;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1;
+}
+#flow span {
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  color: #c9a468;
+}
+#flow.pop b {
+  animation: flow-pop 0.3s var(--ease-out);
+}
+@keyframes flow-pop {
+  0% {
+    transform: scale(1.6);
+    color: #fff3d6;
+  }
+}
+/* An ultimate draws the edges of the world in for a breath. No white flash. */
+#vignette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 75% at 50% 52%, transparent 34%, #070504e0 100%);
+  opacity: 0;
+}
+#vignette.ult::after {
+  animation: ult-veil 0.85s ease-out;
+}
+@keyframes ult-veil {
+  16% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Run overlays ---------- */
+.overlay:not(.hidden) {
+  animation: sheet-fade 0.25s ease both;
+}
+.overlay:not(.hidden) > *,
+.overlay:not(.hidden) .reward-inner > * {
+  animation: camp-rise 0.4s var(--ease-out) both;
+}
+.overlay:not(.hidden) > :nth-child(2),
+.overlay:not(.hidden) .reward-inner > :nth-child(2) { animation-delay: 0.05s; }
+.overlay:not(.hidden) > :nth-child(3),
+.overlay:not(.hidden) .reward-inner > :nth-child(3) { animation-delay: 0.1s; }
+.overlay:not(.hidden) > :nth-child(n + 4),
+.overlay:not(.hidden) .reward-inner > :nth-child(n + 4) { animation-delay: 0.15s; }
+.overlay:not(.hidden) > .reward-inner {
+  animation: none;
+}
+.overlay h2 {
+  font: 600 clamp(30px, 4.2vw, 54px) / 1.05 var(--title);
+  letter-spacing: 0.06em;
+}
+.overlay .eyebrow {
+  font-size: 12px;
+}
+#reward-cards .power-choice {
+  animation: card-deal 0.5s var(--ease-out) both;
+}
+#reward-cards .power-choice:nth-child(1) { animation-delay: 0.16s; }
+#reward-cards .power-choice:nth-child(2) { animation-delay: 0.24s; }
+#reward-cards .power-choice:nth-child(3) { animation-delay: 0.32s; }
+@keyframes card-deal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 34px, 0) scale(0.97);
+  }
+}
+.pause-actions {
+  display: grid;
+  gap: 10px;
+  width: min(340px, 100%);
+}
+.pause-actions .btn {
+  width: 100%;
+  min-width: 0;
+  font-size: 18px;
+}
+#pause-where {
+  max-width: 46ch;
+}
+.end-stats > div {
+  animation: camp-rise 0.5s var(--ease-out) both;
+}
+.end-stats > div:nth-child(2) { animation-delay: 0.3s; }
+.end-stats > div:nth-child(3) { animation-delay: 0.42s; }
+.end-stats > div:nth-child(1) { animation-delay: 0.18s; }
+.end-stats span {
+  font-size: 11px;
+}
+#receipt-status {
+  font-size: 14px;
+}
+.end-actions .text-button {
+  font-size: 12px;
+}
+
+@media (max-width: 1620px) {
+  #camp .tree-tabs small {
+    display: none;
+  }
+  #camp .tree-tabs button {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Smaller screens ---------- */
+@media (max-width: 1000px) {
+  .hub {
+    grid-template-columns: 1fr;
+  }
+  .hub-stage {
+    min-height: 300px;
+  }
+  .tree-summary p,
+  .tree-loadout-title p {
+    display: none;
+  }
+  #camp .page-lede {
+    display: none;
+  }
+  #camp .duel-account {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+@media (max-width: 820px) {
+  #camp {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  #camp-bar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 52px 46px;
+    align-items: center;
+    padding: 0 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .camp-wordmark {
+    padding: 4px 0;
+    font-size: 20px;
+  }
+  #camp-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    margin: 0 -16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-top: 1px solid var(--rule);
+  }
+  #camp-nav button,
+  #camp-nav button:hover,
+  #camp-nav button[aria-current] {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    height: 46px;
+    background: none;
+  }
+  #camp-nav button span {
+    font-size: 16px;
+  }
+  #camp-nav button small,
+  #camp-nav button > i {
+    display: none;
+  }
+  #camp-nav-mark {
+    top: auto;
+    bottom: 0;
+    width: var(--w, 0);
+    height: 3px;
+    transform: translateX(var(--x, 0));
+  }
+  .camp-status {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .camp-coin b {
+    font-size: 22px;
+  }
+  #camp .camp-page {
+    grid-row: 2;
+    grid-column: 1;
+  }
+  #camp .camp-page {
+    padding: 18px 16px 32px;
+  }
+  .camp-coin small,
+  .tree-tabs-label {
+    display: none;
+  }
+  .page-head {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  #camp .market-tabs,
+  .tree-summary {
+    margin-left: 0;
+  }
+  #camp .tree-viewport {
+    height: 420px;
+  }
+  .hud-bottom {
+    grid-template-columns: 1fr auto;
+    padding: 20px 12px 12px;
+  }
+  #action-bar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  #action-bar .action-group > div {
+    width: 96px;
+    height: 46px;
+  }
+  #hud #help {
+    display: none;
+  }
+  #hud #duel-boss {
+    top: 96px;
+    width: 70vw;
+  }
+  .controls-list > div {
+    grid-template-columns: 124px 1fr;
+  }
+}
+
+/* ---------- Game feel: the menu answers every choice ---------- */
+/* The rail deals itself in whenever the camp returns. */
+#camp:not(.gone) #camp-nav button {
+  animation: rail-in 0.5s var(--ease-out) both;
+}
+#camp:not(.gone) #camp-nav button:nth-of-type(2) { animation-delay: 0.05s; }
+#camp:not(.gone) #camp-nav button:nth-of-type(3) { animation-delay: 0.1s; }
+#camp:not(.gone) #camp-nav button:nth-of-type(4) { animation-delay: 0.15s; }
+@keyframes rail-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0);
+  }
+}
+/* A light sweeps across a primary button when it is ready to be pressed. */
+#camp .btn:not(.ghost),
+.overlay .btn:not(.ghost) {
+  overflow: hidden;
+}
+#camp .btn:not(.ghost)::after,
+.overlay .btn:not(.ghost)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 36%, #fff6 50%, transparent 64%);
+  transform: translateX(-130%);
+  pointer-events: none;
+}
+#camp .btn:not(.ghost):hover:not(:disabled)::after,
+.overlay .btn:not(.ghost):hover:not(:disabled)::after {
+  transform: translateX(130%);
+  transition: transform 0.65s var(--ease-out);
+}
+#camp .btn:active:not(:disabled),
+#camp .card:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* Choose your weapon */
+.camp-page[data-enter] #loadout-weapons button,
+.preparation-build.swap #loadout-techniques button {
+  animation: camp-rise 0.34s var(--ease-out) both;
+}
+.camp-page[data-enter] #loadout-weapons button:nth-child(2),
+.preparation-build.swap #loadout-techniques button:nth-child(2) { animation-delay: 0.05s; }
+.camp-page[data-enter] #loadout-weapons button:nth-child(3),
+.preparation-build.swap #loadout-techniques button:nth-child(3) { animation-delay: 0.1s; }
+.camp-page[data-enter] #loadout-weapons button:nth-child(n + 4),
+.preparation-build.swap #loadout-techniques button:nth-child(4) { animation-delay: 0.15s; }
+.preparation-build.swap #loadout-name,
+.preparation-build.swap #loadout-description,
+.preparation-build.swap #loadout-stats,
+.relic-detail.swap > * {
+  animation: swap-in 0.34s var(--ease-out) both;
+}
+.preparation-build.swap #loadout-description,
+.relic-detail.swap > :nth-child(3) { animation-delay: 0.05s; }
+.preparation-build.swap #loadout-stats,
+.relic-detail.swap > :nth-child(n + 4) { animation-delay: 0.1s; }
+@keyframes swap-in {
+  from {
+    opacity: 0;
+    transform: translate3d(16px, 0, 0);
+  }
+}
+/* The stage catches the light when a new weapon is drawn. */
+.preparation-theatre::after,
+.relic-art::after,
+.hub-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 62%, #e9b76e55, transparent 62%);
+  opacity: 0;
+  pointer-events: none;
+}
+.preparation-theatre.flash::after,
+.relic-art.flash::after {
+  animation: stage-flash 0.65s ease-out;
+}
+.camp-page[data-enter] .hub-stage::after {
+  animation: stage-flash 0.9s ease-out 0.1s;
+}
+@keyframes stage-flash {
+  from {
+    opacity: 1;
+  }
+}
+#camp #loadout-weapons button {
+  transition:
+    transform 0.16s var(--ease-out),
+    border-color 0.16s,
+    background 0.16s,
+    box-shadow 0.16s;
+}
+#camp #loadout-weapons button:hover:not(:disabled) {
+  transform: translateX(4px);
+  border-color: var(--gold);
+}
+#camp #loadout-weapons button[aria-pressed="true"] {
+  box-shadow: inset 3px 0 0 var(--ember);
+}
+#camp #loadout-techniques button {
+  transition:
+    transform 0.16s var(--ease-out),
+    border-color 0.16s,
+    background 0.16s;
+}
+#camp #loadout-techniques button:hover {
+  transform: translateY(-2px);
+}
+#camp #loadout-techniques button.previewing {
+  border-color: var(--gold);
+  background: #2c2518;
+}
+#camp #loadout-stats b {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+#camp #loadout-start:not(:disabled) {
+  animation: cta-breathe 2.4s ease-in-out infinite;
+}
+@keyframes cta-breathe {
+  50% {
+    box-shadow:
+      inset 0 0 0 3px #30231730,
+      0 0 0 6px #e9b76e2e,
+      0 10px 34px #ab673f66;
+  }
+}
+
+/* Inventory */
+.camp-page[data-enter] .nft-card {
+  animation: card-deal 0.46s var(--ease-out) both;
+}
+.camp-page[data-enter] .nft-card:nth-child(1) { animation-delay: 0.1s; }
+.camp-page[data-enter] .nft-card:nth-child(2) { animation-delay: 0.17s; }
+.camp-page[data-enter] .nft-card:nth-child(3) { animation-delay: 0.24s; }
+.camp-page[data-enter] .nft-card:nth-child(n + 4) { animation-delay: 0.31s; }
+#camp .nft-card {
+  transition:
+    transform 0.22s var(--ease-out),
+    border-color 0.22s,
+    box-shadow 0.22s;
+}
+#camp .nft-card:hover {
+  transform: translateY(-4px);
+  border-color: #8f7a52;
+  box-shadow: 0 16px 34px #0009;
+}
+.nft-card img,
+.nft-crest .skill-icon {
+  transition: transform 0.4s var(--ease-out);
+}
+.nft-card:hover img,
+.nft-card:hover .nft-crest .skill-icon {
+  transform: scale(1.07);
+}
+.temper-step b:last-of-type {
+  animation: temper-next 1.6s ease-in-out infinite;
+}
+.temper-step b:only-of-type {
+  animation: none;
+}
+@keyframes temper-next {
+  50% {
+    color: #fff0cf;
+    text-shadow: 0 0 14px #e9b76e88;
+  }
+}
+
+/* Market */
+.camp-page[data-enter] .arsenal-choice {
+  animation: camp-rise 0.34s var(--ease-out) both;
+}
+.camp-page[data-enter] .arsenal-choice:nth-child(2) { animation-delay: 0.04s; }
+.camp-page[data-enter] .arsenal-choice:nth-child(3) { animation-delay: 0.08s; }
+.camp-page[data-enter] .arsenal-choice:nth-child(4) { animation-delay: 0.12s; }
+.camp-page[data-enter] .arsenal-choice:nth-child(n + 5) { animation-delay: 0.16s; }
+#camp .arsenal-choice {
+  transition:
+    transform 0.16s var(--ease-out),
+    border-color 0.16s,
+    background 0.16s,
+    box-shadow 0.16s;
+}
+#camp .arsenal-choice:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+}
+#camp .arsenal-choice.selected {
+  box-shadow: inset 0 -3px 0 var(--gold);
+}
+.market-metrics b {
+  font-variant-numeric: tabular-nums;
+}
+.exchange-card {
+  transition:
+    transform 0.2s var(--ease-out),
+    border-color 0.2s;
+}
+.exchange-card:hover {
+  transform: translateY(-3px);
+  border-color: #8f7a52;
+}
+
+/* ---------- Motion preferences ---------- */
+.calm .camp-page[data-leave] {
+  display: none;
+}
+.calm #camp *,
+.calm #camp::before,
+.calm #settings *,
+.calm .overlay,
+.calm .overlay * {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  transition-duration: 0.01ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .camp-page[data-leave] {
+    display: none;
+  }
+}
+
+#flow.strong { color:#e3b779; }
+#flow.master { color:#c4d9ce; text-shadow:0 2px 8px #060606; }
+/* The camp and descent share a short, quiet threshold. */
+#descent-curtain { position:fixed;inset:0;z-index:150;display:grid;place-items:center;background:#0c0b0a;color:#d6c3a1;font:clamp(24px,4vw,52px) var(--heading);letter-spacing:.14em;opacity:0;pointer-events:none; }
+#descent-curtain.descending { animation:descent-curtain .72s both; }
+#descent-curtain.returning { animation:descent-curtain .72s both reverse; }
+@keyframes descent-curtain { 0%{opacity:0;transform:translateY(12%)} 30%,65%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-8%)} }
+.page-loading {position:absolute;inset:0;z-index:8;background:#151410;display:flex;flex-direction:column;justify-content:center;gap:20px;padding:60px;color:#d5c4aa;pointer-events:all;}
+.page-loading i {height:90px;border:1px solid #75624755;background:linear-gradient(90deg,#302a20,#40392a,#302a20);background-size:200%;animation:loading-sweep 1.8s ease-in-out infinite;}
+@keyframes loading-sweep {to{background-position:200%}}
+.power-choice {transition:transform .28s ease,opacity .28s ease;}
+.decided .power-choice:not(.chosen){opacity:.18;transform:scale(.95)}
+.decided .power-choice.chosen{transform:translateY(-12px) scale(1.025);border-color:#dfc18c}
+.reward-flight{position:fixed;z-index:155;width:52px;height:52px;color:#e0c18c;pointer-events:none}
+#end-build{max-width:780px;margin:20px auto;color:#c5b79f;font-size:15px}
+#end-build>div{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+#end-build span{padding:7px 12px;border:1px solid #8a725340;border-radius:3px}
+.end-next{display:flex;justify-content:center;gap:12px;margin:20px 0}
+.calm #descent-curtain,.calm .reward-flight{display:none}
+.calm .power-choice,.calm #camp *,.calm #settings *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+
+.loadout-slot.just-learned{animation:learned-slot .8s ease-out;border-color:#d6c39b!important}
+@keyframes learned-slot{0%{background:#a68a50;transform:scale(1.06)}100%{background:#25231d;transform:scale(1)}}
+.vow-row-title{position:absolute;left:20px;max-width:190px;color:#c7bca6;font:20px var(--body)}
+.vow-row-title small{display:block;font-size:15px;margin-top:8px;color:#9d947f}
+.tree-map.atlas-overview .vow-row-title{display:none}
+/* Progress belongs beside the decision it describes. */
+#mint-steps{display:flex;gap:20px;list-style:none;padding:18px 0;margin:0;color:#807c75;font-size:12px}#mint-steps li{display:flex;gap:8px;align-items:center}#mint-steps b{display:grid;place-items:center;border:1px solid currentColor;width:25px;height:25px;border-radius:50%}#mint-steps .current{color:#e8c99b}#mint-steps .done{color:#9aaf93}
+#camp #loadout-weapons button{position:relative;padding-left:74px;min-height:72px}#camp #loadout-weapons img[data-relic-art]{position:absolute;left:8px;top:5px;width:60px;height:60px;object-fit:contain}.better{color:#a8bd93}.worse{color:#c18b7c}#loadout-stats em{font-size:12px;font-style:normal}.temper-outcome{border:1px solid #9aab80;background:#172016e8;color:#d6e4bb;padding:14px;font-family:var(--heading);font-size:19px!important;text-align:center}.temper-outcome.failed{border-color:#9c685c;color:#e1b4a8;background:#261a18e8}.temper-outcome small{display:block;margin-top:5px;font:11px var(--body)}
+#pause-build{max-width:520px;margin:16px auto;color:#c7bba5}#pause-build strong{font-size:18px}#pause-build p{font-size:12px;line-height:1.6}
+.tree-loadout-slots{position:relative}.quick-equip{position:absolute;right:0;top:100%;width:250px;padding:9px;background:#191713;border:1px solid #66533b;box-shadow:0 14px 32px #000b;z-index:30}.quick-equip button{display:block;width:100%;padding:13px;text-align:left;background:transparent;border:0;color:#d7c6a9;font:13px var(--body)}.quick-equip button:hover,.quick-equip button:focus-visible{background:#393025;outline:1px solid #a48b60}
+#action-bar .cooldown-number{position:absolute;right:5px;top:4px;font:700 18px/1 var(--heading);color:#e0c6a3;text-shadow:0 1px 5px #000;background:#17130ed9;border-radius:3px;padding:2px}#action-bar .cooldown-number:empty{display:none}#wave-progress{height:3px;background:#211c16;width:150px;margin:8px auto}#wave-progress i{display:block;height:100%;width:calc(var(--remaining,1)*100%);background:#b99a6b;transition:width .2s}#first-technique-hint{position:absolute;bottom:160px;left:50%;transform:translateX(-50%);font:600 12px var(--body);color:#d6c3a2;background:#171410e8;padding:10px 16px;border:1px solid #67543a}
+#camp.gone .camp-page{visibility:hidden}
+@media (prefers-reduced-motion:reduce){#camp *,#settings *,#descent-curtain{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+
+/* Compact labels stay with their circle instead of overlapping the following row. */
+#camp .tree-node.vow-node{width:200px;height:52px;min-height:52px}
+#camp .vow-node .node-orb{width:52px;height:52px;margin:0 auto}
+#camp .vow-node strong{top:58px;font-size:calc(16px * var(--label-scale,1));line-height:1.1;margin:0}
+#camp .vow-node small{top:86px;font-size:calc(13px * var(--label-scale,1));line-height:1.1;margin:0}
+#camp .vow-row-title{max-width:140px}

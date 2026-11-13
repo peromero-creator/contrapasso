@@ -179,6 +179,8 @@ export interface SimEvent {
     | "plunge";
   x: number;
   z: number;
+  /** Presentation identity for grouping damage; never part of player input. */
+  target?: number;
   bossMove?: "gaze" | "slam";
   ability?: AbilityId;
   stage?: "charge" | "release" | "pulse";
@@ -498,7 +500,7 @@ function hurtEnemy(w: World, e: Enemy, raw: number, dot = false) {
   e.hp -= dmg;
   e.flash = 0.14;
   if (!dot)
-    w.events.push({ type: "hit", x: e.x, z: e.z, amount: dmg, kind: e.kind });
+    w.events.push({ type: "hit", x: e.x, z: e.z, amount: dmg, kind: e.kind, target: e.id });
   if (
     !dot &&
     e.hp > 0 &&

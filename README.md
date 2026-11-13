@@ -13,15 +13,17 @@ npm run dev
 
 Open [localhost:5173](http://127.0.0.1:5173/). This starts the game and local referee together. A fresh checkout runs Solo locally; testnet writes require your own configured server credentials. See [NEAR setup](docs/NEAR.md).
 
-1. **Take the Descent → Solo** starts a server-issued run. WASD moves, mouse aims, hold click attacks, Space jumps, Shift (or right click) dashes. Attacking in the air dives along the aim and breaks the ground on landing. Every third attack has a weapon-specific finisher.
+1. **Take the Descent** opens Camp. Choose **Solo**, select your weapon and start a server-issued run. WASD moves, mouse aims, hold click attacks, Space jumps, Shift (or right click) dashes. Attacking in the air dives along the aim and breaks the ground on landing. Every third attack has a weapon-specific finisher.
 2. Unlock skills with Solo coin in the weapon, spell and soul-vow skill tree. Clear a circle → choose a rank for one of your unlocked powers with the mouse or **1 / 2 / 3** → enter the lit gate. Powers stack to rank 3.
-3. Finish → the referee verifies the replay and saves earned coin. **Skill Tree** opens the coin-funded skill tree. **Try Same Descent** repeats the seed with your currently owned gear and training.
-4. The skill-tree forge also tempers equipped gear from +0 to +9 with earned coin. **Inventory** lists dynamic NFTs, equips relics and claims a champion into an existing testnet wallet.
+3. Finish → the referee verifies the replay and saves earned coin. **Skills** opens your coin-funded paths. **Try Same Descent** repeats the seed with your currently owned gear and training.
+4. **Inventory** tempers equipped gear from +0 to +9 with earned coin, lists dynamic NFTs, equips relics and claims a champion into an existing testnet wallet.
 5. **The Reliquary** reserves a chosen long sword, war hammer, dagger, hand crossbow, soul staff, executioner axe or war spear with 10 coin, then mints it for 0.01 test NEAR. The current edition has 100 pieces; repeated mints each require fresh coin access and native payment. A bounded demo grant covers guest testnet gas. Mint revenue stays in the owner-controlled application treasury; there are no new tickets or raffle distributions.
 6. **Player Market** lists unequipped tradable weapon NFTs for 0.001–1 test NEAR. Purchases preserve the token’s upgrades and history; 90% becomes seller proceeds and 10% enters the treasury. Withdraw proceeds from the same screen.
 7. With testnet connected, **Duel** lists matched defenders. Both vaults stake 10 coin; the winner takes 20. Fights last up to 90 seconds. Forfeit or abandonment loses the challenger stake. Enable defense to let others challenge your build.
 
 Escape pauses; losing focus also pauses. 1–4 trigger learned techniques for the equipped weapon. Q casts the spell selected in the skill tree (Soul Lance, Cinder Circle or Blood Thread). R releases an attuned soul core at 100% charge; N restarts Solo. Sound defaults off; M enables it. [Silent mode](http://127.0.0.1:5173/?silent=1) hard-disables audio. The development-only `?silent=1&autoplay=1` bot still requires manual power choices.
+
+Camp has a fixed navigation rail for Descent, Skills, Inventory and Market. Skills supports keyboard navigation, cancellable hold-to-learn, an affordable next-technique cue and direct Q/R selection. Settings controls sound, camera shake, pixel density, fullscreen and menu motion. Hidden model previews stop drawing during play.
 
 ## Features and status
 
@@ -33,7 +35,8 @@ Escape pauses; losing focus also pauses. 1–4 trigger learned techniques for th
 - Asynchronous Duel with saved builds, power matching, defense, escrow, rival health bar and reconnect checkpoints.
 - Seven tradable weapon archetypes, dark model portraits and a silent attack preview.
 - NFT weapons with distinct reach, speed, damage and matching hand-attached models/animations. Upgrades and kill history remain on the token.
-- A wider arena, restorative blood vessels, five distinct perimeter compositions, carved funerary niches, an ambient ferryman and many-faced shore spider.
+- A wider arena, restorative blood vessels, five painted north walls, a carved exit, separate boss floors, stone borders, authored braziers and themed props, an ambient ferryman and many-faced shore spider.
+- Readable skill layers: family-specific contact marks, lasting ultimate aftermath, grouped damage numbers and a cosmetic FLOW chain with a short weapon trail at ×5. Enemy warnings draw above player effects.
 - 2.5D presentation: an orthographic camera over painted floors, matte outlined characters, blob shadows, restrained hit feedback, knockback, blood splats and engraved vitality readouts.
 - Art pipeline: concept images, Meshy image-to-3D with rig and preset animations, then local clip trimming, Meshopt compression and a runtime fallback to placeholder shapes.
 
@@ -66,10 +69,10 @@ For a production-bundle preview, run `npm run referee` and `npm run preview` in 
 
 TypeScript, Vite, three.js, NEAR SDK JS / contract standards / near-api-js / near-workspaces, glTF Transform and meshoptimizer. Typography: Cinzel, Barlow and Barlow Condensed via Google Fonts.
 
-The title illustration, weapon and ambient-creature concepts, five painted floors and character concept images were generated with Google Flow (Nano Banana 2.1). The hero and enemy models, rigs and animation clips were generated with Meshy from those concepts (`art/source/`). Interface icons, effects and fallback placeholder actors were created for this project. The Divine Comedy provides public-domain circle names and the contrapasso idea; the protagonist and game are original. Preserve actual asset licenses when adding exports. Source code is [MIT licensed](LICENSE), © 2026 peromero-creator. Generated project art retains the applicable Flow/Meshy service terms; third-party dependencies retain their own licenses.
+The title illustration, weapon and ambient-creature concepts, five circle floors, three boss floors, painted gates, perimeter art and character concepts were generated with Google Flow (Nano Banana 2.1). The hero and enemy models, rigs and animation clips were generated with Meshy from those concepts (`art/source/`). Interface icons, effects and fallback placeholder actors were created for this project. The Divine Comedy provides public-domain circle names and the contrapasso idea; the protagonist and game are original. Preserve actual asset licenses when adding exports. Source code is [MIT licensed](LICENSE), © 2026 peromero-creator. Generated project art retains the applicable Flow/Meshy service terms; third-party dependencies retain their own licenses.
 
 ### Optional bosses and training
 
 Clear circle II, IV or V, choose your upgrade, then approach the carved double door and press **E** (or select **Enter**). Defeat its boss to return with one extra run upgrade. The ordinary lit exit skips the encounter; on circle V it finishes the descent. Boss gates are optional and cannot be repeated within a circle.
 
-Open **Skill Tree** to see all 42 learnable skills on one map. Drag or scroll to explore, select a weapon category to focus its region, and use **All paths** to fit the whole atlas. Hold **Learn** to spend the displayed earned-coin cost; releasing early cancels. Q and R selections share existing training where indicated.
+Open **Skills** to start with the equipped weapon’s path; **All paths** shows all 42 learnable skills on one map. Drag or scroll to explore, select a weapon category to focus its region, and use **All paths** to fit the whole atlas. Hold **Learn** to spend the displayed earned-coin cost; releasing early cancels. Q and R selections share existing training where indicated.

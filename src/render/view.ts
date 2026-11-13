@@ -1,3 +1,5 @@
+import { WeaponTrail } from "./weapon-trail";
+import { EnvironmentArt } from "./environment-art";
 import { BossGate } from './boss-gate';
 import { bossMove, bossWindup, SLAM_RADIUS } from '../sim/bosses.ts';
 import { PresentationSample } from "./presentation-sample.ts";
@@ -6,11 +8,13 @@ import { techniqueId, TECHNIQUES } from "../sim/techniques";
 import { abilityClip } from "./weapon-pose";
 import { Afterimages } from "./afterimages.ts";
 import { SoulFx } from "./soul-fx";
-import { CAST_TIME, CORE_TIME, abilityDuration } from "../sim/abilities";
+import { CAST_TIME, CORE_TIME, abilityContact, abilityDuration } from "../sim/abilities";
+import { skillInk } from "./skill-ink.ts";
+import { SkillWeight, skillTier } from "./skill-weight";
 import { attackClip, orientWeapon, mountGrip, starterWeapon } from "./weapon-pose";
 import { Gore } from "./gore";
 import { ImpactFx, softTexture } from "./impact";
-import { combatLift, type CombatMotion } from "./combat-motion";
+import { CARRY_LIMIT, SKILL_CARRY, skillTail, combatLift, type CombatMotion } from "./combat-motion";
 import { clearTransientEffects } from "./arena-reset.ts";
 import { weapon, WEAPON_IDS, type WeaponId } from "../sim/weapons";
 import { Underworld } from "./dressing";
@@ -133,6 +137,10 @@ interface Particle {
 }
 
 interface DamageText {
+  target?: number;
+  total: number;
+  sinceHit: number;
+  canvas: HTMLCanvasElement;
   sprite: THREE.Sprite;
   life: number;
   size: number;
@@ -205,8 +213,9 @@ export class View {
    * Retain these materials so the program cache survives until the first wave. */
   prepare() {
     return this.preparation ??= (async () => {
-      await Promise.all([...this.actorLoads, this.bossGate.ready]);
-      await Promise.all(CIRCLES.map(c=>this.models.floor(c.name).then(t=>{if(t)this.renderer.initTexture(t);})));
+      await Promise.all([...this.actorLoads, this.bossGate.ready, this.environment.ready, this.underworld.ready]);
+      this.environment.prepare(this.renderer);
+      await Promise.all([...CIRCLES.map(c=>c.name),'BOSS_WARDEN','BOSS_WITNESS','BOSS_CANTOR'].map(name=>this.models.floor(name).then(t=>{if(t)this.renderer.initTexture(t);})));
       const models = await Promise.all(['imp', 'archer', 'brute', 'warden', 'witness', 'cantor'].map(kind => this.models.create(kind)));
       const warmup = new THREE.Scene();
       const textures = new Set<THREE.Texture>();
@@ -221,6 +230,7 @@ export class View {
       }
       for (const texture of textures) this.renderer.initTexture(texture);
       await this.soul.prepare();
+      for(const id of ['sword-1','hammer-1','axe-1','dagger-1','spear-1','crossbow-1','staff-1','ember','ash','iron'] as const)this.renderer.initTexture(skillInk(id));
       // Exercise material variants while the preparation screen still covers the
       // arena. No world is stepped and no gameplay/chain event is produced.
       for (const ability of ['ember', 'iron', 'ash', 'staff-4', 'hammer-4', 'siphon-spell', 'nova-spell'] as const) {
@@ -302,9 +312,19 @@ export class View {
   private leanAxis = new THREE.Vector3();
   private leanQ = new THREE.Quaternion();
   private calm = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.3 : 1;
+  /** Player preference for camera shake, kick and punch only; framing is unaffected. */
+  private shakeScale = 1;
+  private areaZoom=0;
+  setQuality(cap:number){this.renderer.setPixelRatio(Math.min(window.devicePixelRatio,cap));this.resize();}
+  setShake(scale: number) { this.shakeScale = Math.min(1, Math.max(0, scale)); }
   private soul = new SoulFx(this.scene, true);
   private previousCast = 0;
   private afterimages!: Afterimages;
+  private skillWeight = new SkillWeight(this.scene);
+  private weaponTrail = new WeaponTrail(this.scene);
+  /** Skills cast back to back, for the HUD's flow counter. */
+  get flow() { return this.skillWeight.chain; }
+  get bestFlow() { return this.skillWeight.peakChain; }
   private echoCd = 0;
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   private viewH = VIEW_HEIGHT;
@@ -321,6 +341,16 @@ export class View {
   private heroModel: AnimatedModel | null = null;
   private previousHero = new THREE.Vector2();
   private previousHeroSwing = -1;
+  /** Follow-through carried into the recovery window: which swing, and its swing + recovery length. */
+  private carrySwing = -1;
+  private carryWeapon = "";
+  private carryTotal = 0;
+  /** The same carry for skills: which cast is settling, and for how long it has been. */
+  private carryCast = -1;
+  private carryAbility: import("../sim/abilities").AbilityId | null = null;
+  private carryAfter = 0;
+  private heroFacing: number | null = null;
+  private dashStretch = 0;
   private baseGround: THREE.Texture | null = null;
 
   private ground!: THREE.Mesh;
@@ -429,7 +459,7 @@ export class View {
   private boltMat = new THREE.MeshBasicMaterial({ color: 0xc4bba5 });
   private soulMat = new THREE.MeshBasicMaterial({ color: 0x9eada9 });
   private shotMat = new THREE.MeshBasicMaterial({ color: 0xff6a3a });
-  private portal = new THREE.Group();
+  private environment = new EnvironmentArt(this.scene);
   private bossGate = new BossGate();
   private particles: Particle[] = [];
   private pGeo = new THREE.OctahedronGeometry(0.1, 0);
@@ -443,7 +473,16 @@ export class View {
   private damageTexts: DamageText[] = [];
   private pulses: Pulse[] = [];
 
-  private damageText(x: number, z: number, text: string, color: string, y = 2, size = 1) {
+  private damageText(x: number, z: number, text: string, color: string, y = 2, size = 1, target?: number) {
+    const grouped = target === undefined ? undefined : this.damageTexts.find(t => t.target === target && t.sinceHit < .25 && t.life > 0);
+    if (grouped) {
+      grouped.total += Number(text); grouped.sinceHit = 0; grouped.life = .65;
+      grouped.size = Math.min(1.5, Math.max(grouped.size,size) + .035);
+      const ctx = grouped.canvas.getContext('2d')!;
+      ctx.clearRect(0,0,256,128);ctx.strokeText(String(grouped.total),128,82);ctx.fillStyle=color;ctx.fillText(String(grouped.total),128,82);
+      grouped.sprite.material.map!.needsUpdate=true;
+      return;
+    }
     if (this.damageTexts.length >= 40) return;
     const canvas = document.createElement("canvas");
     canvas.width = 256;
@@ -468,7 +507,7 @@ export class View {
     sprite.scale.set(1.5, 0.75, 1);
     sprite.renderOrder = 20;
     this.scene.add(sprite);
-    this.damageTexts.push({ sprite, life: 0.65, size });
+    this.damageTexts.push({ sprite, life: 0.65, size, target, total:Number(text), sinceHit:0, canvas });
   }
 
   private pulse(x: number, z: number, radius: number) {
@@ -517,7 +556,7 @@ export class View {
     this.scene.add(this.ground);
     this.underworld = new Underworld(this.scene, this.models);
 
-    // the void around the arena, a dark stone rim and a thin glowing edge
+    // A dark ground surrounds the authored stone border.
     const flat = (
       w: number,
       d: number,
@@ -540,26 +579,6 @@ export class View {
       0,
       new THREE.MeshBasicMaterial({ color: 0x030203 }),
     );
-    flat(
-      ARENA_HX * 2 + 1.8,
-      ARENA_HZ * 2 + 1.8,
-      0,
-      -0.04,
-      0,
-      new THREE.MeshBasicMaterial({ color: 0x0d0a0b }),
-    );
-    const edge = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.5,
-      blending: THREE.NormalBlending,
-      depthWrite: false,
-    });
-    this.rimMats.push(edge);
-    flat(ARENA_HX * 2 + 0.3, 0.12, 0, 0.01, -ARENA_HZ - 0.08, edge);
-    flat(ARENA_HX * 2 + 0.3, 0.12, 0, 0.01, ARENA_HZ + 0.08, edge);
-    flat(0.12, ARENA_HZ * 2 + 0.3, -ARENA_HX - 0.08, 0.01, 0, edge);
-    flat(0.12, ARENA_HZ * 2 + 0.3, ARENA_HX + 0.08, 0.01, 0, edge);
 
     const sigMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -788,51 +807,34 @@ export class View {
   }
 
   private buildPortal() {
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xffd27a,
-      transparent: true,
-      opacity: 0.55,
-      blending: THREE.NormalBlending,
-      depthWrite: false,
-    });
-    const ring = new THREE.Mesh(new THREE.RingGeometry(1.3, 1.45, 48), mat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.04;
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0xffb040,
-      transparent: true,
-      opacity: 0.065,
-      blending: THREE.NormalBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.3, 1.3, 2, 24, 1, true),
-      beamMat,
-    );
-    beam.position.y = 1;
-    this.portal.add(ring, beam);
-    this.portal.position.set(PORTAL.x, 0, PORTAL.z);
-    this.portal.visible = false;
-    this.scene.add(this.portal, this.bossGate.root);
+    this.scene.add(this.bossGate.root);
+    this.actorLoads.push(this.models.create('gate-threshold', .85).then(model => {
+      if (!model) return;
+      model.root.position.set(0, -.08, .55);
+      this.bossGate.root.add(model.root);
+    }));
   }
 
-  private clearArenaEffects() {
+  private clearArenaEffects(resetRun = false) {
     this.gore.clear();
     this.impact.clear();
     this.soul.clear();
+    this.skillWeight.clear(resetRun);
     clearTransientEffects(this.scene,
       [this.cracks, this.splats, this.pulses, this.particles],
       this.damageTexts, []);
-    this.afterimages.clear();
+    this.afterimages.clear();this.weaponTrail.clear();
     this.squashT = this.squashAmp = this.dustCd = this.echoCd = 0;
     for (const c of this.fallen) this.disposeEnemy(c.view);
     this.fallen = [];
   }
 
-  setCircle(i: number) {
+  private floorKey="";
+  setCircle(i: number, floorName?:string) {
     const idx = Math.max(0, Math.min(CIRCLES.length - 1, i));
-    if (idx === this.circle) return;
+    const key=floorName??CIRCLES[idx].name;
+    if (idx === this.circle && key===this.floorKey) return;
+    this.floorKey=key;
     this.circle = idx;
     this.clearArenaEffects();
     const c = CIRCLES[idx];
@@ -840,11 +842,12 @@ export class View {
     (this.ground.material as THREE.MeshBasicMaterial).color.setHex(c.tint);
     for (const m of this.rimMats) m.color.setHex(0x776856);
     this.key.color.setHex(c.light);
+    this.bossGate.setTint(c.light);
     (this.sigil.material as THREE.MeshBasicMaterial).color.setHex(c.glow);
     for (const l of this.torches) l.color.setHex(c.glow);
     for (const m of this.torchMats) m.emissive.setHex(c.glow);
-    void this.models.floor(c.name).then((texture) => {
-      if (this.circle !== idx) return;
+    void this.models.floor(key).then((texture) => {
+      if (this.floorKey !== key) return;
       const material = this.ground.material as THREE.MeshBasicMaterial;
       material.map = texture ?? this.baseGround;
       // painted floors are dimmed a little so the actors stand out
@@ -1052,6 +1055,16 @@ export class View {
     let stop = 0;
     const glow = CIRCLES[this.circle]?.glow ?? 0xffa040;
     for (const e of events) {
+      // A player's skill is felt: its area stamps the floor, the camera answers, and older
+      // effects yield so the newest one reads clearly when skills are chained.
+      const weight = this.skillWeight.event(e);
+      if (weight) {
+        if (weight.contact) this.soul.recede(0.6);
+        this.punch = Math.max(this.punch, weight.punch);
+        this.shake = Math.max(this.shake, weight.shake);
+        stop = Math.max(stop, weight.stop);
+        if (weight.handoff && this.heroModel) this.afterimages.emit(this.hero);
+      }
       this.soul.event(e, e.side === "enemy" ? this.rivalWeapon : this.equippedWeapon);
       switch (e.type) {
         case "swing":
@@ -1067,7 +1080,7 @@ export class View {
           const heavy = (e.amount ?? 0) > 40;
           const hx = e.x - this.hero.position.x, hz = e.z - this.hero.position.z;
           const hl = Math.hypot(hx, hz) || 1;
-          this.damageText(e.x, e.z, String(e.amount ?? 0), heavy ? "#ffd59a" : "#e8dcc5", 2, heavy ? 1.35 : 1);
+          this.damageText(e.x, e.z, String(e.amount ?? 0), heavy ? "#ffd59a" : "#e8dcc5", 2, heavy ? 1.35 : 1, e.target);
           this.burst(e.x, 1.1, e.z, 3, 0x9c7154, 3);
           this.blood(e.x, e.z, 12, 1.0);
           const fin = this.finisherT > 0;
@@ -1188,7 +1201,7 @@ export class View {
     const battlefieldChanged =
       w.tick < this.lastWorldTick || visualCircle !== this.circle;
     if (w.tick < this.lastWorldTick) {
-      this.clearArenaEffects();
+      this.clearArenaEffects(true);
       this.lastImpactTime = -1;
       this.stride.set(0, 0);
       this.liftPeak = this.finisherT = this.airY = this.diveFrom = this.plungeT = 0;
@@ -1197,14 +1210,14 @@ export class View {
     }
     this.lastWorldTick = w.tick;
     this.time += dt;
-    this.setCircle(visualCircle);
+    this.setCircle(visualCircle,chamberVisible?`BOSS_${w.floor===2?'WARDEN':w.floor===4?'WITNESS':'CANTOR'}`:undefined);
     const p = w.player;
     if (
       p.weaponId !== this.equippedWeapon ||
       p.weaponLevel !== this.weaponLevel
     )
       this.useWeapon(p.weaponId, p.weaponLevel);
-    this.underworld.sync(w, dt, visualCircle);
+    this.underworld.sync(w, dt, visualCircle, chamberVisible);
     this.bossGate.update(w, dt);
     if (battlefieldChanged) this.soul.clear();
     this.slashMat.color.setHex(weapon(p.weaponId).color);
@@ -1229,14 +1242,53 @@ export class View {
     this.stride.multiplyScalar(Math.exp(-dt * 26));
     if (battlefieldChanged) this.stride.set(0, 0);
     this.finisherT -= dt;
-    const rawMotion: CombatMotion | undefined = w.phase === 'dead' || p.dashT > 0 || p.jumpT > 0 ? undefined : p.castT > 0 ? {
-      weapon: p.weaponId, ability: p.castId, elapsed: abilityDuration(p.castId!) - p.castT, combo: Number(p.castId?.split('-')[1]) || 1,
-    } : p.swingT > 0 ? { weapon: p.weaponId, elapsed: weapon(p.weaponId).swing-p.swingT, combo:p.swingN } : undefined;
-    const sampled = this.heroSample.sample(w.tick, p.x, p.z, `${p.weaponId}:${p.castT>0?'cast:'+p.castN:'swing:'+p.swingN}`, rawMotion, alpha, battlefieldChanged);
+    // A swing's follow-through keeps playing through the short recovery that follows it,
+    // so a held chain flows strike to strike instead of dropping to idle for a few frames.
+    // Purely presentational: the hit, its timing and the cooldown are read, never changed.
+    const blade = weapon(p.weaponId);
+    if (battlefieldChanged || w.phase === 'dead' || p.dashT > 0 || p.jumpT > 0 || p.castT > 0 || this.plungeT > 0) this.carrySwing = -1;
+    else if (p.swingT > 0) {
+      this.carrySwing = p.swingN;
+      this.carryWeapon = p.weaponId;
+      this.carryTotal = p.attackCd + (blade.swing - p.swingT);
+    }
+    const tail = Math.min(this.carryTotal, blade.swing + CARRY_LIMIT);
+    const recovered = this.carryTotal - p.attackCd;
+    const carrying = p.swingT <= 0 && p.attackCd > 0 && this.carrySwing === p.swingN && this.carryWeapon === p.weaponId &&
+      recovered < tail && !(this.heroMoving && recovered > blade.swing + .1);
+    // Skills settle the same way: the release keeps unwinding for a moment after the cast
+    // time ends, unless a strike, another skill, a dash or a jump takes over.
+    if (battlefieldChanged || w.phase === 'dead' || p.dashT > 0 || p.jumpT > 0 || p.swingT > 0 || this.plungeT > 0) this.carryCast = -1;
+    else if (p.castT > 0) {
+      this.carryCast = p.castN;
+      this.carryAbility = p.castId;
+      this.carryAfter = 0;
+    } else if (this.carryCast === p.castN) this.carryAfter += dt;
+    const settling = p.castT <= 0 && this.carryCast === p.castN && !!this.carryAbility && this.carryCast >= 0 &&
+      this.carryAfter < SKILL_CARRY && !(this.heroMoving && this.carryAfter > .08);
+    const skill = p.castT > 0 ? p.castId : settling ? this.carryAbility : null;
+    const skillLength = skill ? abilityDuration(skill) : 0;
+    const rawMotion: CombatMotion | undefined = w.phase === 'dead' || p.dashT > 0 || p.jumpT > 0 ? undefined : skill ? {
+      weapon: p.weaponId, ability: skill, elapsed: p.castT > 0 ? skillLength - p.castT : skillLength + this.carryAfter, combo: Number(skill.split('-')[1]) || 1, tail: skillTail(skill),
+    } : p.swingT > 0 ? { weapon: p.weaponId, elapsed: blade.swing-p.swingT, combo:p.swingN, tail }
+      : carrying ? { weapon: p.weaponId, elapsed: recovered, combo: p.swingN, tail } : undefined;
+    const sampled = this.heroSample.sample(w.tick, p.x, p.z, `${p.weaponId}:${skill?'cast:'+p.castN:'swing:'+p.swingN}`, rawMotion, alpha, battlefieldChanged);
     this.hero.position.set((p.swingT > 0 ? p.x : sampled.x) + this.stride.x, 0, (p.swingT > 0 ? p.z : sampled.z) + this.stride.y);
     this.soul.sync(w, dt, this.hero.position);
-    this.hero.rotation.y = -dirAngle(p.castT > 0 ? p.castAim : p.aim);
+    this.skillWeight.update(dt);
+    // Turn through the shortest arc in a few frames rather than snapping to a new aim
+    // between a strike and the next strike or skill.
+    const faceTo = -dirAngle(p.castT > 0 ? p.castAim : p.aim);
+    if (this.heroFacing === null || battlefieldChanged || dt <= 0) this.heroFacing = faceTo;
+    else {
+      const turn = Math.atan2(Math.sin(faceTo - this.heroFacing), Math.cos(faceTo - this.heroFacing));
+      this.heroFacing += turn * (1 - Math.exp(-dt * 34));
+    }
+    this.hero.rotation.y = this.heroFacing;
     const dashing = p.dashT > 0;
+    // The dash stretch eases in and out instead of popping on its first and last frame.
+    this.dashStretch = battlefieldChanged ? 0 : this.dashStretch + ((dashing ? 1 : 0) - this.dashStretch) * (1 - Math.exp(-dt * 30));
+    const stretch = this.dashStretch;
     // The simulation only knows "in the air"; the arc is drawn here, and a dive falls from wherever it began.
     if (p.jumpT > 0 && !p.plunge) {
       this.airY = JUMP_HEIGHT * Math.sin(Math.PI * (1 - p.jumpT / JUMP_TIME));
@@ -1254,16 +1306,19 @@ export class View {
     const spec = weapon(p.weaponId);
     const sw = p.swingT > 0 ? 1 - p.swingT / spec.swing : -1;
     const at = (spec.impactDelay ?? spec.swing * 0.35) / spec.swing;
-    const thrust = sw >= 0 ? Math.exp(-((sw - at) ** 2) / 0.012) : 0;
+    // Skills stretch the body into their contact the same way, harder for capstones and ultimates.
+    const cast = skill && p.castT > 0 ? 1 - p.castT / skillLength : -1;
+    const drive = cast >= 0 ? Math.exp(-((cast - abilityContact(skill!) / skillLength) ** 2) / 0.006) * (skillTier(skill!) === 3 ? 1.6 : 1.1) : 0;
+    const thrust = (sw >= 0 ? Math.exp(-((sw - at) ** 2) / 0.012) : 0) + drive;
     const recoil = p.flash > 0 ? Math.sin(Math.min(1, p.flash / 0.25) * Math.PI) * 0.1 : 0;
     // In the air the body stretches with its speed; the landing squashes it flat for a beat.
     const rush = !airborne ? 0 : p.plunge ? 1.25 : Math.abs(Math.cos(Math.PI * (1 - p.jumpT / JUMP_TIME)));
     this.squashT -= dt;
     const squash = this.squashT > 0 && !airborne ? this.squashAmp * Math.sin((this.squashT / 0.15) * Math.PI) : 0;
     this.hero.scale.set(
-      dashing ? 1.35 : 1 + 0.09 * thrust - 0.5 * recoil - 0.08 * rush + 0.8 * squash,
-      dashing ? 0.8 : 1 - 0.04 * thrust + recoil + 0.17 * rush - squash,
-      1 + (dashing ? 0 : 0.5 * recoil - 0.08 * rush + 0.8 * squash),
+      (1 + 0.09 * thrust - 0.5 * recoil - 0.08 * rush + 0.8 * squash) * (1 - stretch) + 1.35 * stretch,
+      (1 - 0.04 * thrust + recoil + 0.17 * rush - squash) * (1 - stretch) + 0.8 * stretch,
+      1 + (0.5 * recoil - 0.08 * rush + 0.8 * squash) * (1 - stretch),
     );
     const blink = false;
     this.hero.visible = (w.phase !== "dead" || !!this.heroModel) && !blink;
@@ -1278,30 +1333,31 @@ export class View {
       this.heroModel.play(
         w.phase === "dead"
           ? "death"
-          : p.castT > 0
-            ? abilityClip(p.castId!, p.weaponId)
+          : skill
+            ? abilityClip(skill, p.weaponId)
             : airborne
               ? p.plunge ? "ultimate-slam" : "attack-vault"
             : this.plungeT > 0
               ? "ultimate-slam"
             : dashing
               ? "dash"
-              : p.swingT > 0
+              : p.swingT > 0 || carrying
                 ? attackClip(p.weaponId, p.swingN)
                 : moving
                   ? "run"
                   : "idle",
-        p.castT > 0
-          ? abilityDuration(p.castId!)
+        skill
+          ? skillLength
           : airborne && !p.plunge
             ? JUMP_TIME * 1.6
           : airborne || this.plungeT > 0
             ? PLUNGE_FALL + 0.3
-          : p.swingT > 0
+          : p.swingT > 0 || carrying
             ? weapon(p.weaponId).swing
             : undefined,
         (p.castT > 0 && p.castN !== this.previousCast) ||
           (p.swingT > 0 && p.swingN !== this.previousHeroSwing),
+        skill ? Math.min(.22,abilityContact(skill)*.8) : undefined,
       );
       this.heroModel.flash(p.flash > 0.19 ? 0xa8382a : p.flash > 0 ? 0x401b16 : null);
       const motion = sampled.motion;
@@ -1334,6 +1390,8 @@ export class View {
     if (battlefieldChanged) this.afterimages.clear();
     this.afterimages.update(dt);
     this.swordGrip.localToWorld(this.weaponGlow.position.set(.8, 0, 0));
+    const trailSpec=weapon(p.weaponId),flow=this.skillWeight.chain>=5;
+    this.weaponTrail.update(dt,this.swordGrip,!!p.castT||(flow&&p.swingT>0),trailSpec.ranged==='bolt'?.7:Math.max(.7,(trailSpec.height??1.7)-(trailSpec.model==='spear'?1.05:.15)),trailSpec.color,flow);
     this.previousHeroSwing = p.swingN;
     this.previousCast = p.castN;
     this.previousHero.set(p.x, p.z);
@@ -1485,12 +1543,7 @@ export class View {
       this.shots.delete(id);
     }
 
-    // portal
-    this.portal.visible = w.phase === "cleared";
-    if (this.portal.visible) {
-      const k = 1 + Math.sin(this.time * 5) * 0.06;
-      this.portal.scale.set(k, 1, k);
-    }
+    this.environment.sync(w,chamberVisible);
     for (const m of this.torchMats)
       m.emissiveIntensity = 0.4 + Math.sin(this.time * 1.2 + m.id) * 0.03;
 
@@ -1499,6 +1552,7 @@ export class View {
     // particles
     for (const text of this.damageTexts) {
       text.life -= dt;
+      text.sinceHit += dt;
       const age = 0.65 - text.life;
       // Numbers punch in oversized, settle, then drift.
       const pop = age < 0.06 ? 0.6 + 0.75 * (age / 0.06) : 1.35 - 0.35 * Math.min(1, (age - 0.06) / 0.1);
@@ -1565,10 +1619,13 @@ export class View {
     if (this.shake < 0.003) this.shake = 0;
     this.kick.multiplyScalar(Math.exp(-dt * 13));
     this.punch *= Math.exp(-dt * 10);
-    const t = this.time, amp = this.shake * this.calm;
-    const sx = (Math.sin(t * 91) + Math.sin(t * 57 + 1.3)) * 0.5 * amp + this.kick.x * this.calm;
-    const sz = (Math.sin(t * 83 + 2.1) + Math.sin(t * 49)) * 0.5 * amp + this.kick.y * this.calm;
-    const zoom = 1 + (this.punch < 0.0005 ? 0 : this.punch * this.calm);
+    const jolt = this.calm * this.shakeScale;
+    const t = this.time, amp = this.shake * jolt;
+    const sx = (Math.sin(t * 91) + Math.sin(t * 57 + 1.3)) * 0.5 * amp + this.kick.x * jolt;
+    const sz = (Math.sin(t * 83 + 2.1) + Math.sin(t * 49)) * 0.5 * amp + this.kick.y * jolt;
+    const areaTarget=p.castT>0&&p.castId&&skillTier(p.castId)===3?.045:0;
+    this.areaZoom+=(areaTarget-this.areaZoom)*(1-Math.exp(-dt*4));
+    const zoom = 1 - this.areaZoom*jolt + (this.punch < 0.0005 ? 0 : this.punch * jolt);
     if (this.camera.zoom !== zoom) {
       this.camera.zoom = zoom;
       this.camera.updateProjectionMatrix();

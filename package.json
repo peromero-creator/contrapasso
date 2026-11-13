@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "referee": "node server/index.ts",
-    "test": "node scripts/simtest.ts && node scripts/refereetest.ts && node scripts/dueltest.ts && node scripts/bridgetest.mjs && node scripts/contract-rules-test.mjs && node scripts/markettest.mjs && node scripts/assettest.mjs && node scripts/expansiontest.ts && node scripts/near-state-test.ts && node scripts/rangedtest.ts && node scripts/exchangetest.mjs && node scripts/meleetest.ts && node scripts/animationtest.ts && node scripts/render-regression-test.ts && node scripts/soultest.ts && node scripts/techniquetest.ts && node scripts/loadouttest.ts && node scripts/controltest.ts && node scripts/jumptest.ts && node scripts/chain-regression-test.ts && node scripts/bosstest.ts",
+    "test": "node scripts/simtest.ts && node scripts/refereetest.ts && node scripts/dueltest.ts && node scripts/bridgetest.mjs && node scripts/contract-rules-test.mjs && node scripts/markettest.mjs && node scripts/assettest.mjs && node scripts/expansiontest.ts && node scripts/near-state-test.ts && node scripts/rangedtest.ts && node scripts/exchangetest.mjs && node scripts/meleetest.ts && node scripts/animationtest.ts && node scripts/render-regression-test.ts && node scripts/soultest.ts && node scripts/techniquetest.ts && node scripts/loadouttest.ts && node scripts/controltest.ts && node scripts/jumptest.ts && node scripts/chain-regression-test.ts && node scripts/bosstest.ts && node scripts/polish-test.ts",
     "assets": "node scripts/assets.mjs",
     "contract:build": "node scripts/contract-build.mjs",
     "near:prepare": "node scripts/near-prepare.ts",

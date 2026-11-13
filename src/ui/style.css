@@ -64,7 +64,7 @@ h2 {
   letter-spacing: -0.015em;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.6;
   font-weight: 700;
   letter-spacing: 0.17em;
@@ -144,7 +144,7 @@ h2 {
   color: var(--bone);
 }
 kbd {
-  font: 600 9px var(--body);
+  font: 600 11px var(--body);
   padding: 3px 5px;
   border: 1px solid #5e564a;
   border-bottom-width: 2px;
@@ -243,7 +243,7 @@ kbd {
 }
 .landing-top {
   top: 30px;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   color: var(--muted);
 }
@@ -292,7 +292,7 @@ h1 {
   color: #cabbaa;
 }
 .landing-note {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   color: #b49b86;
   margin-top: 20px;
@@ -363,7 +363,7 @@ h1 {
   margin: 2px 0 6px;
 }
 .champion-panel p {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.08em;
 }
@@ -383,7 +383,7 @@ h1 {
   align-items: center;
   gap: 10px;
   margin-left: auto;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
 }
 .champion-bank b {
@@ -395,7 +395,7 @@ h1 {
   align-items: center;
   gap: 14px;
   margin: 28px 0 14px;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   color: var(--muted);
 }
@@ -445,7 +445,7 @@ h1 {
   background: linear-gradient(145deg, #66402a, #252018 75%);
 }
 .card-k {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   color: var(--gold);
 }
@@ -481,24 +481,6 @@ h1 {
 #mode-duel:after {
   content: "II";
 }
-.training-link {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  align-items: center;
-  margin-top: 24px;
-}
-.training-link p {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--muted);
-  max-width: 430px;
-  margin-top: 5px;
-}
-.training-link .btn {
-  font-size: 16px;
-  flex-shrink: 0;
-}
 /* Combat instruments, compact enough to leave the fight clear. */
 #hud {
   position: fixed;
@@ -522,7 +504,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   background: #14120fe0;
   padding: 5px 9px;
@@ -566,7 +548,7 @@ h1 {
   align-items: center;
   gap: 7px;
   padding-bottom: 7px;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   color: var(--muted);
 }
@@ -607,7 +589,7 @@ h1 {
   width: 10px;
 }
 .combo span {
-  font-size: 8px;
+  font-size: 11px;
   margin-left: 5px;
   color: var(--muted);
 }
@@ -631,7 +613,7 @@ h1 {
   height: 19px;
 }
 .power-badge b {
-  font-size: 8px;
+  font-size: 11px;
 }
 .hud-right {
   position: absolute;
@@ -647,7 +629,7 @@ h1 {
   margin: 2px 0 3px;
 }
 #wave {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   color: #c2b6a4;
 }
@@ -662,7 +644,7 @@ h1 {
   font: 700 27px var(--heading);
 }
 #coins > span:last-child {
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   color: var(--muted);
 }
@@ -707,7 +689,7 @@ h1 {
   justify-content: center;
   align-items: center;
   color: #c5b9a6;
-  font-size: 10px;
+  font-size: 11px;
 }
 #help kbd:not(:first-child) {
   margin-left: 14px;
@@ -718,7 +700,7 @@ h1 {
   bottom: 59px;
   display: flex;
   gap: 14px;
-  font-size: 9px;
+  font-size: 11px;
   color: #a99f8c;
   letter-spacing: 0.06em;
 }
@@ -736,7 +718,7 @@ h1 {
   background: #19150feb;
   color: #c5b9a6;
   padding: 7px 10px;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.07em;
   cursor: pointer;
 }
@@ -798,7 +780,7 @@ h1 {
   color: var(--gold);
 }
 .end-stats span {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.12em;
 }
@@ -873,7 +855,7 @@ h1 {
   margin-bottom: 22px;
 }
 .power-rank {
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.15em;
   color: var(--gold);
   margin-bottom: 5px;
@@ -906,7 +888,7 @@ h1 {
   color: var(--gold);
 }
 .reward-hint {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
 }
 #forge,
@@ -920,18 +902,6 @@ h1 {
 .forge-inner {
   width: min(1000px, 100%);
   text-align: left;
-}
-.forge-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 15px;
-}
-.forge-heading h2 {
-  margin-top: 8px;
-}
-.forge-heading .btn {
-  min-width: 110px;
 }
 .forge-inner > p {
   font-size: 13px;
@@ -953,7 +923,7 @@ h1 {
 #daily-coin {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 #forge-cards {
   display: grid;
@@ -981,12 +951,12 @@ h1 {
   text-transform: uppercase;
 }
 .training-card > span {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--muted);
 }
 .training-card > b {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--gold);
   margin-top: auto;
 }
@@ -1010,11 +980,11 @@ h1 {
     right: 24px;
   }
   .landing-top {
-    font-size: 8px;
+    font-size: 11px;
     top: 22px;
   }
   .landing-bottom {
-    font-size: 9px;
+    font-size: 11px;
     gap: 8px;
     bottom: 22px;
     flex-wrap: wrap;
@@ -1080,14 +1050,6 @@ h1 {
   .card-action {
     font-size: 13px;
   }
-  .training-link {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-  }
-  .training-link .btn {
-    justify-content: center;
-  }
   .hud-left {
     left: 15px;
     top: 15px;
@@ -1098,11 +1060,11 @@ h1 {
     top: 15px;
   }
   .vital-heading {
-    font-size: 8px;
+    font-size: 11px;
     padding: 3px 5px;
   }
   .vital-heading b {
-    font-size: 10px;
+    font-size: 11px;
   }
   .vital-mark {
     font-size: 13px;
@@ -1138,7 +1100,7 @@ h1 {
     bottom: 57px;
   }
   #help {
-    font-size: 9px;
+    font-size: 11px;
     gap: 5px;
     bottom: 19px;
   }
@@ -1146,10 +1108,10 @@ h1 {
     margin-left: 4px;
   }
   #help kbd {
-    font-size: 8px;
+    font-size: 11px;
   }
   #wave {
-    font-size: 8px;
+    font-size: 11px;
   }
   #circle {
     font-size: 23px;
@@ -1167,7 +1129,7 @@ h1 {
     font-size: 38px;
   }
   .end-stats span {
-    font-size: 8px;
+    font-size: 11px;
   }
   #reward {
     justify-content: flex-start;
@@ -1223,17 +1185,8 @@ h1 {
     min-height: 185px;
     padding: 15px;
   }
-  .forge-heading h2 {
-    font-size: 40px;
-  }
-  .forge-heading .btn {
-    font-size: 16px;
-    min-width: 85px;
-    padding: 10px;
-    gap: 12px;
-  }
   #daily-coin {
-    font-size: 9px;
+    font-size: 11px;
   }
 }
 @media (max-height: 620px) and (min-width: 701px) {
@@ -1256,9 +1209,6 @@ h1 {
   }
   .card-t {
     font-size: 48px;
-  }
-  .training-link {
-    margin-top: 15px;
   }
   .overlay {
     justify-content: flex-start;
@@ -1289,7 +1239,7 @@ h1 {
   gap: 16px;
   align-items: center;
   margin: 15px 0 8px;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   color: #b8c79b;
 }
@@ -1430,7 +1380,7 @@ h1 {
   height: 23px;
 }
 .opponent-powers b {
-  font-size: 9px;
+  font-size: 11px;
 }
 .opponent-fight {
   display: flex;
@@ -1454,15 +1404,12 @@ h1 {
     justify-content: flex-start;
   }
   .champion-chain {
-    font-size: 8px;
+    font-size: 11px;
     flex-wrap: wrap;
     gap: 6px;
   }
   .gear-summary {
-    font-size: 10px;
-  }
-  .duel-inner .forge-heading h2 {
-    font-size: 38px;
+    font-size: 11px;
   }
   .duel-account {
     align-items: flex-start;
@@ -1615,14 +1562,6 @@ h1 {
   max-width: 1000px;
   margin-inline: auto;
 }
-.market-banner {
-  border: 1px solid #665335;
-  padding: 10px 16px;
-  color: var(--gold);
-  font: 600 12px var(--body);
-  letter-spacing: 0.13em;
-  margin: 20px 0;
-}
 .market-layout {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
@@ -1750,9 +1689,6 @@ h1 {
   .raffle-panel {
     padding: 22px;
   }
-  .market-inner .forge-heading h2 {
-    font-size: 36px;
-  }
 }
 
 /* Connected, coin-unlocked paths. */
@@ -1764,24 +1700,6 @@ h1 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
-}
-.skill-branch {
-  --path: #d5915b;
-}
-.skill-branch.veil {
-  --path: #9eabc3;
-}
-.skill-branch.blood {
-  --path: #b88188;
-}
-.skill-branch header {
-  padding: 16px 0 24px;
-  color: var(--path);
-}
-.skill-branch h3 {
-  font: 700 32px var(--heading);
-  text-transform: uppercase;
-  margin: 8px 0 0;
 }
 .skill-path {
   display: grid;
@@ -1879,7 +1797,7 @@ h1 {
 .skills-popover small {
   margin-left: auto;
   white-space: nowrap;
-  font-size: 9px;
+  font-size: 11px;
 }
 #powers {
   pointer-events: auto;
@@ -1913,7 +1831,7 @@ h1 {
   background: #e9e5da;
 }
 .arsenal-choice span {
-  font: 500 10px var(--body);
+  font: 500 11px var(--body);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   align-self: end;
@@ -2153,9 +2071,6 @@ h1 {
 #market {
   background: #14120ffb;
 }
-#market .forge-heading h2 {
-  font-size: clamp(36px, 4.5vw, 62px);
-}
 #market .market-tabs {
   margin: 18px 0;
 }
@@ -2218,7 +2133,7 @@ h1 {
   text-align: center;
   color: #c7b99e;
   background: #191714e8;
-  font-size: 9px;
+  font-size: 11px;
 }
 #arsenal-choices {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2285,8 +2200,7 @@ h1 {
   margin: 12px 0;
   color: #eadbc2;
 }
-.skill-theatre p,
-.core-card p {
+.skill-theatre p {
   line-height: 1.65;
   color: #b3aaa0;
 }
@@ -2309,43 +2223,6 @@ h1 {
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-bottom: 42px;
-}
-.core-card {
-  padding: 22px;
-  background: #211d19;
-  border: 1px solid #4b4136;
-  display: flex;
-  flex-direction: column;
-}
-.core-card.attuned {
-  border-color: #c3a879;
-  background: #2b251d;
-}
-.core-card h3 {
-  font:
-    600 17px Cinzel,
-    serif;
-  margin: 18px 0 6px;
-  color: #dfceb0;
-}
-.core-card p {
-  font-size: 13px;
-  flex: 1;
-}
-.core-card > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-}
-.core-card .btn {
-  font-size: 13px;
-  padding: 12px;
-}
-.core-card .skill-icon {
-  width: 32px;
-  height: 32px;
-  color: #c7ae83;
 }
 .skill-path {
   position: relative;
@@ -2414,7 +2291,7 @@ h1 {
   color: #ead9b9;
 }
 #combo-instruction {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   max-width: 145px;
 }
@@ -2436,7 +2313,7 @@ h1 {
     gap: 6px;
   }
   .ability-bar span {
-    font-size: 8px;
+    font-size: 11px;
   }
 }
 
@@ -2445,7 +2322,7 @@ h1 {
 .tree-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:28px 0; border-bottom:1px solid #65533a60; padding-bottom:18px; }
 .tree-tabs button { background:#1a1814; border:1px solid #5c503b80; color:#b9b19e; padding:12px 15px; font:600 13px var(--body, sans-serif); cursor:pointer; display:flex; flex-direction:column; gap:3px; }
 .tree-tabs button[aria-pressed=true] { color:#f0d7a3; border-color:#b29862; background:#362d20; }
-.tree-tabs i { font:9px sans-serif; letter-spacing:.1em; color:#a9b392; text-transform:uppercase; }
+.tree-tabs i { font:11px sans-serif; letter-spacing:.1em; color:#a9b392; text-transform:uppercase; }
 .tree-heading { display:flex; justify-content:space-between; align-items:center; gap:24px; }
 .tree-heading h3 { font:28px 'Cinzel',serif; margin:8px 0; }
 .tree-heading p { font-size:13px; color:#b2aa97; max-width:320px; }
@@ -2456,13 +2333,13 @@ h1 {
 .tree-links .grown { stroke:#c5aa6a; stroke-width:3; }
 .tree-links .growing { stroke:#9f8251; stroke-dasharray:4 7; }
 .tree-links .tree-trunk { stroke:#756143; stroke-width:3; }
-.tree-root-label { position:absolute; bottom:14px; left:0; right:0; text-align:center; font-size:9px; letter-spacing:.24em; color:#bda775; }
+.tree-root-label { position:absolute; bottom:14px; left:0; right:0; text-align:center; font-size:11px; letter-spacing:.24em; color:#bda775; }
 .tree-node { position:absolute; transform:translate(-50%,-50%); width:160px; padding:0; background:transparent; border:0; color:#ac9d84; cursor:pointer; text-align:center; }
 .node-orb { display:grid; place-items:center; position:relative; width:59px; height:59px; margin:0 auto 8px; border-radius:50%; background:#211e17; border:1px solid #77674b; box-shadow:0 0 0 5px #171612,0 0 0 6px #75634850; transition:background .3s,border-color .3s,box-shadow .3s; }
 .node-orb .skill-icon { width:27px; height:27px; margin:0; }
 .node-orb em { position:absolute; bottom:-7px; right:-4px; width:21px; height:21px; display:grid; place-items:center; background:#161510; color:#d8c496; border:1px solid #766448; font:11px 'Cinzel',serif; border-radius:50%; }
 .tree-node strong { display:block; font:12px 'Cinzel',serif; color:#d5c5a5; line-height:1.3; }
-.tree-node small { font-size:8px; letter-spacing:.14em; display:block; margin-top:5px; }
+.tree-node small { font-size:11px; letter-spacing:.14em; display:block; margin-top:5px; }
 .tree-node.learned .node-orb { color:#f2d08b; background:#4a3a21; border-color:#d4b471; }
 .tree-node.sealed { opacity:.55; }
 .tree-node[aria-pressed=true] .node-orb { box-shadow:0 0 0 5px #171612,0 0 0 7px #d2b078; }
@@ -2474,7 +2351,7 @@ h1 {
 .tree-detail small { display:block; font-size:11px; line-height:1.6; color:#968e7a; }
 .tree-detail .btn { width:100%; margin-top:12px; font-size:13px; padding:14px 8px; }
 .technique-stats { display:flex; gap:16px; margin:20px 0; }
-.technique-stats span { font-size:9px; color:#a49a86; flex:1; }
+.technique-stats span { font-size:11px; color:#a49a86; flex:1; }
 .technique-stats b { display:block; font:21px 'Cinzel',serif; color:#dfc695; margin-bottom:4px; }
 .tree-detail .tree-requirement { font-size:11px; color:#bea981; min-height:36px; }
 .hold-learn { position:relative; overflow:hidden; touch-action:none; user-select:none; --learn:0%; }
@@ -2484,17 +2361,16 @@ h1 {
 .hold-status { display:block; font-size:11px; line-height:1.5; color:#bca77d; margin-top:10px; }
 .technique-bar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); max-width:420px; margin-top:8px; }
 .technique-bar > div { min-width:0; }
-.technique-bar span { font-size:9px; }
+.technique-bar span { font-size:11px; }
 #forge .skill-theatre { margin-top:18px; }
 @media(max-width:900px) { .tree-workspace { grid-template-columns:1fr; } .tree-detail { border-left:0; border-top:1px solid #78634460; } .tree-heading { align-items:start; } .tree-map { height:460px; } }
-@media(max-width:560px) { .tree-tabs button { padding:9px 10px; font-size:11px; } .tree-map { height:420px; } .tree-node { width:110px; } .tree-node strong { font-size:10px; } .node-orb { width:48px;height:48px; } .tree-heading { display:block; } .technique-bar { max-width:290px; } }
+@media(max-width:560px) { .tree-tabs button { padding:9px 10px; font-size:11px; } .tree-map { height:420px; } .tree-node { width:110px; } .tree-node strong { font-size:11px; } .node-orb { width:48px;height:48px; } .tree-heading { display:block; } .technique-bar { max-width:290px; } }
 @media(prefers-reduced-motion:reduce) { .node-orb { transition:none; } }
 .node-orb::before { content:''; position:absolute; inset:-6px; border-radius:50%; background:conic-gradient(#e0bc75 var(--learn,0%),transparent 0); mask:radial-gradient(transparent 64%,#000 66%); pointer-events:none; }
 
 /* A navigable atlas with an adjacent, persistent theatre. */
 #forge { padding:28px 30px; }
 #forge .forge-inner { width:min(1440px,100%); }
-#forge .forge-heading h2 { font-size:clamp(25px,3vw,38px); margin:5px 0; }
 #forge .forge-inner > p { margin:8px 0; max-width:760px; }
 #forge .forge-balance { margin:12px 0; }
 #forge .forge-section { margin:16px 0 8px; }
@@ -2523,9 +2399,9 @@ h1 {
 .tree-side #skill-stage { height:245px; }
 .tree-side .skill-theatre article { padding:10px 16px; }
 .tree-side .skill-theatre article > .eyebrow,.tree-side #skill-preview-name,.tree-side #skill-preview-description { display:none; }
-.tree-side .skill-theatre small { margin:7px 0 0; font-size:10px; }
-.tree-side .skill-theatre .btn { font-size:10px; padding:9px; }
-#skill-preview-label { left:12px; bottom:12px; max-width:calc(100% - 24px); font-size:9px; line-height:1.5; letter-spacing:.06em; padding:5px 7px; background:#171511d9; pointer-events:none; }
+.tree-side .skill-theatre small { margin:7px 0 0; font-size:11px; }
+.tree-side .skill-theatre .btn { font-size:11px; padding:9px; }
+#skill-preview-label { left:12px; bottom:12px; max-width:calc(100% - 24px); font-size:11px; line-height:1.5; letter-spacing:.06em; padding:5px 7px; background:#171511d9; pointer-events:none; }
 .preview-expand { position:absolute; right:10px; top:10px; font-size:20px; }
 #forge .skill-theatre.expanded { position:fixed; inset:5vh 5vw; z-index:60; display:flex; flex-direction:column; border:1px solid #8f784e; box-shadow:0 0 0 100vmax #080808e0; }
 #forge .skill-theatre.expanded > div { flex:1; min-height:0; }
@@ -2537,7 +2413,6 @@ h1 {
 @media(prefers-reduced-motion:reduce) { .tree-node.learning .node-orb { transition:none; } }
 @media(min-width:761px) {
   #forge { padding-top:18px; }
-  #forge .forge-heading h2 { font-size:28px; }
   #forge .forge-inner > p,#forge .forge-section:first-of-type { display:none; }
   #forge .forge-balance { margin:8px 0; }
   .tree-tabs { margin:9px 0; padding-bottom:9px; }
@@ -2563,19 +2438,13 @@ h1 {
 .mode-heading { margin-bottom:22px; }
 .champion-panel { padding:14px 20px; }
 .champion-panel h2 { font:600 clamp(23px,3vw,34px) var(--heading); }
-.champion-chain { font-size:10px; opacity:.7; }
-.camp-links { display:flex; gap:0; border-block:1px solid #a18a5f35; margin-top:20px; }
-.camp-links .btn { flex:1; font:600 12px var(--body); letter-spacing:.08em; padding:17px 12px; background:none; border:0; box-shadow:none; }
-.camp-links .btn:first-child { color:var(--gold); background:#b18b4910; }
-.camp-links .btn + .btn { border-left:1px solid #a18a5f25; }
-.camp-links .btn:hover { background:#b18b491c; }
+.champion-chain { font-size:11px; opacity:.7; }
 .cards { grid-template-columns:1.4fr 1fr; gap:16px; }
 .card { min-height:205px; padding:23px 26px; gap:9px; border-top-width:1px; }
 .card-t { font:600 46px var(--heading); letter-spacing:.035em; }
 .card-action { font-size:13px; margin-top:auto; }
 #mode-solo { background:linear-gradient(120deg,#573424b0,#211d16); border-color:#b58a55; }
 #mode-duel { background:linear-gradient(120deg,#262926,#191b19); }
-.training-link { border-top:1px solid #a18a5f25; padding-top:14px; margin-top:20px; font-size:11px; }
 .camp-hint { color:var(--muted); text-align:right; line-height:1.6; }
 #preparation { position:fixed; inset:0; z-index:40; background:#111310f7; overflow:auto; padding:30px; display:grid; place-items:center; }
 .preparation-inner { width:min(1180px,100%); }
@@ -2585,7 +2454,7 @@ h1 {
 .preparation-grid { display:grid; grid-template-columns:1.15fr 1fr; gap:32px; }
 .preparation-theatre { position:relative; min-height:410px; border:1px solid #8d785940; background:#171b18; overflow:hidden; }
 #loadout-stage { width:100%; height:100%; position:absolute; inset:0; display:block; }
-#loadout-preview-label { position:absolute; bottom:18px; left:22px; right:22px; text-align:center; line-height:1.5; font-size:10px; }
+#loadout-preview-label { position:absolute; bottom:18px; left:22px; right:22px; text-align:center; line-height:1.5; font-size:11px; }
 .preparation-build { min-width:0; }
 #loadout-weapons { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin:12px 0 20px; max-height:220px; overflow:auto; }
 #loadout-weapons button { text-align:left; padding:11px 12px; background:#24251d; color:var(--bone); border:1px solid #81704e50; cursor:pointer; }
@@ -2593,7 +2462,7 @@ h1 {
 #loadout-weapons button:disabled { opacity:.5; cursor:default; }
 #loadout-weapons strong { font:500 14px var(--heading); }
 #loadout-weapons em { font-style:normal; color:var(--gold); }
-#loadout-weapons small { display:block; margin-top:6px; font-size:9px; letter-spacing:.055em; color:#b7ac98; }
+#loadout-weapons small { display:block; margin-top:6px; font-size:11px; letter-spacing:.055em; color:#b7ac98; }
 #loadout-name { font:500 27px var(--heading); margin:0 0 8px; }
 #loadout-description { font:13px/1.6 var(--body); color:var(--muted); }
 #loadout-stats { display:flex; gap:24px; margin:15px 0 22px; font-size:11px; color:var(--muted); }
@@ -2602,23 +2471,20 @@ h1 {
 #loadout-techniques button { display:flex; gap:10px; align-items:center; text-align:left; color:var(--bone); background:#1d211a; border:1px solid #796b4845; padding:10px; cursor:pointer; font:12px var(--body); }
 #loadout-techniques button:hover { border-color:var(--gold); }
 #loadout-techniques kbd { color:var(--gold); font:18px var(--heading); }
-#loadout-techniques small { display:block; color:#a79e8b; font-size:8px; margin-top:5px; }
+#loadout-techniques small { display:block; color:#a79e8b; font-size:11px; margin-top:5px; }
 #loadout-train { font-size:11px; padding:13px 16px; width:100%; }
 .preparation-footer { margin-top:24px; padding-top:20px; border-top:1px solid #8d785940; display:flex; justify-content:space-between; gap:24px; align-items:center; }
 .preparation-footer p { font:13px/1.5 var(--body); color:var(--bone); max-width:620px; }
-.preparation-footer small { display:block; font:10px/1.7 var(--body); color:var(--muted); margin-top:8px; }
+.preparation-footer small { display:block; font:11px/1.7 var(--body); color:var(--muted); margin-top:8px; }
 .preparation-footer .btn { white-space:nowrap; font-size:16px; padding:20px 26px; }
 @media(max-width:740px) {
   #modes,#preparation { padding:22px 16px; place-items:start center; }
   .mode-heading { align-items:flex-start; gap:14px; }
-  .mode-heading>.eyebrow { max-width:145px; text-align:right; line-height:1.5; font-size:8px; }
-  .camp-links { display:grid; grid-template-columns:1fr 1fr; }
-  .camp-links .btn { font-size:11px; }
+  .mode-heading>.eyebrow { max-width:145px; text-align:right; line-height:1.5; font-size:11px; }
   .cards { grid-template-columns:1fr; }
   .card { min-height:165px; }
   .card-t { font-size:36px; }
   .card-d br { display:none; }
-  .training-link { flex-direction:row; align-items:center; }
   .camp-hint { max-width:170px; }
   .preparation-grid { grid-template-columns:1fr; gap:22px; }
   .preparation-theatre { min-height:300px; }
@@ -2630,7 +2496,7 @@ h1 {
 #modes .champion-panel h2,.card-t,.preparation-heading h2,#loadout-name { font-family:"Cinzel",Georgia,serif; font-weight:500; }
 .preparation-footer .btn { background:#ab673f; border-color:#d29b65; color:#f4e4c7; box-shadow:inset 0 0 0 3px #30231730; }
 
-.motion-speed { position:absolute; left:12px; top:12px; z-index:2; font:10px var(--body); letter-spacing:.06em; background:#151915d9; border:1px solid #b7a17b60; color:#d1bea1; padding:9px 12px; cursor:pointer; }
+.motion-speed { position:absolute; left:12px; top:12px; z-index:2; font:11px var(--body); letter-spacing:.06em; background:#151915d9; border:1px solid #b7a17b60; color:#d1bea1; padding:9px 12px; cursor:pointer; }
 .motion-speed[aria-pressed=true] { border-color:var(--gold); color:var(--gold); }
 #preparation { background:#111310; }
 
@@ -2691,17 +2557,9 @@ h1 {
 }
 
 /* Training: readable branch first, one decision beside its preview. */
-.tree-overview { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:16px; margin:24px 0 32px; }
-.tree-path { min-height:185px; padding:22px 16px; display:flex; flex-direction:column; align-items:center; gap:12px; background:radial-gradient(ellipse at top,#3a3022,#171813); border:1px solid #766143; color:#c9bfa7; cursor:pointer; font:14px var(--body); }
-.tree-path:hover,.tree-path:focus-visible { border-color:#d1ae72; background:#342b20; }
-.tree-path strong { font:17px 'Cinzel',serif; color:#ead6b2; }
-.path-icon .skill-icon { width:40px; height:40px; margin:0; }
-.path-growth { display:flex; flex-wrap:wrap; justify-content:center; gap:5px; margin-top:auto; }
-.path-growth i { width:8px; height:8px; border:1px solid #9c8156; border-radius:50%; }
-.path-growth i.learned { background:#ceb375; }
 #forge .skill-theatre[hidden] { display:none; }
 .tree-tabs button { font-size:14px; padding:10px 13px; }
-.tree-tabs i { font-size:10px; }
+.tree-tabs i { font-size:11px; }
 .tree-node { width:185px; }
 .tree-node strong { font:600 calc(14px * var(--label-scale,1))/1.35 var(--body); color:#e4d4b6; text-shadow:0 2px 4px #12110d; }
 .tree-node small { font-size:calc(11px * var(--label-scale,1)); letter-spacing:.05em; color:#c0ac88; }
@@ -2727,8 +2585,6 @@ h1 {
 .hold-status:empty { display:none; }
 #skill-preview-label { font-size:11px; }
 @media(min-width:761px) { .tree-side { max-height:none; overflow:visible; } .tree-viewport { height:max(430px,calc(100dvh - 315px)); } }
-@media(max-width:1000px) { .tree-overview { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@media(max-width:600px) { .tree-overview { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .tree-path { min-height:165px; } }
 
 /* One atlas, real dependencies, one visual language. */
 .atlas-region { position:absolute; width:520px; height:420px; border:1px solid color-mix(in srgb,var(--path-color) 25%,transparent); border-radius:40px; background:radial-gradient(ellipse at center,color-mix(in srgb,var(--path-color) 9%,transparent),transparent 75%); pointer-events:none; }
@@ -2775,7 +2631,6 @@ h1 {
 .token-details,.treasury-details { font-size:15px; margin:18px 0; border-top:1px solid #78634460; padding-top:16px; }
 .token-details summary,.treasury-details summary { cursor:pointer; color:#d2bb8f; min-height:30px; }
 .market-tabs button { font-size:18px; padding:16px 24px; }
-.market-banner { font-size:14px; letter-spacing:.04em; }
 #arsenal-choices button { padding:14px; min-height:64px; }
 #arsenal-choices .arsenal-choice strong { font:600 16px/1.3 var(--body); text-transform:none; }
 #arsenal-choices .arsenal-choice span { font-size:12px; letter-spacing:.03em; }
