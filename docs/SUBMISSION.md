@@ -61,6 +61,7 @@ Checked against the [organizer’s live rules](https://nearhackathon.com/HACKATH
 - [x] Original project art, optimized models and painted floors.
 - [x] MIT code license and dependency/art credits.
 - [x] Record a silent gameplay and NFT-interface showcase for owner review.
+- [ ] Refresh the final video after the performance and combat-readability pass; keep real gameplay central, with short model close-ups and concise explanatory captions.
 - [ ] Publish the reviewed video in the owner's X demo post.
 - [ ] Select hosting or provide local demo instructions with the video.
 - [x] Publish the repository and add its actual URL.

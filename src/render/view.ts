@@ -28,6 +28,7 @@ import {
 import { dirAngle } from "../sim/dirs";
 import { rank } from "../sim/skills";
 import { ModelLibrary, type AnimatedModel } from "./assets";
+import { EnemyThreat } from './enemy-threat.ts';
 
 // 2.5D: an orthographic camera at a fixed tilt over a painted floor, with flat
 // shadowless light, so actors read as illustrated figures rather than lit 3D props.
@@ -38,7 +39,7 @@ const CAM_DIST = 60;
 const VIEW_HEIGHT = 13;
 /** Seconds an enemy's attack and charge animations should take, to match the combat rules. */
 const WINDUP: Record<string, number> = {
-  imp: 0.34,
+  imp: 0.42,
   archer: 0.5,
   brute: 0.65,
   warden: 0.5,
@@ -110,6 +111,7 @@ interface EnemyView {
   hpBg: THREE.Sprite;
   hpFg: THREE.Sprite;
   tele: THREE.Mesh | null;
+  threat?: EnemyThreat;
   h: number;
   model?: AnimatedModel;
   weaponModel?: AnimatedModel;
@@ -223,7 +225,10 @@ export class View {
       this.gore.update(0);
       this.afterimages.emit(this.hero);
       warmup.add(new THREE.Mesh(this.boltGeo, this.boltMat), new THREE.Mesh(this.shotGeo, this.soulMat), new THREE.Mesh(this.shotGeo, this.shotMat));
+      const threatSample = new EnemyThreat();
+      warmup.add(threatSample.root);
       this.preparedPrograms = programSamples([this.scene, warmup]);
+      threatSample.dispose();
       await this.renderer.compileAsync(this.preparedPrograms, this.camera, this.scene);
       // Some drivers defer pipeline creation and buffer upload until a real draw.
       // Draw once behind the preparation screen, then restore the clean arena in
@@ -932,9 +937,8 @@ export class View {
       add(new THREE.SphereGeometry(0.16, 8, 6), eye, 1.05, 3.1, -0.35);
       h = 4.9;
     }
-    if (kind === "brute" || kind === "warden" || kind === "champion") {
-      const w = kind === "warden" ? 3.2 : 2.0;
-      const len = kind === "warden" ? 12 : kind === "champion" ? 6 : 10;
+    if (kind === "champion") {
+      const w = 2.0, len = 6;
       tele = new THREE.Mesh(
         new THREE.PlaneGeometry(len, w),
         new THREE.MeshBasicMaterial({
@@ -970,6 +974,8 @@ export class View {
     hpBg.visible = hpFg.visible = false;
     this.scene.add(hpBg, hpFg);
     this.scene.add(group);
+    const threat = kind === 'champion' ? undefined : new EnemyThreat();
+    if (threat) this.scene.add(threat.root);
     return {
       sample: new PresentationSample(),
       group,
@@ -978,6 +984,7 @@ export class View {
       hpBg,
       hpFg,
       tele,
+      threat,
       h,
     };
   }
@@ -1386,6 +1393,7 @@ export class View {
       if (seen.has(id)) continue;
       this.scene.remove(v.hpBg, v.hpFg);
       if (v.tele) v.tele.visible = false;
+      v.threat?.clear();
       if (v.model && !battlefieldChanged) {
         // The killing blow throws the body back; it flares once, then cools.
         const fx = v.group.position.x - this.hero.position.x;
@@ -1554,6 +1562,7 @@ export class View {
   }
 
   private disposeEnemy(v: EnemyView) {
+    v.threat?.dispose();
     this.scene.remove(v.group, v.hpBg, v.hpFg);
     v.starterProp?.traverse(o=>{ if(o instanceof THREE.Mesh){o.geometry.dispose();(o.material as THREE.Material).dispose();} });
     v.weaponModel?.dispose();
@@ -1570,6 +1579,7 @@ export class View {
   }
 
   private syncEnemy(e: Enemy, v: EnemyView, position: { x: number; z: number } = e) {
+    v.threat?.sync(e, position);
     const wind = e.state === "windup";
     // A blow squashes the body and tips it away from the attacker; a wind-up trembles.
     const k = e.flash > 0 ? Math.min(1, e.flash / 0.14) : 0;

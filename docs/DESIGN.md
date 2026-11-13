@@ -187,3 +187,9 @@ Common enemy meshes and shaders are prepared before issuing a new Solo or Duel c
 Preparation waits for the hero and held-weapon models, retains compiled effect material variants, and performs a covered warm-up draw before combat. Skinned actors and their outlines cache a bind-pose sphere for depth sorting, avoiding a first-draw scan of every animated vertex. Frustum culling stays disabled on those meshes so the approximate sorting bound cannot clip animated limbs.
 
 Afterimages never contribute lights. The held weapon's light lives in the scene and follows the grip independently of actor visibility, keeping the light count stable through dash echoes and hurt blinking. This avoids recompiling the arena's lit materials during combat.
+
+## Enemy attack readability
+
+Solo enemies have distinct, matte windup cues: the imp's close strike fills a small circle, archers show their tracking aim, brutes and charging Wardens mark a locked lane, and a Warden's radial volley uses an outward-pointing seal instead of a charge lane. The lane stops at the arena boundary. These are anticipation cues, not new damage zones; the existing contact rules, dodge windows and replays are unchanged. The imp's attack animation now uses its actual 0.42-second windup.
+
+Cues follow the displayed enemy position independently of body shake and recoil. They fill continuously without blinking or adding lights, disappear when the windup ends, and share geometry across enemies. Each active warning uses at most three draws. Duel keeps its existing weapon/skill presentation.

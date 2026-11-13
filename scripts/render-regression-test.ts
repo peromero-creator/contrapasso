@@ -6,7 +6,8 @@ import { Gore } from '../src/render/gore.ts';
 import { AnimatedModel } from '../src/render/assets.ts';
 import { PresentationSample } from '../src/render/presentation-sample.ts';
 import { EffectAnchor, attachmentFor, isPassivePulse } from '../src/render/effect-anchor.ts';
-import { createWorld } from '../src/sim/world.ts';
+import { createWorld, step, type Enemy } from '../src/sim/world.ts';
+import { EnemyThreat, enemyThreat } from '../src/render/enemy-threat.ts';
 import { programSamples } from '../src/render/program-warmup.ts';
 
 // Baking scenery preserves bounds under nested, rotated and scaled parents.
@@ -123,3 +124,49 @@ assert.equal(retained.customProgramCacheKey(), 'warmup-regression');
 let retainedDisposals = 0; retained.addEventListener('dispose', () => retainedDisposals++);
 shaderSource.material.dispose(); assert.equal(retainedDisposals, 0);
 assert.equal((programs.children[0] as T.Mesh).geometry, shaderSource.geometry);
+
+// Warnings read authoritative timing and direction, and never follow actor recoil.
+const threatEnemy: Enemy = {id:99,kind:'imp',x:0,z:0,hp:55,maxHp:55,r:.55,state:'windup',t:.42,cd:0,dx:1,dz:0,hitDone:false,pattern:1,flash:0,spawn:0,burnT:0,burnCd:0};
+const warning = new EnemyThreat();
+assert.equal(enemyThreat(threatEnemy)!.progress,0);
+assert.equal(enemyThreat(threatEnemy)!.radius,2.3);
+const contactWorld=createWorld(3,[]);contactWorld.spawnDelay=999;contactWorld.player.x=2.2;contactWorld.player.z=0;contactWorld.enemies=[threatEnemy];
+const initialLife=contactWorld.player.hp;
+for(let i=0;i<25;i++)step(contactWorld,{move:-1,aim:0,attack:false,dash:false});
+assert.equal(contactWorld.player.hp,initialLife,'warning never implies an early hit');
+assert.ok(enemyThreat(threatEnemy)!.progress>.98);
+step(contactWorld,{move:-1,aim:0,attack:false,dash:false});
+assert.equal(contactWorld.player.hp,initialLife-10);
+assert.equal(enemyThreat(threatEnemy),null,'warning expires on actual contact');
+const brute={...threatEnemy,kind:'brute',r:.95,state:'windup',t:.325,dx:0,dz:1} as Enemy;
+warning.sync(brute,{x:3,z:4});
+assert.deepEqual(warning.root.position.toArray(),[3,0,4]);
+assert.equal(warning.root.rotation.y,-Math.PI/2);
+assert.equal(enemyThreat(brute)!.length,17*.55);
+assert.equal(enemyThreat(brute)!.progress,.5);
+assert.ok(enemyThreat({...brute,z:9.5})!.length<.56,'charge guide ends at the arena clamp');
+let litWarnings=0;warning.root.traverse(node=>{if(node instanceof T.Light)litWarnings++;});assert.equal(litWarnings,0);
+assert.equal(enemyThreat({...brute,kind:'warden',pattern:3})!.shape,'burst','radial shots must not masquerade as a charge lane');
+assert.equal(enemyThreat({...brute,kind:'archer'})!.shape,'aim');
+assert.equal(enemyThreat({...brute,spawn:.1}),null);
+assert.equal(enemyThreat({...brute,hp:0}),null);
+assert.equal(enemyThreat({...brute,state:'recover'}),null);
+const otherWarning=new EnemyThreat();otherWarning.sync(brute,brute);
+assert.equal((warning.root.children[0] as T.Mesh).geometry,(otherWarning.root.children[0] as T.Mesh).geometry);
+let sharedDisposed=false;(warning.root.children[0] as T.Mesh).geometry.addEventListener('dispose',()=>sharedDisposed=true);
+warning.dispose();assert.equal(sharedDisposed,false);otherWarning.dispose();
+console.log('Enemy tells: PASS (real contact clock, locked charge, radial volley, no lights, shared geometry lifetime)');
+
+// Real simulated attacks stay escapable along the direction the tell advertises.
+function chargeTrial(dodge: boolean) {
+  const arena=createWorld(4,[]);arena.spawnDelay=999;arena.player.x=6;arena.player.z=0;
+  arena.enemies=[{...brute,x:0,z:0,dx:1,dz:0,t:.65,hp:170,maxHp:170}];
+  for(let i=0;i<85;i++)step(arena,{move:dodge?256:-1,aim:0,attack:false,dash:false});
+  return arena.player.hp;
+}
+assert.equal(chargeTrial(false),80,'standing in the shown lane takes the charge');
+assert.equal(chargeTrial(true),100,'sidestepping the locked lane avoids it');
+const volley=createWorld(5,[]);volley.spawnDelay=999;volley.player.x=6;
+volley.enemies=[{...brute,kind:'warden',r:1.5,x:0,z:0,t:.01,pattern:3,hp:900,maxHp:900}];
+step(volley,{move:-1,aim:0,attack:false,dash:false});
+assert.equal(volley.shots.length,12);assert.equal(volley.enemies[0].state,'recover');
