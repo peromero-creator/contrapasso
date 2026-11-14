@@ -1,17 +1,28 @@
-// Original, quiet effects generated locally. Audio never reads or changes the simulation.
+// Effects are CC0 samples (Kenney) plus a few quiet synthesized tones. Audio never reads or changes the simulation.
 import { techniqueId, familyOf } from "../sim/techniques.ts";
 import { isSpell, abilityDuration } from "../sim/abilities.ts";
 import type { SimEvent } from "../sim/world";
 
-/** Short narrator lines; each speaks a banner or result title the game already shows. */
-export const VOICE_LINES = [
-  "limbo", "lust", "gluttony", "greed", "wrath",
-  "warden", "wizard", "witness", "cantor", "deepens",
-  "duel", "won", "dead", "duel-won", "duel-lost",
-] as const;
-export type VoiceLine = (typeof VOICE_LINES)[number];
-/** The narrator sits just above an effect's peak, well under the limiter. */
-const VOICE_GAIN = 1.4;
+/**
+ * CC0 samples from Kenney.nl "Impact Sounds" and "RPG Audio" under `public/assets/sfx/`.
+ * Every cue has 2-3 variations; a missing file leaves that cue silent.
+ * Gains are relative to one master bus: impacts dominate, UI cues sit lowest.
+ */
+const SAMPLES: Record<string, { files: string[]; gain: number }> = {
+  swing: { files: ["impactMetal_light_000.ogg", "impactMetal_light_001.ogg", "impactMetal_light_002.ogg"], gain: 0.5 },
+  hit: { files: ["impactPunch_heavy_000.ogg", "impactPunch_medium_000.ogg", "impactPlate_medium_000.ogg"], gain: 0.62 },
+  kill: { files: ["impactPunch_heavy_002.ogg", "impactPlate_heavy_000.ogg", "impactMetal_heavy_000.ogg"], gain: 0.6 },
+  hurt: { files: ["impactPunch_medium_001.ogg", "impactSoft_medium_000.ogg", "impactPunch_medium_002.ogg"], gain: 0.55 },
+  dash: { files: ["cloth2.ogg", "cloth3.ogg", "cloth4.ogg"], gain: 0.4 },
+  jump: { files: ["footstep_concrete_000.ogg", "footstep_concrete_001.ogg", "footstep00.ogg"], gain: 0.3 },
+  land: { files: ["impactWood_heavy_000.ogg", "impactPlank_medium_000.ogg", "impactWood_medium_000.ogg"], gain: 0.4 },
+  plunge: { files: ["impactSoft_heavy_000.ogg", "impactMining_000.ogg", "impactWood_heavy_001.ogg"], gain: 0.65 },
+  bell: { files: ["impactBell_heavy_000.ogg", "impactBell_heavy_001.ogg", "impactBell_heavy_002.ogg"], gain: 0.55 },
+  rewardOpen: { files: ["bookOpen.ogg", "cloth1.ogg", "bookFlip1.ogg"], gain: 0.32 },
+  rewardPick: { files: ["metalClick.ogg", "bookClose.ogg", "metalLatch.ogg"], gain: 0.3 },
+  gateOpen: { files: ["doorOpen_1.ogg", "doorOpen_2.ogg"], gain: 0.45 },
+  bossDeath: { files: ["impactMining_001.ogg", "impactSoft_heavy_001.ogg", "impactMetal_heavy_001.ogg"], gain: 0.6 },
+};
 
 export class Sound {
   muted = true;
@@ -24,10 +35,9 @@ export class Sound {
   private skillChain=0;
   private skillUntil=0;
   private pulseAt = new Map<string, number>();
-  private lines = new Map<VoiceLine, AudioBuffer>();
-  private linesRequested = false;
-  private speaking: AudioBufferSourceNode | null = null;
-  private waiting: { line: VoiceLine; until: number } | null = null;
+  private samples = new Map<string, AudioBuffer>();
+  private samplesRequested = false;
+  private sampleLast = new Map<string, number>();
 
   private readonly silent: boolean;
   constructor(silent = false) {this.silent=silent;}
@@ -47,7 +57,7 @@ export class Sound {
         const samples = this.noise.getChannelData(0);
         for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
         this.updateVolume();
-        this.loadLines(ctx);
+        this.loadSamples(ctx);
       }
       if (this.context.state === "suspended") void this.context.resume().catch(() => {});
     } catch {
@@ -71,57 +81,49 @@ export class Sound {
   setPaused(paused: boolean) {
     this.paused = paused;
     if (paused) {
-      this.waiting = null;
       for (const voice of this.voices) voice.stop();
     }
     this.updateVolume();
   }
 
   /** Requested once, after sound is switched on. A silent or muted session never fetches them. */
-  private loadLines(ctx: AudioContext) {
-    if (this.linesRequested) return;
-    this.linesRequested = true;
-    for (const line of VOICE_LINES)
-      void fetch(`/assets/voice/${line}.mp3`)
-        .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(line))))
-        .then((bytes) => ctx.decodeAudioData(bytes))
-        .then((buffer) => {
-          this.lines.set(line, buffer);
-          const waiting = this.waiting;
-          if (waiting?.line === line) {
-            this.waiting = null;
-            if (ctx.currentTime <= waiting.until) this.say(line);
-          }
-        })
-        .catch(() => {
-          // A missing line leaves the banner silent; effects still play.
-        });
+  private loadSamples(ctx: AudioContext) {
+    if (this.samplesRequested) return;
+    this.samplesRequested = true;
+    for (const { files } of Object.values(SAMPLES))
+      for (const file of files)
+        void fetch(`/assets/sfx/${file}`)
+          .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(file))))
+          .then((bytes) => ctx.decodeAudioData(bytes))
+          .then((buffer) => {
+            this.samples.set(file, buffer);
+          })
+          .catch(() => {
+            // A missing file leaves that cue silent; the synthesized tones still play.
+          });
   }
 
-  /** Speak one narrator line. A newer line replaces the one still playing. */
-  say(line: VoiceLine, delay = 0) {
+  /** Play one sampled cue: a variation never repeats back to back, at ±4% playback rate. */
+  private sample(cue: string, delay = 0) {
     const ctx = this.context;
-    if (!ctx || !this.master || this.muted || this.paused) return;
-    const buffer = this.lines.get(line);
-    if (!buffer) {
-      // Sound was switched on a moment ago: speak when the line arrives, if still timely.
-      this.waiting = { line, until: ctx.currentTime + delay + 1.5 };
-      return;
-    }
-    if (ctx.state !== "running") return;
-    this.waiting = null;
-    this.speaking?.stop();
+    if (!ctx || !this.master || ctx.state !== "running" || this.muted || this.paused || this.voices.size >= 24) return;
+    const def = SAMPLES[cue];
+    if (!def) return;
+    const buffers = def.files.map((f) => this.samples.get(f)).filter((b): b is AudioBuffer => !!b);
+    if (buffers.length === 0) return;
+    let index = Math.floor(Math.random() * buffers.length);
+    if (buffers.length > 1 && index === this.sampleLast.get(cue)) index = (index + 1) % buffers.length;
+    this.sampleLast.set(cue, index);
     const source = ctx.createBufferSource();
+    source.buffer = buffers[index];
+    source.playbackRate.value = 0.96 + Math.random() * 0.08;
     const gain = ctx.createGain();
-    source.buffer = buffer;
-    gain.gain.value = VOICE_GAIN;
+    gain.gain.value = def.gain;
     source.connect(gain);
     gain.connect(this.master);
     this.voices.add(source);
-    this.speaking = source;
     source.onended = () => {
       this.voices.delete(source);
-      if (this.speaking === source) this.speaking = null;
       source.disconnect();
       gain.disconnect();
     };
@@ -174,41 +176,39 @@ export class Sound {
     voice.stop(at + duration + 0.01);
   }
 
-  /** Ritual bell: a low, resonant bronze strike with a soft mallet transient. */
+  /** Ritual bell: a real CC0 bronze bell strike. */
   bell() {
-    this.play(235, 233, 0.9, 0.3, false);
-    this.play(470, 466, 0.6, 0.16, false, 0.004);
-    this.play(705, 700, 0.4, 0.1, false, 0.008);
-    this.play(800, 300, 0.25, 0.08, true);
+    this.sample("bell");
   }
   /** A boss telegraphs: a low tension swell. */
   bossWarn() {
     this.play(90, 58, 0.55, 0.32, false);
     this.play(280, 90, 0.5, 0.18, true);
   }
-  /** Boss phase change: deeper than the warning, under the narrator. */
+  /** Boss phase change: deeper than the warning. */
   bossPhase() {
     this.play(64, 42, 0.8, 0.4, false);
     this.play(180, 60, 0.6, 0.22, true);
   }
-  /** Boss dies: the loudest dark cue, still under a hit. */
+  /** Boss dies: a heavy sample over the darkest low tone. */
   bossDeath() {
-    this.play(150, 26, 1.0, 0.55, false);
-    this.play(240, 35, 0.85, 0.28, true);
+    this.sample("bossDeath");
+    this.play(150, 26, 1.0, 0.4, false);
+    this.play(240, 35, 0.85, 0.2, true);
   }
-  /** Boss door opens: low rumble with a slow creak. */
+  /** Boss door opens: a recorded creak with a low rumble. */
   gateOpen() {
-    this.play(70, 48, 1.1, 0.34, false);
-    this.play(130, 45, 1.0, 0.24, true);
+    this.sample("gateOpen");
+    this.play(70, 48, 1.1, 0.25, false);
+    this.play(130, 45, 1.0, 0.18, true);
   }
-  /** Reward cards rise. */
+  /** Reward cards rise: book and cloth. */
   rewardOpen() {
-    this.play(520, 523, 0.22, 0.2, false);
-    this.play(780, 784, 0.3, 0.16, false, 0.09);
+    this.sample("rewardOpen");
   }
-  /** Reward choice confirmed. */
+  /** Reward choice confirmed: a small metal click. */
   rewardPick() {
-    this.play(660, 990, 0.14, 0.24, false);
+    this.sample("rewardPick");
   }
   /** A new wave arrives: barely-there air. */
   waveArrive() {
@@ -261,33 +261,34 @@ export class Sound {
           break;
         }
         case "swing":
-          this.play(e.amount === 2 ? 900 : 1600, 220, 0.13, 0.35, true);
+          this.sample("swing");
           break;
         case "hit":
-          this.play(180, 55, 0.1, 0.65);
+          this.sample("hit");
           break;
         case "kill":
-          this.play(440, 660, 0.12, 0.25);
+          this.sample("kill");
           break;
         case "hurt":
-          this.play(110, 40, 0.24, 0.65);
+          this.sample("hurt");
           break;
         case "jump":
-          this.play(320, 760, 0.12, 0.2, true);
+          this.sample("jump");
           break;
         case "land":
-          this.play(170, 70, 0.08, 0.3);
+          this.sample("land");
           break;
         case "plunge":
-          this.play(150, 34, 0.32, 0.8);
+          this.sample("plunge");
           break;
         case "dash":
-          this.play(600, 2400, 0.15, 0.3, true);
+          this.sample("dash");
           break;
         case "cleared":
         case "floor":
         case "won":
-          [330, 440, 660].forEach((hz, i) => this.play(hz, hz, 0.35, 0.3, false, i * 0.12));
+          // Coin arpeggio stays synthesized but sits at half level under the samples.
+          [330, 440, 660].forEach((hz, i) => this.play(hz, hz, 0.35, 0.15, false, i * 0.12));
           break;
         case "dead":
           this.play(180, 35, 0.7, 0.5);

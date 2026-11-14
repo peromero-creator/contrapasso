@@ -66,7 +66,6 @@ import { vowArt, warmVowArt } from "./ui/vow-art";
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const ROMAN = ["I", "II", "III", "IV", "V"];
-const CIRCLE_LINES = ["limbo", "lust", "gluttony", "greed", "wrath"] as const;
 const params = new URLSearchParams(location.search);
 const automated = import.meta.env.DEV && params.get("autoplay") === "1";
 const silent = params.get("silent") === "1" || automated;
@@ -600,7 +599,6 @@ function showEnd(won: boolean) {
   $("hud").inert = true;
   closeReward();
   $("end-title").textContent = won ? "HELL REMEMBERS" : "NOT FORGIVEN";
-  sound.say(duel ? (won ? "duel-won" : "duel-lost") : won ? "won" : "dead", 0.6);
   $("end-sub").textContent = won
     ? "Five circles behind you. Return to camp and prepare your next descent."
     : `${CIRCLES[world.floor - 1].name} keeps you. The next descent is yours.`;
@@ -705,7 +703,6 @@ function enterRun(next: RunChallenge) {
       ? "THEY BECAME YOUR PUNISHMENT"
       : `CIRCLE I / ${CIRCLES[0].name}`,
   );
-  sound.say(next.mode === "duel" ? "duel" : "limbo", entranceT + 0.2);
   notice("");
   if (world.phase === "won" || world.phase === "dead")
     showEnd(world.phase === "won");
@@ -1841,7 +1838,7 @@ function frame(now: number) {
       acc -= DT;
       n++;
       const phaseBoss=world.enemies.find(e=>e.kind==='warden'&&(e.enraged||e.hp<e.maxHp*.5));
-      if(phaseBoss&&phaseBoss.id!==enragedBoss){enragedBoss=phaseBoss.id;freeze=Math.max(freeze,.09);restartAnimation($('vignette'),'ult');showBanner('THE RITUAL DEEPENS',1.25);sound.say('deepens');sound.bossPhase();}
+      if(phaseBoss&&phaseBoss.id!==enragedBoss){enragedBoss=phaseBoss.id;freeze=Math.max(freeze,.09);restartAnimation($('vignette'),'ult');showBanner('THE RITUAL DEEPENS',1.25);sound.bossPhase();}
       // Boss presentation cues: warning start, door opening, death.
       const bossNow = world.enemies.find(e => e.kind === "warden" && e.boss);
       if (bossNow) {
@@ -1868,7 +1865,6 @@ function frame(now: number) {
             showBanner(
               boss ? BOSSES[boss].name.toUpperCase() : `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
             );
-            sound.say(boss ?? CIRCLE_LINES[world.floor - 1], 0.35);
           }
         }
         if (e.type === "hit") {

@@ -96,7 +96,27 @@ The same Meshy hero rig adds Charged Spell Cast (125), Mage Spell Cast 3 (132) a
 
 `src/render/soul-fx.ts` draws original layered flame textures, seals, tapering orbit blades, lance streaks and ward facets. Effects use normal transparency and bounded lifetimes, with at most 32 motifs. Dash echoes copy the current posed hero and fade over 0.3 seconds. The skill-tree preview uses the same rig and effects; it has no gameplay, payment or audio side effects. The earlier procedural perimeter filler has been replaced by authored props and ashen static poses from the existing enemy rigs.
 
-Audio is fully synthetic. The narrator's short banner lines are generated once, locally, with the Apache-2.0 Kokoro-82M text-to-speech model and shipped as small MP3s under `public/assets/voice/`; every gameplay cue — strikes, hits, the ritual bell, boss warnings, gate and reward beats — is synthesized at runtime with Web Audio. Sound is off by default, and silent mode never downloads a voice file or creates an audio context.
+Audio is sampled, not narrated. Most gameplay cues — swings, strikes, kills, footsteps, cloth, the ritual bell, boss deaths, gate creaks and reward beats — play CC0 samples from Kenney.nl's Impact Sounds and RPG Audio packs under `public/assets/sfx/` (see the table below). They load once, when sound is first enabled; each cue plays one of 2-3 variations with a ±4% playback-rate offset and never repeats a variation back to back. A few quiet synthesized tones remain (boss warning swell, wave air, the half-level coin arpeggio). Sound is off by default, and silent mode never downloads a sound file or creates an audio context.
+
+## Sound effects (CC0, Kenney)
+
+All files below are CC0 from Kenney.nl (`https://kenney.nl/assets/impact-sounds` and `https://kenney.nl/assets/rpg-audio`, licenses included in each pack) and copied unmodified under `public/assets/sfx/`.
+
+| Cue | Files | Source pack |
+| --- | --- | --- |
+| swing | impactMetal_light_000–002 | Impact Sounds |
+| hit | impactPunch_heavy_000, impactPunch_medium_000, impactPlate_medium_000 | Impact Sounds |
+| kill | impactPunch_heavy_002, impactPlate_heavy_000, impactMetal_heavy_000 | Impact Sounds |
+| hurt | impactPunch_medium_001, impactSoft_medium_000, impactPunch_medium_002 | Impact Sounds |
+| dash | cloth2, cloth3, cloth4 | RPG Audio |
+| jump | footstep_concrete_000–001, footstep00 | Impact Sounds, RPG Audio |
+| land | impactWood_heavy_000, impactPlank_medium_000, impactWood_medium_000 | Impact Sounds |
+| plunge | impactSoft_heavy_000, impactMining_000, impactWood_heavy_001 | Impact Sounds |
+| bell | impactBell_heavy_000–002 | Impact Sounds |
+| rewardOpen | bookOpen, cloth1, bookFlip1 | RPG Audio |
+| rewardPick | metalClick, bookClose, metalLatch | RPG Audio |
+| gateOpen | doorOpen_1, doorOpen_2 | RPG Audio |
+| bossDeath | impactMining_001, impactSoft_heavy_001, impactMetal_heavy_001 | Impact Sounds |
 
 ## Weapon mastery presentation (0.10)
 

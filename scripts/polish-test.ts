@@ -61,11 +61,17 @@ assert.equal(trailScene.children.length,1);assert.equal((trailScene.children[0] 
 trail.update(.2,grip,false,1.6,0xffffff,false);assert.equal(trailScene.children[0].visible,false);
 let audioContexts=0;
 Object.defineProperty(globalThis,'AudioContext',{configurable:true,value:class{constructor(){audioContexts++;throw new Error('Audio must stay locked');}}});
+// The hard lock also covers downloads: a silent or off session never fetches a voice or sfx file.
+let audioFetches=0;
+const realFetch=globalThis.fetch;
+Object.defineProperty(globalThis,'fetch',{configurable:true,value:(...args:Parameters<typeof fetch>)=>{audioFetches++;return realFetch(...args);}});
 const sound=new Sound(true);sound.toggle();sound.muted=false;sound.unlock();sound.setVolume(1);sound.setPaused(false);
 sound.consume([{type:'ability',stage:'charge',ability:'ember',side:'player',x:0,z:0},{type:'ability',stage:'pulse',ability:'ember',side:'player',x:0,z:0},{type:'ability',stage:'release',ability:'lance',side:'player',x:0,z:0},{type:'ability',stage:'pulse',ability:'sword-1',side:'player',x:0,z:0}]);
-sound.bell();sound.bossWarn();sound.bossPhase();sound.bossDeath();sound.gateOpen();sound.rewardOpen();sound.rewardPick();sound.waveArrive();sound.say('limbo');
-assert.equal(audioContexts,0,'silent mode never creates an audio context, including new presentation cues');
-console.log('Polish: PASS (warning priority, bounded ink/trails, lasting orbit, distinct cores, hard audio lock, new cues silent under lock)');
+sound.bell();sound.bossWarn();sound.bossPhase();sound.bossDeath();sound.gateOpen();sound.rewardOpen();sound.rewardPick();sound.waveArrive();
+const offSound=new Sound(false);offSound.unlock();
+assert.equal(audioFetches,0,'silent or sound-off sessions never download a voice or sfx file');
+assert.equal(audioContexts,0,'silent mode never creates an audio context, including the sampled cues');
+console.log('Polish: PASS (warning priority, bounded ink/trails, lasting orbit, distinct cores, hard audio lock, sampled cues silent under lock)');
 const atmosphere=new Atmosphere(),buffer=atmosphere.mesh.instanceMatrix.array;
 for(let i=0;i<3000;i++)atmosphere.update(1/120,i%6);
 assert.equal(atmosphere.mesh.count,24);assert.equal(atmosphere.mesh.instanceMatrix.array,buffer);
