@@ -1,6 +1,6 @@
 // Effects are CC0 samples (Kenney) plus a few quiet synthesized tones. Audio never reads or changes the simulation.
 import { techniqueId, familyOf } from "../sim/techniques.ts";
-import { isSpell, abilityDuration } from "../sim/abilities.ts";
+import { isSpell } from "../sim/abilities.ts";
 import type { SimEvent } from "../sim/world";
 
 /**
@@ -32,8 +32,6 @@ export class Sound {
   private voices = new Set<AudioScheduledSourceNode>();
   private paused = false;
   private volume = 1;
-  private skillChain=0;
-  private skillUntil=0;
   private pulseAt = new Map<string, number>();
   private samples = new Map<string, AudioBuffer>();
   private samplesRequested = false;
@@ -212,7 +210,7 @@ export class Sound {
   }
   /** A new wave arrives: barely-there air. */
   waveArrive() {
-    this.play(420, 900, 0.3, 0.1, true);
+    this.sample("land");
   }
 
   consume(events: readonly SimEvent[]) {
@@ -223,40 +221,16 @@ export class Sound {
       heard.add(e.type);
       switch (e.type) {
         case 'ability': {
+          // Recorded CC0 impacts only: no synthesized charge, release or pulse tones.
           if(e.side==='enemy'||!e.ability)break;
           const now=this.context?.currentTime??0,id=e.ability,t=techniqueId(id),ultimate=!t&&!isSpell(id),tier=ultimate||t?.endsWith('-4')?3:t?.endsWith('-3')?2:1;
-          if(e.stage==='charge'){
-            this.skillChain=now<this.skillUntil?Math.min(5,this.skillChain+1):1;this.skillUntil=now+abilityDuration(id)+1.4;
-            this.play((ultimate?120:360)*(1+.06*this.skillChain),ultimate?65:620,.16,.22,true);
-          }else if(e.stage==='release'){
-            // Spell or soul-core release: cores are heavy and deep, spells mid and distinct.
-            if(ultimate){
-              this.play(70,30,.55,.5,false);
-              this.play(140,40,.45,.3,true);
-              this.play(90,60,.5,.25,false,.12);
-            }else if(id==='lance'){
-              this.play(320,150,.22,.3,false);
-              this.play(1400,2200,.16,.14,true);
-            }else if(id==='nova-spell'){
-              this.play(200,90,.3,.32,false);
-              this.play(500,220,.3,.16,true);
-            }else{
-              this.play(260,70,.32,.28,false);
-              this.play(900,240,.28,.14,true);
-            }
+          if(e.stage==='release'){
+            this.sample("plunge");
+            if(ultimate)this.sample("kill",0.08);
           }else if(e.stage==='pulse'){
-            // Technique contact or zone pulse: one cue per ability per beat; heavy families sit lower.
             if(now-(this.pulseAt.get(id)??-1)<.1)break;
             this.pulseAt.set(id,now);
-            if(ultimate){
-              this.play(75,40,.3,.32,false);
-              this.play(160,50,.28,.16,true);
-            }else{
-              const family=t?t.slice(0,t.indexOf('-')):'sword';
-              const base={hammer:180,axe:190,dagger:260,sword:270,spear:300,crossbow:340,staff:380}[family]??270;
-              this.play(base,base*.45,.11+tier*.04,.26+tier*.07,false);
-              this.play(700+tier*200+this.skillChain*60,190,.08,.12,true);
-            }
+            this.sample(ultimate||tier===3?"kill":"hit");
           }
           break;
         }
@@ -287,11 +261,10 @@ export class Sound {
         case "cleared":
         case "floor":
         case "won":
-          // Coin arpeggio stays synthesized but sits at half level under the samples.
-          [330, 440, 660].forEach((hz, i) => this.play(hz, hz, 0.35, 0.15, false, i * 0.12));
+          this.sample("bell");
           break;
         case "dead":
-          this.play(180, 35, 0.7, 0.5);
+          this.sample("kill");
           break;
       }
     }
