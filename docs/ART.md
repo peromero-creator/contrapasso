@@ -96,7 +96,7 @@ The same Meshy hero rig adds Charged Spell Cast (125), Mage Spell Cast 3 (132) a
 
 `src/render/soul-fx.ts` draws original layered flame textures, seals, tapering orbit blades, lance streaks and ward facets. Effects use normal transparency and bounded lifetimes, with at most 32 motifs. Dash echoes copy the current posed hero and fade over 0.3 seconds. The skill-tree preview uses the same rig and effects; it has no gameplay, payment or audio side effects. The earlier procedural perimeter filler has been replaced by authored props and ashen static poses from the existing enemy rigs.
 
-Audio is sampled, not narrated. Most gameplay cues — swings, strikes, kills, footsteps, cloth, the ritual bell, boss deaths, gate creaks and reward beats — play CC0 samples from Kenney.nl's Impact Sounds and RPG Audio packs under `public/assets/sfx/` (see the table below). They load once, when sound is first enabled; each cue plays one of 2-3 variations with a ±4% playback-rate offset and never repeats a variation back to back. A few quiet synthesized tones remain (boss warning swell, wave air, the half-level coin arpeggio). Sound is off by default, and silent mode never downloads a sound file or creates an audio context.
+Audio is sampled, not narrated. Gameplay cues — swings, strikes, kills, footsteps, cloth, the ritual bell, boss deaths, gate creaks and reward beats — play CC0 samples from Kenney.nl's Impact Sounds and RPG Audio packs under `public/assets/sfx/` (see the table below). They load once, when sound is first enabled; each cue plays one of 2-3 variations with a ±4% playback-rate offset and never repeats a variation back to back. Only low synthesized rumbles remain under the boss warning, boss phase change, boss death and gate opening; skills, circle clears, victory and death use samples. Sound is off by default, and silent mode never downloads a sound file or creates an audio context.
 
 ## Sound effects (CC0, Kenney)
 
@@ -197,6 +197,8 @@ Six original Flow concepts were converted with Meshy image-to-3D. Their source J
 | Gluttony cauldron | 2,981 | 157,660 |
 | Greed chest | 2,791 | 158,888 |
 | Wrath column | 3,182 | 168,500 |
+
+The wave lever beside the bell is a Meshy text-to-3D prop: a horned demon-skull obsidian shrine with chains (`art/source/wave-lever-2.glb`, preview `wave-lever-2.jpg`).
 
 Planted weapon props are grounded blade-first. Static enemy figures use cached grayscale versions of their authored textures, with their emissive contribution removed, to distinguish stone scenery from living enemies. These props load before shader preparation.
 

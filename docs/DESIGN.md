@@ -192,6 +192,8 @@ Afterimages never contribute lights. The held weapon's light lives in the scene 
 
 ## Enemy attack readability
 
+Since the final build these cues are kept in the simulation and tests but not drawn on screen; attacks are read from wind-up animations.
+
 Solo enemies have distinct, matte windup cues: the imp's close strike fills a small circle, archers show their tracking aim, brutes and charging Wardens mark a locked lane, and a Warden's radial volley uses an outward-pointing seal instead of a charge lane. The lane stops at the arena boundary. These are anticipation cues, not new damage zones; the existing contact rules, dodge windows and replays are unchanged. The imp's attack animation now uses its actual 0.42-second windup.
 
 Cues follow the displayed enemy position independently of body shake and recoil. They fill continuously without blinking or adding lights, share geometry across enemies, and normally disappear at release. The Witness gaze remains visible for its brief contact beat. Each active warning uses at most three draws. Duel keeps its existing weapon/skill presentation.
