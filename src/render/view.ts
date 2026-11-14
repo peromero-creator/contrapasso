@@ -367,7 +367,6 @@ export class View {
   private sigilInner!: THREE.Mesh;
   private bellRoot!: THREE.Group;
   private leverRoot!: THREE.Group;
-  private leverArm!: THREE.Mesh;
   private leverPivot!: THREE.Group;
   private leverPulse = 0;
   private rimMats: THREE.MeshBasicMaterial[] = [];
@@ -648,35 +647,19 @@ export class View {
         this.bellRoot.add(model.root);
       }
     }));
-    // Lever: a stocky iron pull on a stone plinth, drawn from primitives; its arm tips when pulled.
-    {
-      const stone = new THREE.MeshStandardMaterial({ color: 0x4c4438, roughness: 0.95, metalness: 0 });
-      const iron = new THREE.MeshStandardMaterial({ color: 0x3a3228, roughness: 0.55, metalness: 0.55 });
-      const brass = new THREE.MeshStandardMaterial({ color: 0x8a7a55, roughness: 0.35, metalness: 0.8 });
-      this.leverRoot = new THREE.Group();
-      this.leverRoot.position.set(1.75, 0, 0);
-      const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.22, 0.72), stone);
-      plinth.position.y = 0.11;
-      this.leverRoot.add(plinth);
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 1.05, 10), iron);
-      post.position.set(0, 0.75, 0);
-      this.leverRoot.add(post);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.1, 10), brass);
-      cap.position.set(0, 1.32, 0);
-      this.leverRoot.add(cap);
-      const pivot = new THREE.Group();
-      pivot.position.set(0, 1.32, 0);
-      this.leverRoot.add(pivot);
-      this.leverArm = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 1.35), iron);
-      this.leverArm.position.set(0, 0.1, 0.55);
-      this.leverArm.rotation.x = -0.28;
-      pivot.add(this.leverArm);
-      const grip = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), brass);
-      grip.position.set(0, 0.1, 1.22);
-      pivot.add(grip);
-      this.leverPivot = pivot;
-      this.scene.add(this.leverRoot);
-    }
+    // Lever: a themed Meshy iron rune lever box beside the bell; it jolts when pulled.
+    this.leverRoot = new THREE.Group();
+    this.leverRoot.position.set(1.75, 0, 0);
+    this.leverRoot.rotation.y = 0;
+    this.leverPivot = new THREE.Group();
+    this.leverRoot.add(this.leverPivot);
+    this.scene.add(this.leverRoot);
+    this.actorLoads.push(this.models.create("wave-lever", 1.75).then((model) => {
+      if (model) {
+        model.root.position.y = 0;
+        this.leverPivot.add(model.root);
+      }
+    }));
   }
 
   /** A soft dark disc under an actor: the only "shadow" in a 2.5D scene. */
@@ -1391,7 +1374,7 @@ export class View {
     if (this.leverPulse > 0) {
       this.leverPulse = Math.max(0, this.leverPulse - dt);
       const t = 1 - this.leverPulse / 0.95;
-      this.leverPivot.rotation.x = Math.sin(Math.PI * Math.min(1, t)) * 0.85;
+      this.leverPivot.rotation.x = Math.sin(Math.PI * Math.min(1, t)) * 0.16;
     } else {
       this.leverPivot.rotation.x = 0;
     }
@@ -1786,6 +1769,8 @@ export class View {
 
   private syncEnemy(e: Enemy, v: EnemyView, position: { x: number; z: number } = e) {
     v.threat?.sync(e, position);
+    // Owner request: no hitbox-like warning rings under enemies or bosses on screen.
+    if (v.threat) v.threat.root.visible = false;
     const wind = e.state === "windup";
     // A blow squashes the body and tips it away from the attacker; a wind-up trembles.
     const k = e.flash > 0 ? Math.min(1, e.flash / 0.14) : 0;

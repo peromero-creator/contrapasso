@@ -27,7 +27,7 @@ export function orientWeapon(
   // melee models; flip it so the handle seats in the fist and the blade leads.
   const dagger = spec.model === "dagger";
   root.rotation.z = bolt ? 0 : dagger ? Math.PI / 2 : -Math.PI / 2;
-  root.rotation.y = bolt ? Math.PI / 2 : 0;
+  root.rotation.y = bolt ? -Math.PI / 2 : 0;
   root.position.set(
     bolt ? 0.22 : dagger ? 0.8 : spec.model === "spear" ? -1.05 : spec.model === "hammer" ? -.45 : -0.15,
     bolt ? -0.12 : 0,

@@ -125,7 +125,7 @@ export class SoulFx {
   constructor(scene: T.Scene, trackActors = false) {
     this.trackActors = trackActors;
     scene.add(this.root);
-    this.root.add(this.ward, this.core);
+    this.root.add(this.ward);
     const c = document.createElement("canvas");
     c.width = c.height = 512;
     const g = c.getContext("2d")!;
@@ -549,7 +549,7 @@ export class SoulFx {
       }
     }
     const p = w.player;
-    this.core.visible = !!p.core && w.phase !== "dead";
+    this.core.visible = false; // The core shows on the HUD; the floating marker read as a stray notch.
     this.core.position.set(hero.x, 1.25, hero.z + 0.15);
     this.core.rotation.y = this.time;
     this.core.material.color.setHex(p.core ? CORES[p.core].color : 0x888888);

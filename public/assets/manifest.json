@@ -384,6 +384,19 @@
         "source": "Original Google Flow concept (art/source/funerary-brazier.jpg), Meshy image-to-3D. Carved bone-hand bronze brazier."
       }
     },
+    "wave-lever": {
+      "file": "/assets/models/wave-lever-dd8b11f6cfba.glb",
+      "height": 1.75,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 430624,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy text-to-3D from a written prompt (art/source/wave-lever-2.jpg is the generated preview). Horned demon-skull obsidian lever shrine with chains."
+      }
+    },
     "ritual-bell": {
       "file": "/assets/models/ritual-bell-0f9625ce0bad.glb",
       "height": 2.4,
