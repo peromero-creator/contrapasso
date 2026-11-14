@@ -137,8 +137,12 @@ export class NearBridge {
     try {
       await this.provider!.viewAccount({ accountId });
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (isMissingAccount(error)) return false;
+      throw new RefereeError(
+        "Unable to verify that testnet account right now. Please try again.",
+        503,
+      );
     }
   }
   /** The champion and gear NFTs exactly as the contract reports them. */
@@ -197,7 +201,7 @@ export class NearBridge {
     await this.ready();
     const tokens: NftToken[] = [];
     const inventory: any[] = [];
-    for (let offset = 0; offset < 1000; offset += 50) {
+    for (let offset = 0; ; offset += 50) {
       const page = await this.view("nft_tokens_for_owner", {
         account_id: this.guest(profile.id).accountId,
         from_index: String(offset),
@@ -207,8 +211,8 @@ export class NearBridge {
       if (page.length < 50) break;
     }
     for (const token of inventory) {
-      const id = token.token_id;
       if (!token) continue;
+      const id = token.token_id;
       let extra: Record<string, unknown> = {};
       try {
         extra = JSON.parse(token.metadata?.extra ?? "{}");

@@ -1,5 +1,5 @@
 import { DescentTransition } from "./ui/descent-transition";
-import { BOSSES } from './sim/bosses.ts';
+import { BOSS_IDS, BOSSES } from './sim/bosses.ts';
 import { SkillInputBuffer } from "./ui/skill-input";
 import { loadoutWeapons } from "./ui/loadout";
 import { SkillTree } from "./ui/skill-tree";
@@ -27,7 +27,7 @@ import { canPayNative, type MarketOperation, type MarketView } from "./shared/ma
 import * as THREE from "three";
 import { View, CIRCLES } from "./render/view";
 import {
-  BOSS_FLOORS, bossAvailable, nearBossGate,
+  BOSS_FLOORS, bossAvailable, nearBossGate, nearWaveBell, waveBellReady,
   createWorld,
   createDuelWorld,
   step,
@@ -61,10 +61,12 @@ import { api, ApiError } from "./api";
 import type { Champion, RunChallenge, DuelOpponent } from "./shared/protocol";
 import { bot } from "./dev/bot";
 import { skillIcon } from "./ui/icons";
+import { vowArt, warmVowArt } from "./ui/vow-art";
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const ROMAN = ["I", "II", "III", "IV", "V"];
+const CIRCLE_LINES = ["limbo", "lust", "gluttony", "greed", "wrath"] as const;
 const params = new URLSearchParams(location.search);
 const automated = import.meta.env.DEV && params.get("autoplay") === "1";
 const silent = params.get("silent") === "1" || automated;
@@ -73,6 +75,9 @@ const sound = new Sound(silent);
 const camp = new Camp();
 const descentTransition = new DescentTransition();
 let entranceT=0, rewardPicking=false;
+/** The cleared room stays in view for a breath before the cards rise over it. */
+const REWARD_DELAY = 1.4;
+let rewardDelay = 0, rewardOpen = false;
 const runVows: string[] = [];
 let world: World = createWorld(1);
 let mode: "menu" | "run" = "menu";
@@ -130,7 +135,7 @@ function reflectSound() {
   button.disabled = silent;
   $("sound-note").textContent = silent
     ? "Locked off for this silent session."
-    : "Off by default. Press M at any time.";
+    : "Off by default. Press M outside text fields.";
 }
 function skillBadge(
   skills: import("./sim/skills").Skills,
@@ -170,10 +175,10 @@ function refreshChampion() {
   duel.classList.toggle("locked", duel.disabled);
   $("duel-card-action").textContent =
     chain && !chain.pending
-      ? "FIND A RIVAL ↘"
+      ? "Find a rival"
       : chain
-        ? "SAVING CHAMPION…"
-        : "TESTNET CONNECTION REQUIRED";
+        ? "Saving champion…"
+        : "Testnet connection required";
 }
 async function loadChampion() {
   if (!championRequest)
@@ -216,12 +221,13 @@ function readInput(): Input {
   if (jumpQueued > 0)
     jumpQueued =
       world.player.jumpCd <= DT && world.player.jumpT <= 0 && world.player.castT <= 0 ? 0 : jumpQueued - 1;
-  return { move, aim, attack, dash, ...skillInput.take(world.player, dash || jump), jump, choice: world.phase === "cleared" ? choiceQueued : 0 };
+  return { move, aim, attack, dash, ...skillInput.take(world.player, dash || jump), jump, choice: world.phase === "cleared" || nearWaveBell(world) ? choiceQueued : 0 };
 }
 function choose(choice: number) {
-  if (world.phase !== "reward" || paused || choiceQueued) return;
+  if (world.phase !== "reward" || paused || choiceQueued || !rewardOpen) return;
   if(rewardPicking || !world.offers[choice-1])return;
   rewardPicking=true;
+  const rewardWorld = world;
   const skill=world.offers[choice-1];
   const card=document.querySelector<HTMLElement>(`[data-choice="${choice}"]`)!;
   card.classList.add('chosen');card.parentElement!.classList.add('decided');
@@ -231,13 +237,14 @@ function choose(choice: number) {
     const target=$(techniqueId(skill)?'technique-'+skill.slice(-1):skill.endsWith('-spell')?'cast-slot':['ember','ash','iron'].includes(skill)?'core-slot':'powers');
     if(icon){const a=card.getBoundingClientRect(),b=target.getBoundingClientRect();icon.classList.add('reward-flight');document.body.append(icon);icon.style.left=`${a.x+a.width/2}px`;icon.style.top=`${a.y+200}px`;const animation=icon.animate([{transform:'translate(-50%,-50%) scale(1)',opacity:1},{transform:`translate(${b.x+b.width/2-a.x-a.width/2}px,${b.y+b.height/2-a.y-200}px) scale(.4)`,opacity:.1}],{duration:440,easing:'cubic-bezier(.4,0,.2,1)'});animation.onfinish=()=>icon.remove();}
   }
-  window.setTimeout(()=>{if(world.phase==='reward'&&mode==='run'){choiceQueued=choice;runVows.push(SKILLS[skill].name);}rewardPicking=false;},duration);
+  window.setTimeout(()=>{if(world!==rewardWorld)return;if(world.phase==='reward'&&mode==='run'){choiceQueued=choice;runVows.push(SKILLS[skill].name);}rewardPicking=false;},duration);
   for (const button of document.querySelectorAll<HTMLButtonElement>(
     ".power-choice",
   ))
     button.disabled = true;
 }
 window.addEventListener("keydown", (e) => {
+  if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
   if (!e.repeat && e.code === "KeyM") {
     sound.toggle();
     reflectSound();
@@ -265,7 +272,7 @@ window.addEventListener("keydown", (e) => {
     if (!e.repeat && choice) choose(choice);
     return;
   }
-  if (!e.repeat && e.code === "KeyE" && nearBossGate(world)) choiceQueued = 1;
+  if (!e.repeat && e.code === "KeyE" && (nearBossGate(world) || nearWaveBell(world))) choiceQueued = 1;
   if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
   if (!e.repeat && ["ShiftLeft", "ShiftRight", "KeyK"].includes(e.code))
     dashQueued = 8;
@@ -312,7 +319,10 @@ function showBanner(text: string, seconds = 2.2) {
   bannerT = seconds;
 }
 function setPaused(value: boolean) {
+  // A chosen reward is a menu decision, so pausing must not discard it after its animation.
+  const rewardChoice = world.phase === "reward" ? choiceQueued : 0;
   clearInput();
+  choiceQueued = rewardChoice;
   if (mode !== "run" || ended || paused === value) return;
   paused = value;
   acc = freeze = slow = 0;
@@ -323,7 +333,7 @@ function setPaused(value: boolean) {
       button.disabled = rewardPicking || !!choiceQueued;
   sound.setPaused(value);
   $("hud").inert = value || world.phase === "reward";
-  $("reward").inert = value;
+  $("reward").inert = value || !rewardOpen;
   $("pause").classList.toggle("hidden", !value);
   if (value)
     $("pause-where").textContent =
@@ -337,37 +347,96 @@ function setPaused(value: boolean) {
   }
   else {
     sound.unlock();
-    if (world.phase === "reward")
+    if (world.phase === "reward" && rewardOpen)
       document.querySelector<HTMLButtonElement>(".power-choice")?.focus();
     else if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
   }
 }
 $("boss-enter").onclick = () => { if (!paused && nearBossGate(world)) choiceQueued = 1; };
+function closeReward(fade = false) {
+  const reward = $("reward");
+  rewardDelay = 0;
+  rewardOpen = false;
+  reward.inert = true;
+  reward.classList.remove("open");
+  if (!fade || document.documentElement.classList.contains("calm")) { reward.classList.add("hidden"); return; }
+  // Let the panel sink away while the room wakes up behind it.
+  window.setTimeout(() => { if (!rewardOpen && rewardDelay <= 0) reward.classList.add("hidden"); }, 260);
+}
+/** Lay the cards out unseen, then let the cleared room breathe before they rise. */
 function showReward() {
   if (world.phase !== "reward" || !world.offers.length) return;
   clearInput();
   rewardPicking=false;
+  rewardOpen=false;
   $("reward-cards").classList.remove("decided");
   acc = freeze = slow = 0;
   $("hud").inert = true;
   $("reward-circle").textContent = world.bossEncounter === "defeated" ? "BOSS DEFEATED" : `CIRCLE ${ROMAN[world.floor - 1]} CLEARED`;
   const cards = $("reward-cards");
+  const art = vowArt(world.offers);
   cards.innerHTML = world.offers
     .map(
       (id, i) =>
-        `<button class="power-choice" style="--card-panel:${id.startsWith("staff-")||id.endsWith("-spell")||id==="pyre"?1:techniqueId(id)?0:["ember","ash","iron"].includes(id)?2:3}" data-choice="${i + 1}"><span class="power-key">0${i + 1}</span><span class="power-art" aria-hidden="true"></span>${skillIcon(id)}<span class="power-rank">RANK ${rank(world.player.skills, id) + 1}</span><strong>${SKILLS[id].name}</strong><span class="power-description">${SKILLS[id].description}</span><span class="power-effect">${SKILLS[id].rank.replace(" per rank", "")}</span><span class="power-take">CHOOSE UPGRADE <span>↗</span></span></button>`,
+        `<button class="power-choice" data-choice="${i + 1}"><span class="power-art" aria-hidden="true"><img src="/art/vows/${art[i]}.jpg" alt="" draggable="false" /></span>${skillIcon(id)}<span class="power-rank">RANK ${rank(world.player.skills, id) + 1}</span><strong>${SKILLS[id].name}</strong><span class="power-description">${SKILLS[id].description}</span><span class="power-effect">${SKILLS[id].rank.replace(" per rank", "")}</span><span class="power-take"><kbd>${i + 1}</kbd>Choose</span></button>`,
     )
     .join("");
   for (const button of cards.querySelectorAll<HTMLButtonElement>("button"))
     button.addEventListener("click", () =>
       choose(Number(button.dataset.choice)),
     );
-  $("reward").classList.remove("hidden");
-  document.querySelector<HTMLButtonElement>(".power-choice")?.focus();
+  const reward = $("reward");
+  reward.classList.remove("hidden", "open");
+  reward.inert = true;
+  rewardDelay = document.documentElement.classList.contains("calm") ? 0.25 : REWARD_DELAY;
+}
+function openReward() {
+  rewardDelay = 0;
+  if (world.phase !== "reward" || mode !== "run" || ended) return;
+  rewardOpen = true;
+  const reward = $("reward");
+  reward.inert = paused;
+  reward.classList.add("open");
+  if (!paused) document.querySelector<HTMLButtonElement>(".power-choice")?.focus();
 }
 let waveKey='',wavePeak=0;
-for(const id of ['cast-slot','technique-1','technique-2','technique-3','technique-4']){const number=document.createElement('output');number.className='cooldown-number';number.setAttribute('aria-hidden','true');$(id).append(number);}
+for(const id of ['cast-slot','core-slot','technique-1','technique-2','technique-3','technique-4']){const number=document.createElement('output');number.className='cooldown-number';number.setAttribute('aria-hidden','true');$(id).append(number);}
+// The bar is repainted every frame; only values that changed touch the page.
+const hudShown = new Map<string, string>();
+function hudChanged(key: string, value: string) {
+  if (hudShown.get(key) === value) return false;
+  hudShown.set(key, value);
+  return true;
+}
+const hudWriters = new Map<string, { textContent: string }>();
+/** Stands in for an element inside updateHud: assigning the same text again costs nothing. */
+function hud(id: string) {
+  let writer = hudWriters.get(id);
+  if (!writer) hudWriters.set(id, (writer = { set textContent(value: string) { hudText(id, value); }, get textContent() { return hudShown.get('t:' + id) ?? ''; } }));
+  return writer;
+}
+function hudText(id: string, value: string) {
+  if (hudChanged('t:' + id, value)) $(id).textContent = value;
+}
+function hudFill(id: string, fraction: number) {
+  const value = (Math.round(Math.max(0, Math.min(1, fraction)) * 60) / 60).toFixed(3);
+  if (hudChanged('f:' + id, value)) $(id).style.setProperty('--fill', value);
+}
+/** One key cap: bright when ready; while cooling the key steps aside for the seconds left. */
+function keycap(id: string, known: boolean, wait: number, total: number, name: string, skillId: string | null = null, shown = wait >= 10 ? String(Math.ceil(wait)) : wait.toFixed(1)) {
+  const el = $(id), cooling = known && wait > 0.05;
+  el.classList.toggle('unlearned', !known);
+  el.classList.toggle('ready', known && !cooling);
+  el.classList.toggle('cooling', cooling);
+  if (hudChanged('n:' + id, cooling ? shown : '')) el.querySelector('output')!.textContent = cooling ? shown : '';
+  if (hudChanged('icon:' + id, skillId ?? '')) {
+    const icon = el.querySelector('.keycap-icon');
+    if (icon) icon.innerHTML = skillId ? skillIcon(skillId as import("./sim/skills").SkillId) : '';
+  }
+  hudFill(id, known ? 1 - wait / Math.max(total, 0.001) : 0);
+  if (hudChanged('title:' + id, name)) el.title = name;
+}
 function updateHud(dt: number) {
   const p = world.player;
   const key=`${world.floor}:${world.wave}:${world.bossEncounter}`;
@@ -375,50 +444,26 @@ function updateHud(dt: number) {
   wavePeak=Math.max(wavePeak,world.enemies.length);
   $('wave-progress').style.setProperty('--remaining',String(wavePeak?world.enemies.length/wavePeak:0));
   $('wave-progress').hidden=world.phase!=='fight'||world.bossEncounter==='active'||world.mode==='duel';
-  for(const [i,id]of ['cast-slot','technique-1','technique-2','technique-3','technique-4'].entries()){
-    const cd=i===0?p.spellCd:p.techniqueCd[i-1];$(id).querySelector('output')!.textContent=cd>.05?cd.toFixed(1):'';
-  }
   $('first-technique-hint').hidden=!settings.values.hints||!!champion?.runs||p.castN>0||!weaponTechniques(p.weaponId).some(id=>rank(p.skills,id)>0)||world.phase!=='fight';
   hpFill.style.width = `${(p.hp / p.maxHp) * 100}%`;
   $("hp-lag").style.width = hpFill.style.width;
   $("vital").classList.toggle("critical", p.hp > 0 && p.hp <= p.maxHp * 0.25);
   hpText.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+  const dashTotal = 0.75 * (1 - 0.12 * rank(p.skills, "ash"));
   dashPip.classList.toggle("ready", p.dashCd <= 0);
-  $("dash-meter").style.width =
-    `${Math.max(0, 1 - p.dashCd / (0.75 * (1 - 0.12 * rank(p.skills, "ash")))) * 100}%`;
+  hudFill("dash-pip", 1 - p.dashCd / dashTotal);
   $("jump-pip").classList.toggle("ready", p.jumpCd <= 0 && p.jumpT <= 0);
-  $("jump-label").textContent = p.plunge ? "PLUNGE" : p.jumpT > 0 ? "ATTACK ↓" : "JUMP";
-  $("jump-meter").style.width = `${p.jumpT > 0 ? 0 : Math.max(0, 1 - p.jumpCd / JUMP_CD) * 100}%`;
-  $("cast-label").textContent = !availableSpell(p.spell, p.skills)
-    ? "LEARN A Q SPELL"
-    : p.spellCd > 0
-      ? `${SPELLS[p.spell].name} · ${p.spellCd.toFixed(1)}s`
-      : SPELLS[p.spell].name;
-  $("cast-meter").style.width =
-    `${availableSpell(p.spell, p.skills) ? Math.max(0, 1 - p.spellCd / spellCooldown(p.skills)) * 100 : 0}%`;
-  $("core-label").textContent = p.core
-    ? `${CORES[p.core].name} · ${Math.floor(p.charge)}%`
-    : "ATTUNE A CORE";
-  $("core-meter").style.width = `${p.charge}%`;
-  $("core-slot").classList.toggle("ready", p.charge >= 100);
-  $("core-slot").classList.toggle("unlearned", !p.core);
-  $("cast-slot").classList.toggle(
-    "unlearned",
-    !availableSpell(p.spell, p.skills),
-  );
-  $("cast-slot").classList.toggle(
-    "ready",
-    availableSpell(p.spell, p.skills) && p.spellCd <= 0,
-  );
-  for (const [i, id] of weaponTechniques(p.weaponId).entries()) {
-    const el = $("technique-" + (i+1)), known = rank(p.skills,id)>0;
-    el.querySelector('span')!.textContent = known ? p.techniqueCd[i]>0 ? `${TECHNIQUES[id].name} · ${p.techniqueCd[i].toFixed(1)}s` : TECHNIQUES[id].name : `LEARN ${TECHNIQUES[id].name.toUpperCase()}`;
-    el.classList.toggle('ready',known && p.techniqueCd[i]<=0);
-    // an unlearned slot is only a reminder; keep it off the arena during a run
-    el.classList.toggle('unlearned', !known);
-    (el.querySelector('b') as HTMLElement).style.width = `${known?Math.max(0,1-p.techniqueCd[i]/TECHNIQUES[id].cooldown)*100:0}%`;
-  }
-  $("combo-instruction").textContent =
+  hudText("jump-label", p.plunge ? "PLUNGE" : p.jumpT > 0 ? "ATTACK" : "JUMP");
+  hudFill("jump-pip", p.jumpT > 0 ? 0 : 1 - p.jumpCd / JUMP_CD);
+  const spellKnown = availableSpell(p.spell, p.skills);
+  keycap("cast-slot", spellKnown, p.spellCd, spellCooldown(p.skills), spellKnown ? SPELLS[p.spell].name : "", spellKnown ? p.spell : null);
+  // The core fills with dealt damage instead of time: show its charge until it is full.
+  keycap("core-slot", !!p.core, p.charge >= 100 ? 0 : 1, 1, p.core ? CORES[p.core].name : "", p.core, `${Math.floor(p.charge)}%`);
+  hudFill("core-slot", p.core ? p.charge / 100 : 0);
+  for (const [i, id] of weaponTechniques(p.weaponId).entries())
+    keycap("technique-" + (i + 1), rank(p.skills, id) > 0, p.techniqueCd[i], TECHNIQUES[id].cooldown, TECHNIQUES[id].name, id);
+  $("help").classList.toggle("seen", world.tick > 540);
+  hud("combo-instruction").textContent =
     p.weaveT > 0
       ? "SOUL-WOVEN · +25%"
       : p.comboT > 0 && rank(p.skills, "coup")
@@ -432,24 +477,24 @@ function updateHud(dt: number) {
     $("flow").classList.toggle("strong", shownFlow >= 3);
     $("flow").classList.toggle("master", shownFlow >= 5);
     if (shownFlow >= 2) {
-      $("flow-count").textContent = `×${shownFlow}`;
+      hud("flow-count").textContent = `×${shownFlow}`;
       restartAnimation($("flow"), "pop");
     }
   }
-  $("coin-n").textContent = String(p.coins);
-  $("circle").textContent =
+  hud("coin-n").textContent = String(p.coins);
+  hud("circle").textContent =
     `${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`;
-  $("wave").textContent =
+  hud("wave").textContent =
     world.phase === "reward"
       ? "TAKE A VOW"
       : world.phase === "cleared"
         ? "ENTER THE GATE"
-        : world.bossEncounter === "active" ? "BOSS CHAMBER" : `WAVE ${world.wave + 1} / ${world.wavesInFloor} · ${world.enemies.length} REMAIN`;
+        : world.bossEncounter === "active" ? "BOSS CHAMBER" : waveBellReady(world) ? "RING THE BELL · WAVE " + (world.wave + 2) : `WAVE ${world.wave + 1} / ${world.wavesInFloor} · ${world.enemies.length} REMAIN`;
   if (world.mode === "duel") {
-    $("circle").textContent = "DUEL / THE CHALLENGE";
-    $("wave").textContent =
+    hud("circle").textContent = "DUEL / THE CHALLENGE";
+    hud("wave").textContent =
       `${Math.max(0, Math.ceil((DUEL_TICKS - world.tick) / 60))} SECONDS · 10 COIN AT STAKE`;
-    $("coin-n").textContent = String(champion?.coins ?? 0);
+    hud("coin-n").textContent = String(champion?.coins ?? 0);
     const opponent = world.enemies.find((e) => e.kind === "champion");
     $("duel-boss-fill").style.width =
       `${opponent ? Math.max(0, opponent.hp / opponent.maxHp) * 100 : 0}%`;
@@ -464,23 +509,26 @@ function updateHud(dt: number) {
     }
   }
   $("portal-hint").classList.toggle("hidden", world.phase !== "cleared");
-  $("portal-hint").textContent = world.floor === FLOORS ? "ENTER THE LIT GATE TO FINISH" : "ENTER THE LIT GATE TO DESCEND";
+  hud("portal-hint").textContent = !world.portalArmed
+    ? "Step away, then enter the exit to continue"
+    : world.floor === FLOORS ? "Enter the lit exit to finish" : "Enter the lit exit to descend";
   const gateReady = nearBossGate(world);
   $("boss-gate-prompt").classList.toggle("hidden", !bossAvailable(world) || world.phase !== "cleared");
   $("boss-enter").toggleAttribute("disabled", !gateReady);
-  $("boss-gate-name").textContent = BOSSES[(["warden", "witness", "cantor"] as const)[BOSS_FLOORS.indexOf(world.floor as 2|4|5)] ?? "warden"].name;
-  $("boss-gate-help").textContent = gateReady ? "Optional encounter" : "Optional boss · Approach the carved door";
+  $("wave-bell-prompt").classList.toggle("hidden", !nearWaveBell(world));
+  hud("boss-gate-name").textContent = BOSSES[BOSS_IDS[BOSS_FLOORS.indexOf(world.floor as 2|3|4|5)] ?? "warden"].name;
+  hud("boss-gate-help").textContent = gateReady ? "Optional encounter" : "Optional boss · Approach the carved door";
   $("gate-veil").style.opacity = world.gateTransition > 0 ? String(Math.sin(Math.PI * (1-world.gateTransition/54))) : "0";
   const seconds = Math.floor(world.tick / 60);
-  $("run-time").textContent =
+  hud("run-time").textContent =
     `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-  $("run-seed").textContent = `SEED ${world.seed}`;
+  hud("run-seed").textContent = `SEED ${world.seed}`;
   for (let i = 1; i <= 3; i++)
     $("combo-" + i).classList.toggle(
       "lit",
       p.swingN > 0 && i <= ((p.swingN - 1) % 3) + 1,
     );
-  $("held-weapon").textContent =
+  hud("held-weapon").textContent =
     `${weapon(p.weaponId).name} +${p.weaponLevel} · ${weapon(p.weaponId).className}`;
   const powers = JSON.stringify(p.skills);
   if (powers !== shownPowers) {
@@ -524,12 +572,12 @@ async function verifyRun(checkingPending = false) {
         ? " · Testnet save pending"
         : " · Confirmed on NEAR testnet";
     if (resultPending) {
-      $("retry-verification").textContent = "CHECK SAVE ↻";
+      $("retry-verification").textContent = "Check save";
       $("retry-verification").classList.remove("hidden");
     }
   } catch (e) {
     $("receipt-status").textContent = (e as Error).message;
-    $("retry-verification").textContent = "RETRY VERIFICATION ↻";
+    $("retry-verification").textContent = "Retry save";
     $("retry-verification").classList.remove("hidden");
   } finally {
     verifying = false;
@@ -545,21 +593,24 @@ function countCoins(value:number) {
   coinAnimation=requestAnimationFrame(tick);
 }
 function showEnd(won: boolean) {
+  const duel = world.mode === "duel";
   ended = true;
   clearInput();
   $("hud").inert = true;
-  $("reward").classList.add("hidden");
+  closeReward();
   $("end-title").textContent = won ? "HELL REMEMBERS" : "NOT FORGIVEN";
+  sound.say(duel ? (won ? "duel-won" : "duel-lost") : won ? "won" : "dead", 0.6);
   $("end-sub").textContent = won
     ? "Five circles behind you. Return to camp and prepare your next descent."
     : `${CIRCLES[world.floor - 1].name} keeps you. The next descent is yours.`;
-  $("end-coins").textContent="0"; countCoins(world.player.coins);
+  cancelAnimationFrame(coinAnimation);
+  $("end-coins").textContent = duel ? "10" : "0";
+  if (!duel) countCoins(world.player.coins);
   $("end-build").innerHTML=`<p>${weapon(world.player.weaponId).name} · ${Math.floor(world.tick/3600)}:${String(Math.floor(world.tick/60)%60).padStart(2,'0')} · Best FLOW ×${view.bestFlow}</p><div>${runVows.map(name=>`<span>${escapeHtml(name)}</span>`).join('') || '<span>No vows taken this descent</span>'}</div>`;
   $("end-kills").textContent = `${world.player.kills}`;
   $("end-floor").textContent = `${world.floor} / 5`;
-  const duel = world.mode === "duel";
   $("same-seed").classList.toggle("hidden", duel);
-  $("again").textContent = duel ? "FIND ANOTHER RIVAL ↗" : "DESCEND AGAIN ↗";
+  $("again").textContent = duel ? "Find another rival" : "Play again";
   $("end-coins-label").textContent = duel ? "COIN AT STAKE" : "COIN COLLECTED";
   $("end-kills-label").textContent = duel ? "RIVAL DEFEATED" : "ENEMIES SLAIN";
   $("end-floor-label").textContent = duel ? "DUEL TIME" : "CIRCLES REACHED";
@@ -598,6 +649,7 @@ async function startRun(retry?: string) {
 function enterRun(next: RunChallenge) {
   if (next.version !== SIM_VERSION)
     throw new Error("The game has updated. Reload to continue.");
+  settings.close();
   resultPending = false;
   runVows.length=0;rewardPicking=false;
   challenge = next;
@@ -631,7 +683,9 @@ function enterRun(next: RunChallenge) {
   mode = "run";
   sound.setPaused(false);
   sound.unlock();
-  for (const id of ["end", "pause", "reward"]) $(id).classList.add("hidden");
+  for (const id of ["end", "pause"]) $(id).classList.add("hidden");
+  closeReward();
+  warmVowArt();
   $("landing").classList.add("up");
   $("landing").inert = true;
   entranceT=descentTransition.play(next.mode === "duel" ? "THE DUEL" : "CIRCLE I · LIMBO");
@@ -643,26 +697,29 @@ function enterRun(next: RunChallenge) {
   $("duel-boss").classList.toggle("hidden", next.mode !== "duel");
   $("duel-boss-name").textContent = next.opponent?.name ?? "RIVAL CHAMPION";
   $("pause-menu").textContent =
-    next.mode === "duel" ? "FORFEIT · LOSE 10 COIN" : "LEAVE · RETURN TO CAMP";
+    next.mode === "duel" ? "Forfeit · lose 10 coin" : "Leave run";
   showBanner(
     next.mode === "duel"
       ? "THEY BECAME YOUR PUNISHMENT"
       : `CIRCLE I / ${CIRCLES[0].name}`,
   );
+  sound.say(next.mode === "duel" ? "duel" : "limbo", entranceT + 0.2);
   notice("");
   if (world.phase === "won" || world.phase === "dead")
     showEnd(world.phase === "won");
 }
 function toMenu() {
   if (verifying) return;
+  settings.close();
   resultPending = false;
   clearInput();
   resetCombatFeedback();
   paused = false;
   mode = "menu";
   sound.setPaused(true);
-  for (const id of ["pause", "end", "hud", "reward"])
+  for (const id of ["pause", "end", "hud"])
     $(id).classList.add("hidden");
+  closeReward();
   descentTransition.play("RETURN TO CAMP",true);
   camp.enter("modes");
   refreshChampion();
@@ -675,8 +732,8 @@ function renderLobby() {
     `${champion.duelWins} W / ${champion.duelLosses} L`;
   const defense = $<HTMLButtonElement>("defense-toggle");
   defense.textContent = champion.defending
-    ? "DEFENSE ON · DISABLE"
-    : "ENABLE DEFENSE";
+    ? "Disable defense"
+    : "Enable defense";
   defense.setAttribute("aria-pressed", String(champion.defending));
   defense.disabled =
     busy ||
@@ -696,7 +753,7 @@ function renderLobby() {
     button.className = "opponent-card";
     button.dataset.opponent = opponent.id;
     button.disabled = busy || !!champion.lockedBy || champion.coins < 10;
-    button.innerHTML = `<span class="eyebrow">MATCHED POWER / ${buildPower(opponent.build)}</span><strong></strong><span>${opponent.wins} W / ${opponent.losses} L · Blade +${opponent.build.weaponLevel} / Armor +${opponent.build.armorLevel}</span><span class="opponent-powers">SKILLS · ${Object.keys(opponent.build.skills).length}</span><span class="opponent-fight">CHALLENGE · 10 COIN <b>↘</b></span>`;
+    button.innerHTML = `<span class="eyebrow">MATCHED POWER / ${buildPower(opponent.build)}</span><strong></strong><span>${opponent.wins} W / ${opponent.losses} L · Blade +${opponent.build.weaponLevel} / Armor +${opponent.build.armorLevel}</span><span class="opponent-powers">SKILLS · ${Object.keys(opponent.build.skills).length}</span><span class="opponent-fight">Challenge · 10 coin</span>`;
     button.querySelector("strong")!.textContent = opponent.name;
     button.addEventListener("click", () => void startDuel(opponent.id));
     grid.appendChild(button);
@@ -724,7 +781,7 @@ async function openLobby(turn = navigation) {
     notice((e as Error).message);
   } finally {
     busy = false;
-    renderLobby();
+    await refreshActiveMenu().catch((e) => notice((e as Error).message));
   }
 }
 async function startDuel(opponentId: string) {
@@ -741,7 +798,7 @@ async function startDuel(opponentId: string) {
     notice((e as Error).message);
   } finally {
     busy = false;
-    renderLobby();
+    await refreshActiveMenu().catch((e) => notice((e as Error).message));
   }
 }
 $("mode-duel").addEventListener("click", () => void navigate("duel-lobby"));
@@ -768,7 +825,7 @@ $("defense-toggle").addEventListener("click", async () => {
     notice((e as Error).message);
   } finally {
     busy = false;
-    renderLobby();
+    await refreshActiveMenu().catch((e) => notice((e as Error).message));
   }
 });
 function checkpointDuel() {
@@ -828,9 +885,7 @@ function showMarketTab(exchange: boolean) {
   $("exchange-panel").classList.toggle("hidden", !exchange);
   $("tab-mint").setAttribute("aria-pressed", String(!exchange));
   $("tab-exchange").setAttribute("aria-pressed", String(exchange));
-  $("market-title").textContent = exchange
-    ? "THE ASH EXCHANGE"
-    : "THE RELIQUARY";
+  $("market-title").textContent = "Market";
   document.querySelector<HTMLElement>(".market-fine")!.textContent = exchange
     ? "The same NFT, with its upgrades and history. Seller receives 90%; game treasury receives 10%. Test NEAR only."
     : "10 coin + 0.01 test NEAR per weapon. Equip, upgrade, or resell.";
@@ -848,21 +903,21 @@ function renderExchange() {
           .map((l) => {
             const spec = weapon(l.weaponId),
               mine = l.seller === owner;
-            return `<article class="exchange-card">${relicImage(weaponId(l.weaponId), escapeHtml(spec.name))}<div><span class="eyebrow">${escapeHtml(spec.className)} · +${l.level}</span><h3>${escapeHtml(spec.name)}</h3><p>${l.kills} kills · ${l.pastOwners.length} previous owner${l.pastOwners.length === 1 ? "" : "s"}</p><dl><dt>Damage</dt><dd>${spec.damage + l.level * 2}</dd><dt>Range</dt><dd>${spec.reach} m</dd><dt>Seller</dt><dd>${escapeHtml(shortAccount(l.seller))}</dd></dl><p class="listing-price">${nearAmount(l.priceYocto)} <small>test NEAR</small></p><button class="btn ${mine ? "ghost" : ""}" data-sale="${escapeHtml(l.id)}" data-sale-action="${mine ? "cancel_sale" : "buy_gear"}" ${busy || pendingMarket || (!mine && !canPayNative(state, l.priceYocto)) ? "disabled" : ""}>${mine ? "CANCEL LISTING" : "BUY THIS NFT ↗"}</button></div></article>`;
+            return `<article class="exchange-card">${relicImage(weaponId(l.weaponId), escapeHtml(spec.name))}<div><span class="eyebrow">${escapeHtml(spec.className)} · +${l.level}</span><h3>${escapeHtml(spec.name)}</h3><p>${l.kills} kills · ${l.pastOwners.length} previous owner${l.pastOwners.length === 1 ? "" : "s"}</p><dl><dt>Damage</dt><dd>${spec.damage + l.level * 2}</dd><dt>Range</dt><dd>${spec.reach} m</dd><dt>Seller</dt><dd>${escapeHtml(shortAccount(l.seller))}</dd></dl><p class="listing-price">${nearAmount(l.priceYocto)} <small>test NEAR</small></p><button class="btn ${mine ? "ghost" : ""}" data-sale="${escapeHtml(l.id)}" data-sale-action="${mine ? "cancel_sale" : "buy_gear"}" ${busy || pendingMarket || (!mine && !canPayNative(state, l.priceYocto)) ? "disabled" : ""}>${mine ? "Cancel listing" : `Buy · ${nearAmount(l.priceYocto)} test NEAR`}</button></div></article>`;
           })
           .join("")
       : '<p class="exchange-empty">No relics are listed yet. Offer an unequipped weapon below.</p>';
   $("exchange-balance").innerHTML =
-    `<div><span class="eyebrow">YOUR SALE PROCEEDS</span><b>${nearAmount(marketState.proceedsYocto ?? "0")} <small>test NEAR</small></b></div>${marketButton("withdraw_sales", marketState.proceedsPending ? "WITHDRAWAL PENDING" : "WITHDRAW PROCEEDS ↗", !ready || !!marketState.proceedsPending || BigInt(marketState.proceedsYocto ?? "0") === 0n)}<p>Available test NEAR: ${nearAmount(state.nativeBalanceYocto ?? "0")}. Gas reserve: ${nearAmount(state.nativeGasReserveYocto ?? "0")}.</p>`;
+    `<div><span class="eyebrow">YOUR SALE PROCEEDS</span><b>${nearAmount(marketState.proceedsYocto ?? "0")} <small>test NEAR</small></b></div>${marketButton("withdraw_sales", marketState.proceedsPending ? "Withdrawal pending" : "Withdraw proceeds", !ready || !!marketState.proceedsPending || BigInt(marketState.proceedsYocto ?? "0") === 0n)}<p>Available test NEAR: ${nearAmount(state.nativeBalanceYocto ?? "0")}. Gas reserve: ${nearAmount(state.nativeGasReserveYocto ?? "0")}.</p>`;
   if (!state.sponsored && state.fundingAvailable && champion.runs > 0)
     $("exchange-balance").insertAdjacentHTML(
       "beforeend",
-      marketButton("fund_guest", "GET DEMO TEST NEAR ↗", !ready),
+      marketButton("fund_guest", "Get demo test NEAR", !ready),
     );
   if (pendingMarket)
     $("exchange-balance").insertAdjacentHTML(
       "beforeend",
-      '<button class="btn ghost" data-market-retry="1">CHECK PENDING ACTION ↻</button>',
+      '<button class="btn ghost" data-market-retry="1">Check pending action</button>',
     );
   const select = $<HTMLSelectElement>("sale-token"),
     selected = select.value;
@@ -956,15 +1011,15 @@ function renderMarket() {
     actions =
       marketButton(
         "mint",
-        "MINT RESERVED WEAPON ↗",
+        `Mint weapon · ${nearAmount(round.priceYocto)} test NEAR`,
         !open || !canPayNative(marketState, round.priceYocto),
-      ) + marketButton("cancel_mint", "CANCEL · REFUND 10 COIN");
+      ) + marketButton("cancel_mint", "Cancel · refund 10 coin");
   } else if (open)
     actions = marketButton(
       "reserve_mint",
       reservation?.status === "minted"
-        ? "MINT ANOTHER · RESERVE 10 COIN"
-        : "RESERVE · 10 COIN",
+        ? "Reserve another · 10 coin"
+        : "Reserve · 10 coin",
       champion.runs < 1 ||
         champion.coins < 10 ||
         (["guillotine-hymn", "acheron-needle"].includes(selectedRelic) &&
@@ -980,8 +1035,8 @@ function renderMarket() {
     actions += marketButton(
       "fund_guest",
       marketState.fundingAvailable
-        ? "GET DEMO TEST NEAR"
-        : "DEMO FUNDING IS FULL",
+        ? "Get demo test NEAR"
+        : "Demo funding is full",
       !marketState.fundingAvailable || champion.runs < 1,
     );
   if (champion.runs < 1)
@@ -1011,17 +1066,17 @@ function renderMarket() {
   ]);
   $("raffle-actions").innerHTML =
     round && !round.drawn && !open && round.revenueMode === "treasury"
-      ? marketButton("draw_round", "CLOSE EDITION & REFUND UNPAID SPOTS ↗")
+      ? marketButton("draw_round", "Close edition & refund reservations")
       : "";
   $("raffle-winners").textContent =
     "Funds stay in the application treasury under project-owner control. No tickets, automatic prize distribution or investment returns.";
   $("prize-vault").classList.toggle("hidden", BigInt(prizeYocto) === 0n);
   $("prize-vault").innerHTML =
-    `<span class="eyebrow">YOUR CHAMPION’S PRIZE VAULT</span><h3>${nearAmount(prizeYocto)} TEST NEAR</h3><p>Withdraw to the current NFT owner. Taking the champion to your wallet takes this vault with it.</p>${marketButton("withdraw_prize", "WITHDRAW PRIZE ↗", BigInt(prizeYocto) === 0n)}`;
+    `<span class="eyebrow">YOUR CHAMPION’S PRIZE VAULT</span><h3>${nearAmount(prizeYocto)} TEST NEAR</h3><p>Withdraw to the current NFT owner. Taking the champion to your wallet takes this vault with it.</p>${marketButton("withdraw_prize", "Withdraw prize", BigInt(prizeYocto) === 0n)}`;
   if (pendingMarket)
     $("market-actions").insertAdjacentHTML(
       "beforeend",
-      '<button class="btn ghost" data-market-retry="1">CHECK PENDING ACTION ↻</button>',
+      '<button class="btn ghost" data-market-retry="1">Check pending action</button>',
     );
 }
 async function doMarket(
@@ -1068,8 +1123,7 @@ async function doMarket(
       out.innerHTML = response.intent.error
         ? escapeHtml(response.intent.error)
         : `Confirmed on testnet.${response.intent.transaction ? ` <a href="${EXPLORER}/txns/${encodeURIComponent(response.intent.transaction)}" target="_blank" rel="noopener noreferrer">View transaction ↗</a>` : ""}`;
-      if (nft) await renderNft();
-      else saleInventory = (await api.nft()).tokens;
+      if (!nft) saleInventory = (await api.nft()).tokens;
     } else
       out.textContent =
         "Still confirming. Check the same pending action to continue; it will not charge twice.";
@@ -1078,6 +1132,7 @@ async function doMarket(
   } finally {
     busy = false;
     renderMarket();
+    await refreshActiveMenu().catch((e) => notice((e as Error).message));
   }
 }
 async function openMarket() {
@@ -1192,14 +1247,14 @@ let claimArmed = false;
 let claimSourceId: string | null = null;
 $("claim-account").addEventListener("input", () => {
   claimArmed = false;
-  $("claim-button").textContent = "CLAIM TO WALLET";
+  $("claim-button").textContent = "Transfer to wallet";
   $("claim-result").textContent = "";
 });
 async function renderNft(flash?: { slot: GearSlot; held: boolean }) {
   const view = await api.nft();
   $("nft-intro").textContent = view.onChain
-    ? "Your champion, equipment and history, saved on NEAR testnet. Temper equipped gear with Solo coin."
-    : "Local preview. Temper equipped gear with Solo coin; connect testnet to mint and trade.";
+    ? "Your champion, equipment and history, saved on NEAR testnet. Upgrade equipped gear with Solo coin."
+    : "Local preview. Upgrade equipped gear with Solo coin; connect testnet to mint and trade.";
   $("nft-tokens").innerHTML = view.tokens
     .map((token) => {
       const x = token.extra as Record<string, unknown>;
@@ -1256,12 +1311,12 @@ async function renderNft(flash?: { slot: GearSlot; held: boolean }) {
       const available = !x.bound || x.championId === champion?.id;
       const gearButton =
         !isChampion && view.features?.includes("market") && available
-          ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || x.listing || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${x.listing ? "LISTED · CANCEL IN MARKET" : equipped ? "UNEQUIP" : "EQUIP"}</button>`
+          ? `<button class="btn ghost" data-equip="${equipped ? "unequip_gear" : "equip_gear"}" data-slot="${slot}" data-gear="${escapeHtml(token.tokenId)}" ${champion?.chain?.pending || x.listing || (x.equippedTo && x.equippedTo !== champion?.id) ? "disabled" : ""}>${x.listing ? "Listed · cancel in Market" : equipped ? "Unequip" : "Equip"}</button>`
           : "";
       const primaryRows = rows.filter(([key],i)=>isChampion ? i<3 : ['Level','Damage','Kills'].includes(key));
       const otherRows = rows.filter(row=>!primaryRows.includes(row));
       const flashed = !isChampion && equipped && flash?.slot === slot ? ` data-flash="${flash.held ? "held" : "burned"}"` : "";
-      return `<article class="nft-card${isChampion ? " champion" : equipped ? " equipped" : ""}"${flashed}><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? `IN USE · ${slot.toUpperCase()}` : slot === "weapon" ? "WEAPON" : "ARMOR"}</span>${!isChampion && x.kind === "weapon" ? `${relicImage(identity, weapon(identity).name)}` : `<div class="nft-crest" aria-hidden="true">${skillIcon(isChampion ? "ember" : x.kind === "armor" ? "iron" : "sword-1")}</div>`}<strong>${escapeHtml(token.title)}</strong><dl>${primaryRows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl><details class="token-details"><summary>Details & ownership</summary><dl>${otherRows.map(([k,v])=>`<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl></details>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${!isChampion && equipped ? temperHtml(slot) : ""}${flash?.slot===slot&&equipped?`<p class="temper-outcome ${flash.held?'held':'failed'}" role="status">${flash.held?'TEMPER HELD':'TEMPER FAILED'}<small>+${x.level} ${flash.held?'FORGED':'UNCHANGED'}</small></p>`:""}${gearButton}</article>`;
+      return `<article class="nft-card${isChampion ? " champion" : equipped ? " equipped" : ""}"${flashed}><span class="eyebrow">${isChampion ? "CHAMPION" : equipped ? `IN USE · ${slot.toUpperCase()}` : slot === "weapon" ? "WEAPON" : "ARMOR"}</span>${!isChampion && x.kind === "weapon" ? `${relicImage(identity, weapon(identity).name)}` : `<div class="nft-crest" aria-hidden="true">${skillIcon(isChampion ? "ember" : x.kind === "armor" ? "iron" : "sword-1")}</div>`}<strong>${escapeHtml(token.title)}</strong><dl>${primaryRows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl><details class="token-details"><summary>Details & ownership</summary><dl>${otherRows.map(([k,v])=>`<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("")}<dt>Token</dt><dd>${escapeHtml(shortAccount(token.tokenId))}</dd><dt>Owner</dt><dd>${view.onChain ? `<a href="${EXPLORER}/address/${encodeURIComponent(token.ownerId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(shortAccount(token.ownerId))} ↗</a>` : escapeHtml(token.ownerId)}</dd></dl></details>${isChampion ? skillBadge({}, (Array.isArray(x.skills) ? x.skills : []) as SkillId[]) : ""}${!isChampion && equipped ? temperHtml(slot) : ""}${flash?.slot===slot&&equipped?`<p class="temper-outcome ${flash.held?'held':'failed'}" role="status">${flash.held?'Upgrade successful':'Upgrade failed'}<small>+${x.level} ${flash.held?'NEW LEVEL':'UNCHANGED'}</small></p>`:""}${gearButton}</article>`;
     })
     .join("");
   paintRelics($("nft-tokens"));
@@ -1280,7 +1335,7 @@ async function openInventory() {
   await renderNft();
   claimArmed = false;
   claimSourceId = champion?.id ?? null;
-  $("claim-button").textContent = "CLAIM TO WALLET";
+  $("claim-button").textContent = "Transfer to wallet";
   $("claim-result").textContent = "";
 }
 $("claim-button").addEventListener("click", async () => {
@@ -1294,7 +1349,7 @@ $("claim-button").addEventListener("click", async () => {
   }
   if (!claimArmed) {
     claimArmed = true;
-    $("claim-button").textContent = "CONFIRM CLAIM";
+    $("claim-button").textContent = "Confirm transfer";
     out.textContent = `This sends the champion, its gear and its vault to ${receiver}. Press again to confirm.`;
     return;
   }
@@ -1320,7 +1375,8 @@ $("claim-button").addEventListener("click", async () => {
   } finally {
     busy = false;
     claimArmed = false;
-    $("claim-button").textContent = "CLAIM TO WALLET";
+    $("claim-button").textContent = "Transfer to wallet";
+    await refreshActiveMenu().catch((e) => notice((e as Error).message));
   }
 });
 const gearName = (slot: GearSlot) =>
@@ -1333,7 +1389,7 @@ const GEAR: Record<
   weapon: { name: "Cinder Blade", effect: (level) => `+${level * 2} damage` },
   armor: { name: "Ash Armor", effect: (level) => `+${level * 3} life` },
 };
-let pendingUpgrade: { id: string; championId: string; slot: GearSlot } | null = null;
+let pendingUpgrade: { id: string; championId: string; slot: GearSlot; expectedGearId?: string; expectedLevel?: number } | null = null;
 try { pendingUpgrade = JSON.parse(sessionStorage.getItem("contrapasso-upgrade") ?? "null"); } catch { /* Optional storage. */ }
 function saveUpgradeIntent() {
   try {
@@ -1355,7 +1411,7 @@ function temperHtml(slot: GearSlot) {
   const otherPending = pendingUpgrade?.championId === champion.id && !confirming;
   const blocked = busy || otherPending || (!confirming && (max || champion.coins < cost || !available));
   const short = !max && available && !confirming && champion.coins < cost;
-  return `<div class="temper"><span class="eyebrow">TEMPER</span><div class="temper-step"><b>+${level}</b>${max ? "" : `<i>→</i><b>+${level + 1}</b>`}<span>${GEAR[slot].effect(level)}${max ? "" : ` → ${GEAR[slot].effect(level + 1)}`}</span></div><small>${max ? "Nothing left to temper." : short ? `${cost - champion.coins} more coin needed. Earn coin in Solo.` : odds === 100 ? "Always holds." : `${odds}% to hold. A failure burns only the coin.`}</small><button class="btn" data-temper="${slot}" ${blocked ? "disabled" : ""}>${confirming ? "CONFIRM UPGRADE" : !available ? "NOT AVAILABLE" : max ? "AT ITS LIMIT" : `TEMPER · ${cost} COIN`}</button></div>`;
+  return `<div class="temper"><span class="eyebrow">UPGRADE</span><div class="temper-step"><b>+${level}</b>${max ? "" : `<i>→</i><b>+${level + 1}</b>`}<span>${GEAR[slot].effect(level)}${max ? "" : ` → ${GEAR[slot].effect(level + 1)}`}</span></div><small>${max ? "Maximum upgrade level reached." : short ? `${cost - champion.coins} more coin needed. Earn coin in Solo.` : odds === 100 ? "Always succeeds." : `${odds}% success chance. Failure spends coin; the level stays unchanged.`}</small><button class="btn" data-temper="${slot}" ${blocked ? "disabled" : ""}>${confirming ? "Check upgrade" : !available ? "Not available" : max ? "Max level" : `Upgrade · ${cost} coin`}</button></div>`;
 }
 async function temper(slot: GearSlot) {
   if (busy || !champion) return;
@@ -1366,33 +1422,40 @@ async function temper(slot: GearSlot) {
   let flash: { slot: GearSlot; held: boolean } | undefined;
   try {
     if (!pendingUpgrade || pendingUpgrade.championId !== champion.id)
-      pendingUpgrade = { id: crypto.randomUUID(), championId: champion.id, slot };
+      pendingUpgrade = {
+        id: crypto.randomUUID(), championId: champion.id, slot,
+        expectedGearId: champion.equipped?.[slot] ?? undefined,
+        expectedLevel: champion.build[slot === "weapon" ? "weaponLevel" : "armorLevel"],
+      };
     saveUpgradeIntent();
-    const response = await api.upgrade(slot, pendingUpgrade.id);
+    const intent = pendingUpgrade;
+    const response = await api.upgrade(intent.slot, intent.id, intent.expectedGearId, intent.expectedLevel);
     champion = response.champion;
     refreshChampion();
     if (champion.chain?.pending) {
-      notice("Upgrade sent. Confirm it before tempering again.");
+      notice("Upgrade sent. Check its result before upgrading again.");
       return;
     }
     pendingUpgrade = null;
     saveUpgradeIntent();
-    if (!response.upgrade.error) flash = { slot, held: response.upgrade.success };
+    if (!response.upgrade.error) flash = { slot: intent.slot, held: response.upgrade.success };
     notice(response.upgrade.error ?? (
       response.upgrade.success
-        ? `The ${gearName(slot)} holds. It is now +${response.upgrade.level}.`
-        : `The coin burns. The ${gearName(slot)} stays +${response.upgrade.level}.`),
+        ? `${gearName(intent.slot)} upgraded to +${response.upgrade.level}.`
+        : `Upgrade failed. Coin spent; ${gearName(intent.slot)} stays +${response.upgrade.level}.`),
     );
   } catch (e) {
     // Validation refused the action before enqueueing it. Transport/relay uncertainty keeps the ID.
-    if (e instanceof ApiError && e.status === 400) {
+    if (e instanceof ApiError && (e.status === 400 || e.status === 409)) {
       pendingUpgrade = null;
       saveUpgradeIntent();
+      await loadChampion().catch(() => {});
     }
     notice((e as Error).message);
   } finally {
     busy = false;
-    await renderNft(flash).catch(() => {});
+    if (camp.page === "nft") await renderNft(flash).catch(() => {});
+    else await refreshActiveMenu().catch(() => {});
   }
 }
 let loadoutStage: RelicStage | null = null;
@@ -1424,7 +1487,7 @@ function renderPreparation() {
   loadoutStage ??= new RelicStage($<HTMLCanvasElement>('loadout-stage'),$('loadout-preview-label'));
   void loadoutStage.select(identity); loadoutStage.preview(null);
   $<HTMLButtonElement>('loadout-start').disabled=preparationBusy||!!champion.chain?.pending||!!selected?.blocked;
-  $('loadout-start').textContent=preparationBusy?'PREPARING…':pendingMarket?'CHECK PENDING ACTION ↻':'TAKE THE DESCENT ↘';
+  $('loadout-start').textContent=preparationBusy?'Preparing…':pendingMarket?'Check pending action':'Start Solo';
 }
 async function openPreparation(turn = navigation) {
   if(busy||verifying)return;
@@ -1437,11 +1500,11 @@ async function openPreparation(turn = navigation) {
     camp.show('preparation');
     $('loadout-status').textContent='Choose your weapon and preview its techniques. Locked skills must be learned before use.';
     renderPreparation(); $('preparation-close').focus();
-  } catch(e){notice((e as Error).message);}
+  } catch(e){if(turn === navigation) throw e;}
 }
 function closePreparation() {
   if(busy||preparingRun)return;
-  camp.show('modes'); $('mode-solo').focus();
+  void navigate('modes'); $('mode-solo').focus();
 }
 $('preparation-close').onclick=closePreparation;
 $('loadout-weapons').onclick=e=>{
@@ -1480,7 +1543,7 @@ $('loadout-train').onclick=()=>{
 let skillStage: RelicStage | null = null;
 for(const id of ['loadout-slow','skill-slow']) $(id).onclick=()=>{
   const button=$(id), slow=button.getAttribute('aria-pressed')!=='true';
-  button.setAttribute('aria-pressed',String(slow));button.textContent=slow?'0.35× · NORMAL SPEED':'SLOW MOTION';
+  button.setAttribute('aria-pressed',String(slow));button.textContent=slow?'Normal speed':'Slow motion';
   (id==='loadout-slow'?loadoutStage:skillStage)?.setSpeed(slow?.35:1);
 };
 function showSkillPreview(id: AbilityId, identity?: WeaponId) {
@@ -1498,7 +1561,7 @@ async function changeSkill(action: () => Promise<Champion>, success: string) {
   busy = true; renderForge(); notice("");
   try { champion = await action(); refreshChampion(); notice(champion.chain?.pending ? "Confirming your skill. Coin and access update after confirmation." : success); }
   catch(e) { notice((e as Error).message); }
-  finally { busy = false; renderForge(); }
+  finally { busy = false; await refreshActiveMenu().catch((e) => notice((e as Error).message)); }
 }
 const skillTree = new SkillTree($("forge-cards"), {
   learn: id => changeSkill(()=>api.train(id), `${SKILLS[id].name} learned.`),
@@ -1520,12 +1583,23 @@ const skillTree = new SkillTree($("forge-cards"), {
 });
 function renderForge() {
   if (!champion) return;
+  setSkillPreviewExpanded(false);
   skillTree.render(champion, busy);
+}
+/** Writes can finish after the player changes pages; unlock the controls on the page they can see. */
+async function refreshActiveMenu() {
+  if (mode !== "menu") return;
+  if (camp.page === "forge") renderForge();
+  else if (camp.page === "preparation") renderPreparation();
+  else if (camp.page === "nft") await renderNft();
+  else if (camp.page === "duel-lobby") renderLobby();
+  else if (camp.page === "market") renderMarket();
 }
 $("forge-close").addEventListener("click", () => {
   if (!forgeFromPreparation || busy) return;
   forgeFromPreparation = false;
   $("forge-close").classList.add("hidden");
+  setSkillPreviewExpanded(false);
   skillTree.close();
   renderPreparation();
   camp.show("preparation");
@@ -1536,11 +1610,14 @@ $("forge-close").addEventListener("click", () => {
 let navigation = 0;
 async function navigate(page: CampPage) {
   if (mode !== "menu" || preparingRun || verifying) return;
-  if (page === camp.page) return;
+  const destination=$(page);
+  if (page === camp.page && !destination.querySelector('.page-error')) return;
+  setSkillPreviewExpanded(false);
   const turn = ++navigation;
   const nav = $("camp-nav");
   nav.dataset.loading = camp.tab(page);
-  const destination=$(page);
+  destination.querySelector('.page-error')?.remove();
+  destination.classList.remove('load-failed');
   camp.show(page);
   destination.inert=true;
   destination.setAttribute('aria-busy','true');
@@ -1562,12 +1639,22 @@ async function navigate(page: CampPage) {
     else if (page === "duel-lobby") return void (await openLobby());
     if (turn === navigation) camp.show(page);
   } catch (e) {
-    if (turn === navigation) notice((e as Error).message);
+    if (turn === navigation) {
+      notice("");
+      const error=document.createElement('div');error.className='page-error';error.setAttribute('role','alert');
+      const heading=document.createElement('h3');heading.textContent="Couldn't load this page";
+      const message=document.createElement('p');message.textContent=(e as Error).message;
+      const retry=document.createElement('button');retry.className='btn';retry.textContent='Try again';
+      retry.onclick=()=>void navigate(page);
+      error.append(heading,message,retry);destination.append(error);
+      destination.classList.add('load-failed');
+    }
   } finally {
     placeholder.remove();
     if (destination.dataset.load === String(turn)) {
       destination.removeAttribute("aria-busy");delete destination.dataset.load;
       destination.inert=camp.page!==page;
+      if (turn === navigation) destination.querySelector<HTMLButtonElement>('.page-error button')?.focus();
     }
     if (turn === navigation) delete nav.dataset.loading;
   }
@@ -1578,12 +1665,13 @@ for (const button of document.querySelectorAll<HTMLElement>("[data-camp],[data-c
   );
 $("camp-home").addEventListener("click", () => void navigate("modes"));
 let previewInert: [HTMLElement, boolean][] = [];
-$("skill-preview-expand").onclick = () => {
+function setSkillPreviewExpanded(expanded: boolean) {
   const theatre = document.querySelector('.skill-theatre')!;
-  const expanded = theatre.classList.toggle('expanded');
+  if (!theatre || theatre.classList.contains('expanded') === expanded) return;
+  theatre.classList.toggle('expanded', expanded);
   if(expanded) {
     theatre.setAttribute('role','dialog'); theatre.setAttribute('aria-modal','true'); theatre.setAttribute('aria-label','Skill animation preview');
-    for(let branch=theatre as HTMLElement;branch.parentElement && branch!==$('forge');branch=branch.parentElement) {
+    for(let branch=theatre as HTMLElement;branch.parentElement;branch=branch.parentElement) {
       for(const sibling of branch.parentElement.children) if(sibling!==branch && sibling instanceof HTMLElement) { previewInert.push([sibling,sibling.inert]);sibling.inert=true; }
     }
   } else {
@@ -1592,7 +1680,8 @@ $("skill-preview-expand").onclick = () => {
   }
   $("skill-preview-expand").setAttribute('aria-pressed',String(expanded));
   $("skill-preview-expand").setAttribute('aria-label',expanded?'Close expanded preview':'Expand animation preview');
-};
+}
+$("skill-preview-expand").onclick = () => setSkillPreviewExpanded(!document.querySelector('.skill-theatre')?.classList.contains('expanded'));
 document.addEventListener('keydown', e => { if(e.key==='Escape' && document.querySelector('.skill-theatre.expanded')) { $("skill-preview-expand").click(); e.stopImmediatePropagation(); } }, true);
 
 const embers = $("embers");
@@ -1668,6 +1757,11 @@ window.addEventListener(
       return;
     }
     if (mode !== "menu" || !camp.active || document.querySelector(".skill-theatre.expanded")) return;
+    if (camp.page === "forge" && skillTree.closeQuickEquip()) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
     if (camp.page === "preparation") closePreparation();
     else if (camp.page === "duel-lobby") closeLobby();
     else if (camp.page === "forge" && forgeFromPreparation) $("forge-close").click();
@@ -1709,6 +1803,7 @@ function frame(now: number) {
   if (document.hidden) { requestAnimationFrame(frame); return; }
   entranceT=Math.max(0,entranceT-dt);
   if (mode === "run" && !paused && !ended && !busy && entranceT<=0) {
+    if (rewardDelay > 0 && (rewardDelay -= dt) <= 0) openReward();
     if (world.phase === "reward" && !choiceQueued) acc = 0;
     else if (freeze > 0) freeze -= dt;
     else acc += dt * (slow > 0 ? 0.3 : 1);
@@ -1739,12 +1834,15 @@ function frame(now: number) {
       acc -= DT;
       n++;
       const phaseBoss=world.enemies.find(e=>e.kind==='warden'&&(e.enraged||e.hp<e.maxHp*.5));
-      if(phaseBoss&&phaseBoss.id!==enragedBoss){enragedBoss=phaseBoss.id;freeze=Math.max(freeze,.09);restartAnimation($('vignette'),'ult');showBanner('THE RITUAL DEEPENS',1.25);}
+      if(phaseBoss&&phaseBoss.id!==enragedBoss){enragedBoss=phaseBoss.id;freeze=Math.max(freeze,.09);restartAnimation($('vignette'),'ult');showBanner('THE RITUAL DEEPENS',1.25);sound.say('deepens');}
       for (const e of world.events) {
-        if (e.type === "floor")
+        if (e.type === "floor") {
+          const boss = world.bossEncounter === "active" ? BOSS_IDS[BOSS_FLOORS.indexOf(world.floor as 2|3|4|5)] : null;
           showBanner(
-            world.bossEncounter === "active" ? BOSSES[(["warden","witness","cantor"] as const)[BOSS_FLOORS.indexOf(world.floor as 2|4|5)]].name.toUpperCase() : `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
+            boss ? BOSSES[boss].name.toUpperCase() : `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
           );
+          sound.say(boss ?? CIRCLE_LINES[world.floor - 1], 0.35);
+        }
         if (e.type === "hit") {
           chain += 1;
           chainT = 3;
@@ -1763,10 +1861,12 @@ function frame(now: number) {
           void veil.offsetWidth;
           veil.classList.add("on");
         }
-        // The last kill of a room lingers.
+        // The last kill of a room lingers; the reward beat lets the cleared wave
+        // settle in slow motion before the cards rise over it.
         if (e.type === "cleared" || e.type === "won" || e.type === "kill" && e.kind === "warden") slow = 0.55;
+        if (e.type === "reward") slow = 0.5;
         if (e.type === "cleared") {
-          $("reward").classList.add("hidden");
+          closeReward(true);
           $("hud").inert = false;
           clearInput();
           showBanner("THE WAY DOWN IS OPEN", 2);
@@ -1804,11 +1904,28 @@ $("hurt-veil").addEventListener("animationend", (e) => {
   if ((e as AnimationEvent).animationName === "hurt-veil") $("hurt-veil").classList.remove("on");
 });
 requestAnimationFrame(frame);
+let checkingMenuConfirmation = false;
+async function checkMenuConfirmation() {
+  if (checkingMenuConfirmation || mode !== "menu" || busy || !champion?.chain?.pending) return;
+  const championId = champion.id, turn = navigation;
+  checkingMenuConfirmation = true;
+  try {
+    await loadChampion();
+    // Refresh once when confirmation arrives, without disturbing a newer page or action.
+    if (mode === "menu" && !busy && turn === navigation && champion?.id === championId && !champion.chain?.pending) {
+      await refreshActiveMenu();
+      if ($("notice").textContent === "Confirming your skill. Coin and access update after confirmation.") notice("");
+    }
+  } catch {
+    // Keep the pending state; the next poll retries the same saved operation.
+  } finally {
+    checkingMenuConfirmation = false;
+  }
+}
 setInterval(() => {
   if (mode === "run" && ended && resultPending && !verifying && !busy)
     void verifyRun(true);
-  if (mode === "menu" && champion?.chain?.pending && !busy)
-    void loadChampion().catch(() => {});
+  void checkMenuConfirmation();
 }, 5000);
 
 // Development inspection only. The referee never accepts a client world or score.

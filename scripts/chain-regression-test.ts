@@ -30,11 +30,14 @@ try {
  for(const event of ref.pendingChainOperations())ref.acknowledgeChain(event.id,{});
  ref.adoptChain(id,{...ref.profile(owner),coins:100,earnedToday:300,day:Math.floor(now/86400000)-1,revision:1});
  assert.equal(ref.profile(owner).earnedToday,0,'yesterday’s on-chain cap cannot suppress today’s award');
- const intent=randomUUID(),upgrade=ref.upgrade(owner,'weapon',intent),coins=ref.profile(owner).coins;
+ const upgradeGear=ref.profile(owner).equipped!.weapon!;
+ const intent=randomUUID(),upgrade=ref.upgrade(owner,'weapon',intent,upgradeGear,0),coins=ref.profile(owner).coins;
  ref=new Referee({directory,now:()=>now,seed:()=>42,roll:()=>99});
- assert.deepEqual(ref.upgrade(owner,'weapon',intent),upgrade,'intent and result survive process restart');
+ assert.deepEqual(ref.upgrade(owner,'weapon',intent,upgradeGear,0),upgrade,'intent, original quote and result survive process restart');
  assert.equal(ref.profile(owner).coins,coins,'retry never charges twice');
  assert.throws(()=>ref.upgrade(owner,'armor',intent),/different choices/);
+ assert.throws(()=>ref.upgrade(owner,'weapon',intent,'different-nft',0),/different choices/);
+ assert.throws(()=>ref.upgrade(owner,'weapon',intent,upgradeGear,1),/different choices/);
  for(const event of ref.pendingChainOperations())ref.acknowledgeChain(event.id,{});
  const run=ref.begin(owner),equipped=ref.profile(owner).equipped!;
  ref.adoptChain(id,{...ref.profile(owner),equipped:{...equipped,weapon:'another-nft'},day:Math.floor(now/86400000),revision:2});

@@ -180,21 +180,28 @@ function weaponStroke(kind:string) {
     }
     geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(points,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,4));geometry.setIndex(indices);
   } else if(kind==='thrust') {
-    geometry=ribbon(t=>new T.Vector3(t,.015,Math.sin(t*Math.PI)*.018),.05);
+    // Spear: one straight piercing lane with a slight widening at the point.
+    geometry=ribbon(t=>new T.Vector3(t*.78,.015,Math.sin(t*Math.PI)*.022),.055);
+  } else if(kind==='cross') {
+    // Dagger: a short, quick cut; the two parts cross into an X.
+    geometry=ribbon(t=>new T.Vector3(.1+t*.62,.02,0),.052);
+  } else if(kind==='cleave') {
+    // Axe: a broad, flat chop that sweeps a wide arc.
+    geometry=ribbon(t=>{const a=-1.4+t*2.8;return new T.Vector3(Math.cos(a),.02+Math.sin(Math.PI*t)*.14,Math.sin(a));},.15);
   } else {
-    const wide=kind==='cleave';
-    geometry=ribbon(t=>{const a=-1.05+t*2.1;return new T.Vector3(Math.cos(a),.02+Math.sin(Math.PI*t)*(wide?.12:.035),Math.sin(a));},wide?.12:.065);
+    // Sword slash: a crescent with a tighter curve than the axe cleave.
+    geometry=ribbon(t=>{const a=-1.15+t*1.72;return new T.Vector3(Math.cos(a),.02+Math.sin(Math.PI*t)*.05,Math.sin(a));},.055);
   }
   geometry.userData.sharedEffect=true;weaponStrokes.set(kind,geometry);return geometry;
 }
 export function weaponImpact(family:string,pattern:string,reach:number,color:number) {
   const root=new T.Group(),parts:T.Mesh[]=[];
   const hammer=family==='hammer',dagger=family==='dagger',line=pattern==='line',burst=pattern==='burst';
-  const kind=hammer?(line?'fault':'fracture'):line?'thrust':family==='axe'?'cleave':'cut';
+  const kind=hammer?(line?'fault':'fracture'):line?'thrust':family==='axe'?'cleave':family==='dagger'?'cross':'slash';
   const count=hammer?1:line?2:burst?3:dagger?2:1;
   for(let i=0;i<count;i++) {
     const part=mesh(root,weaponStroke(kind),color,hammer?.42:dagger?.6:.53);
-    part.rotation.y=line?0:burst?i*Math.PI*2/3:dagger?(i-.5)*.45:0;
+    part.rotation.y=line?0:burst?i*Math.PI*2/3:dagger?(i-.5)*.42:0;
     part.position.y=hammer?0:line?.7+i*.12:.55+i*.16;
     part.scale.set(reach,1,line?1:reach);
     if(line)part.position.z=(i-.5)*.14;
@@ -205,7 +212,7 @@ export function weaponImpact(family:string,pattern:string,reach:number,color:num
     parts.forEach((part,i)=>{
       if(line)part.scale.x=reach*(.35+.65*travel);
       else if(hammer)part.scale.set(reach*(.35+.65*travel),1,reach*(.35+.65*travel));
-      else part.rotation.y=(burst?i*Math.PI*2/3:dagger?(i-.5)*.45:0)+(dagger?(i%2?-1:1):1)*(travel-.5)*(family==='axe'?1.1:.7);
+      else part.rotation.y=(burst?i*Math.PI*2/3:dagger?(i-.5)*.42:0)+(dagger?(i%2?-1:1):1)*(travel-.5)*(family==='axe'?1.25:family==='dagger'?.85:.7);
       part.userData.fade=Math.min(1,t/.035)*(1-t)**(dagger?1.6:.75);
     });
   }};

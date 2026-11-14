@@ -50,7 +50,7 @@ The script verifies the testnet RPC, requests a free named account from the offi
 
 ## Referee and relay
 
-The browser records simulation `0.12.0` inputs, including jump, plunge and optional boss-gate entry. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
+The browser records simulation `0.12.1` inputs, including jump, plunge and optional boss-gate entry. The local referee issues seeds and loadouts, replays every tick, and signs complete results. The contract accepts Ed25519-signed operations bound to its domain, contract, current NFT owner, champion revision, expiry and one-time receipt ID. The WASM verifies signatures with NEAR's native Ed25519 host function; the checked-in C adapter adds this function to the SDK 2 QuickJS bridge during the build and restores the SDK source afterward.
 
 Local commits and relay requests are serialized. The durable outbox retries after network failures; an on-chain receipt lookup recovers a lost acknowledgement without awarding twice. Writes first synchronize NFT ownership and the chain's current vault. An externally transferred champion cannot continue using its old guest session. Invalid operations do not block unrelated champions' relays. The server imports existing local champions as a one-time signed migration checkpoint, preserving the owner's current progress.
 
@@ -170,6 +170,10 @@ Simulation 0.11.0 adds seeded Solo boss identities, boss recovery openings and a
 
 Simulation 0.12.0 moves bosses behind optional gates on circles II, IV and V. The referee validates entry at the cleared gate and verifies both boss and skip routes. Existing coin caps and one-time result settlement still apply; no contract update is needed.
 
+Simulation 0.12.1 prevents an exit opening beneath the hero from automatically skipping the optional boss choice. The hero must leave that exit and approach it again. The shared deterministic rule applies to both client and referee; older unfinished runs must restart. Packed inputs remain 30-bit and no contract deployment is required.
+
+Simulation 0.14.0 adds a fourth optional boss, the Vesper Shriven, behind a gate on circle III; the ink-touched caster cycles through a converging ink deluge, a focused ink lance, a radial ink swarm and a heavy slam. The referee validates the same boss and skip routes on all four gate circles. The contract ABI and deployed WASM remain unchanged.
+
 ## Delivery readback (2026-11-14, Istanbul)
 
 The deployed 0.10.0 WASM still matches the published hash above. Rebuilding commit `49e81d6` reproduces that hash exactly. The current contract bundle differs only in five skill-description strings inherited from the shared catalog; executable logic, costs and ABI are unchanged. A current build therefore has a different hash without requiring a gameplay migration. The full current WASM suite passed again.
@@ -177,3 +181,9 @@ The deployed 0.10.0 WASM still matches the published hash above. Rebuilding comm
 A new simulation-0.12.0 Solo replay was accepted by the live referee and saved on testnet: [transaction](https://testnet.nearblocks.io/txns/7UeBxJYi394uBP19ZJnhZFW4Kx1groYeKEarVv24B1mM). Repeating the result did not award again. Readback confirmed the existing resold Cinder Requiem still belongs to its buyer at +1 and that prior Duel locks are released. Earlier paid mint/resale evidence remains historical; it was not presented as a new mint or sale.
 
 The skill-atlas equipment shortcut was also exercised with the existing buyer account: [equip the purchased +1 blade](https://testnet.nearblocks.io/txns/FaE1ykS9tH7PNNotBjP636oo9G16XTncS3yQtr1fBMuM), then [restore its original spear](https://testnet.nearblocks.io/txns/9KYKRxfyQWpJcqT394eRGeTVAZpESQWdCgYaktM8by1f). The preview, damage and action bar followed confirmed equipment; coin stayed at 77 and the three learned skills were unchanged.
+
+## Final flow audit (2026-11-14, Istanbul)
+
+Wallet-recipient verification now distinguishes a missing account from a temporary RPC failure and rejects invalid account syntax before making a lookup. Failed verification cannot enqueue a transfer. NFT inventory reads every page instead of truncating after 1,000 tokens; a 1,003-token regression covers the supported edition size plus champion and starter gear.
+
+A fresh authorized testnet pass verified reservation/refund, repeat-safe minting, equipment restoration, listing/cancellation, stale-quote rejection, resale, royalties and seller withdrawal. [Gravewhisper mint](https://testnet.nearblocks.io/txns/BgVXZC9JYXQjqkF2vT5eU8uuLVvFHKcU6AjnyoTUJct1), [resale](https://testnet.nearblocks.io/txns/2psNtEsRQUmtLDf4iYaoMkz3yf8Ff5nUMKGFoH7eewPC), and [seller withdrawal](https://testnet.nearblocks.io/txns/GuTPbyahnuHw74ckXQphRnYQu1HpWZQnM83szUGR1pfi) settled with the expected 90/10 split. A simulation-0.12.1 Duel also settled once and released both locks. Existing test guests and funds were reused; no deployment or additional funding was needed. Successful wallet transfer and callback failure recovery were rerun in the local WASM sandbox rather than transferring a saved live champion.

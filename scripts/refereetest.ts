@@ -88,7 +88,7 @@ try {
   assert.throws(() => forge.upgrade(smith, "weapon"), /coin/);
   assert.throws(() => forge.upgrade(smith, "ring"), /Unknown gear/);
   console.log("Referee: PASS (replay, ownership, signatures, tampering, idempotency, persistence, training, gear upgrades, daily cap, expiry)");
-  // Both complete routes must verify: skip every boss or take all three gates.
+  // Both complete routes must verify: skip every boss or take all four gates.
   const gates = new Referee({directory:join(directory,"gates"),now:()=>now,seed:()=>5});
   for(const visit of [false,true]) {
     const player=gates.createSession().owner;
@@ -101,13 +101,13 @@ try {
       for(const e of w.enemies)if(e.boss)bosses.add(e.boss);
       w.events.length=0;
     }
-    assert.equal(w.phase,'won');assert.deepEqual([...bosses],visit?['warden','witness','cantor']:[]);
+    assert.equal(w.phase,'won');assert.deepEqual([...bosses],visit?['warden','wizard','witness','cantor']:[]);
     now+=Math.ceil(w.tick/60*1000);
     const result=gates.submit(player,challenge.id,replay);
     assert.equal(result.receipt.result.outcome,'won');
     assert.equal(result.champion.victories,1);
     assert.deepEqual(gates.submit(player,challenge.id,replay),result,'optional bosses cannot pay twice');
   }
-  console.log('Optional boss routes: PASS (all three gates and all skips replayed by the referee; one settlement)');
+  console.log('Optional boss routes: PASS (all four gates and all skips replayed by the referee; one settlement)');
 
 } finally { rmSync(directory, { recursive: true, force: true }); }

@@ -27,6 +27,23 @@ const lanceGeo = new T.ConeGeometry(0.1, 1.2, 5).rotateZ(-Math.PI / 2);
 const thrownKnife = new T.BufferGeometry();
 thrownKnife.setAttribute('position',new T.Float32BufferAttribute([-.28,0,-.055,.12,0,-.09,.58,0,0,.12,0,.09,-.28,0,.055],3));
 thrownKnife.setIndex([0,1,2,0,2,3,0,3,4]);
+// One painted arrow silhouette (head, shaft, fletching) so a bolt reads as a
+// deliberate projectile rather than a thin laser line. Laid flat in the X-Z plane.
+const arrowShape = new T.Shape();
+arrowShape.moveTo(0.95, 0);
+arrowShape.lineTo(0.42, 0.16);
+arrowShape.lineTo(0.42, 0.035);
+arrowShape.lineTo(-0.62, 0.035);
+arrowShape.lineTo(-0.62, 0.19);
+arrowShape.lineTo(-0.46, 0.035);
+arrowShape.lineTo(-0.46, -0.035);
+arrowShape.lineTo(-0.62, -0.19);
+arrowShape.lineTo(-0.62, -0.035);
+arrowShape.lineTo(0.42, -0.035);
+arrowShape.lineTo(0.42, -0.16);
+arrowShape.closePath();
+const arrowGeo = new T.ShapeGeometry(arrowShape).rotateX(-Math.PI / 2);
+arrowGeo.userData.sharedEffect = true;
 const trailGeo = new T.PlaneGeometry(1.5, 0.1).rotateX(-Math.PI / 2);
 const blade = new T.TorusGeometry(1, 0.035, 4, 32, Math.PI * 0.8);
 const orbitBlade = new T.BufferGeometry();
@@ -103,6 +120,7 @@ export class SoulFx {
   private seal: T.CanvasTexture;
   private flame: T.CanvasTexture;
   private wisp: T.CanvasTexture;
+  private swirl: T.CanvasTexture;
   private trackActors: boolean;
   constructor(scene: T.Scene, trackActors = false) {
     this.trackActors = trackActors;
@@ -176,6 +194,22 @@ export class SoulFx {
     this.flame.colorSpace = T.SRGBColorSpace;
     this.seal = new T.CanvasTexture(c);
     this.seal.colorSpace = T.SRGBColorSpace;
+    // Wind swirl: a few spiral arms that read as moving air under rotating effects.
+    const swirl=document.createElement('canvas');swirl.width=swirl.height=256;
+    const sw=swirl.getContext('2d')!;sw.translate(128,128);sw.lineCap='round';
+    for(let arm=0;arm<3;arm++) {
+      sw.beginPath();
+      const off=arm*Math.PI*2/3;
+      for(let a=0;a<=Math.PI*2.2;a+=.12) {
+        const r=16+(a/Math.PI)*40;
+        const x=Math.cos(a+off)*r,y=Math.sin(a+off)*r;
+        a===0?sw.moveTo(x,y):sw.lineTo(x,y);
+      }
+      sw.strokeStyle=`rgba(255,255,255,${.55-arm*.13})`;
+      sw.lineWidth=9-arm*2.2;
+      sw.stroke();
+    }
+    this.swirl=new T.CanvasTexture(swirl);this.swirl.colorSpace=T.SRGBColorSpace;
 
   }
   private part(
@@ -298,9 +332,9 @@ export class SoulFx {
         root,
         new T.PlaneGeometry(2, 2),
         color,
-        charge ? 0.35 : kind === "ash" ? .06 : 0.2,
+        charge ? 0.35 : kind === "ash" ? .12 : 0.2,
       );
-      (glyph.material as T.MeshBasicMaterial).map = this.seal;
+      (glyph.material as T.MeshBasicMaterial).map = kind === "ash" ? this.swirl : this.seal;
       glyph.rotation.x = -Math.PI / 2;
       for (let i = 0; i < (kind === "ash" ? 3 : lance ? 6 : 12); i++) {
         const a = (i * Math.PI * 2) / (kind === "ash" ? 3 : lance ? 6 : 12),
@@ -413,16 +447,20 @@ export class SoulFx {
       dart.rotation.y = -angle; dart.position.set(Math.cos(angle)*.7, 1.3, Math.sin(angle)*.7);
       if(staff) {
         if(e.ability==='staff-4') dragonSoul(dart,color);
-        const plume=this.part(dart,wispPlane,color,.68);
-        (plume.material as T.MeshBasicMaterial).map=this.wisp;
-        plume.rotation.x=-Math.PI/2;plume.position.x=-.25;
-        const thread=this.part(dart,orbitBlade,color,.3);thread.scale.set(.7,1,.14);thread.rotation.y=Math.PI;thread.position.x=-.25;
+        if(e.ability==='lance') {
+          // Soul Lance reads as a committed piercing arrow, not a laser streak.
+          const arrow=this.part(dart,arrowGeo,color,.72);arrow.scale.setScalar(1.05);
+        } else {
+          const plume=this.part(dart,wispPlane,color,.68);
+          (plume.material as T.MeshBasicMaterial).map=this.wisp;
+          plume.rotation.x=-Math.PI/2;plume.position.x=-.25;
+          const thread=this.part(dart,orbitBlade,color,.3);thread.scale.set(.7,1,.14);thread.rotation.y=Math.PI;thread.position.x=-.25;
+        }
       } else if(dagger) {
         const knife=this.part(dart,thrownKnife,0xb9b8a1,.7);spinners.push(knife);
         const wake=this.part(dart,trailGeo,0x94aa99,.2);wake.position.x=-.45;wake.scale.x=.45;
       } else {
-        const tip=this.part(dart,lanceGeo,color,.55);tip.scale.set(.65,.45,.45);
-        const tail=this.part(dart,trailGeo,color,.22);tail.position.x=-.55;tail.scale.x=.7;
+        const arrow=this.part(dart,arrowGeo,color,.72);arrow.scale.setScalar(.95);
       }
       root.add(dart);
     }

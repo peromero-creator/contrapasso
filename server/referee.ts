@@ -18,7 +18,7 @@ import {
 } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createWorld, createDuelWorld, nearBossGate, step } from "../src/sim/world.ts";
+import { createWorld, createDuelWorld, nearBossGate, nearWaveBell, step } from "../src/sim/world.ts";
 import { SIM_VERSION, unpackInput } from "../src/sim/input.ts";
 import {
   SKILL_IDS,
@@ -67,7 +67,7 @@ type Run = RunChallenge & {
   equipped?: Champion["equipped"];
 };
 interface State {
-  upgrades?: Record<string, { owner: string; championId: string; slot: string; outcome: UpgradeOutcome }>;
+  upgrades?: Record<string, { owner: string; championId: string; slot: string; gearId?: string; fromLevel?: number; outcome: UpgradeOutcome }>;
   schema: number;
   accounts: Record<string, Account>;
   runs: Record<string, Run>;
@@ -80,6 +80,14 @@ export class RefereeError extends Error {
     super(message);
     this.status = status;
   }
+}
+export function isClaimReceiver(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 64 &&
+    (/^(?:[a-z0-9]+(?:[-_][a-z0-9]+)*\.)+testnet$/.test(value) ||
+      /^[a-f0-9]{64}$/.test(value))
+  );
 }
 function demand(test: unknown, message: string, status = 400): asserts test {
   if (!test) throw new RefereeError(message, status);
@@ -477,10 +485,7 @@ export class Referee {
     );
     demand(!a.lockedBy, "Finish your Duel first.");
     demand(
-      typeof receiver === "string" &&
-        receiver.length <= 64 &&
-        (/^(?:[a-z0-9]+(?:[-_][a-z0-9]+)*\.)+testnet$/.test(receiver) ||
-          /^[a-f0-9]{64}$/.test(receiver)),
+      isClaimReceiver(receiver),
       "Enter a NEAR testnet account, like yourname.testnet.",
     );
     demand(a.chainProvisioned, "Your champion is not on testnet yet.", 409);
@@ -511,12 +516,15 @@ export class Referee {
     return this.state.accounts[`claimed:${championId}`]?.chain?.lastTransaction;
   }
   /** One "+" attempt on equipped gear: burns coin, may raise the level. */
-  upgrade(owner: string, slot: unknown, intentId?: unknown): UpgradeOutcome {
+  upgrade(owner: string, slot: unknown, intentId?: unknown, expectedGearId?: unknown, expectedLevel?: unknown): UpgradeOutcome {
+    demand(expectedGearId === undefined || (typeof expectedGearId === "string" && expectedGearId.length > 0 && expectedGearId.length <= 160), "Invalid upgrade item.");
+    demand(expectedLevel === undefined || (Number.isSafeInteger(expectedLevel) && Number(expectedLevel) >= 0 && Number(expectedLevel) <= MAX_GEAR_LEVEL), "Invalid upgrade level.");
     if (intentId !== undefined) {
       demand(typeof intentId === "string" && /^[A-Za-z0-9_-]{8,100}$/.test(intentId), "Invalid upgrade action id.");
       const existing = this.state.upgrades?.[intentId];
       if (existing) {
         demand(existing.owner === owner && existing.championId === this.account(owner).id && existing.slot === slot, "Upgrade action id was used for different choices.", 409);
+        demand((expectedGearId === undefined || existing.gearId === undefined || existing.gearId === expectedGearId) && (expectedLevel === undefined || existing.fromLevel === undefined || existing.fromLevel === expectedLevel), "Upgrade action id was used for different choices.", 409);
         return structuredClone(existing.outcome);
       }
     }
@@ -527,6 +535,7 @@ export class Referee {
     const level = a.build[key];
     demand(level < MAX_GEAR_LEVEL, "This gear is already +9.", 409);
     demand(a.equipped?.[slot], "Nothing is equipped in that slot.");
+    demand((expectedGearId === undefined || expectedGearId === a.equipped[slot]) && (expectedLevel === undefined || expectedLevel === level), "Equipment changed. Refresh your inventory before upgrading.", 409);
     const cost = upgradeCost(level);
     demand(a.coins >= cost, "Earn more coin in Solo first.");
     const roll = this.roll();
@@ -541,7 +550,7 @@ export class Referee {
     });
     const outcome: UpgradeOutcome = { slot, success, level: a.build[key], cost };
     if (typeof intentId === "string") {
-      (this.state.upgrades ??= {})[intentId] = { owner, championId: a.id, slot, outcome };
+      (this.state.upgrades ??= {})[intentId] = { owner, championId: a.id, slot, gearId: a.equipped[slot]!, fromLevel: level, outcome };
     }
     this.save();
     return outcome;
@@ -769,7 +778,7 @@ export class Referee {
         "Replay continues after the end.",
       );
       demand(
-        world.phase === "reward" ? !!input.choice : !input.choice || (input.choice === 1 && nearBossGate(world)),
+        world.phase === "reward" ? !!input.choice : !input.choice || (input.choice === 1 && (nearBossGate(world) || nearWaveBell(world))),
         "Invalid power selection.",
       );
       const tick = world.tick;

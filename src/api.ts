@@ -22,19 +22,31 @@ export class ApiError extends Error {
   }
 }
 async function request<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api/${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers:
-      body === undefined ? undefined : { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(60_000),
-  });
-  const result = await response
-    .json()
-    .catch(() => ({ error: "Connection lost. Please try again." }));
-  if (!response.ok)
-    throw new ApiError(result.error ?? "Something went wrong. Please try again.", response.status);
+  let response: Response;
+  try {
+    response = await fetch(`/api/${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers:
+        body === undefined ? undefined : { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (error) {
+    const timedOut = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
+    throw new ApiError(timedOut
+      ? "The request timed out. Check your connection and try again."
+      : "Connection lost. Check your connection and try again.", 0);
+  }
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    // A successful status with an unreadable body is an uncertain result, not a saved champion.
+    throw new ApiError("The server response could not be read. Please try again.", response.ok ? 0 : response.status);
+  }
+  if (!response.ok || typeof result?.error === "string")
+    throw new ApiError(typeof result?.error === "string" ? result.error : "Something went wrong. Please try again.", response.ok ? 0 : response.status);
   return result;
 }
 export const api = {
@@ -50,9 +62,9 @@ export const api = {
   attune: (core: import("./sim/abilities").CoreId) =>
     request<Champion>("attune", { core }),
   train: (skill: SkillId) => request<Champion>("train", { skill }),
-  upgrade: (slot: "weapon" | "armor", id: string) =>
+  upgrade: (slot: "weapon" | "armor", id: string, expectedGearId?: string, expectedLevel?: number) =>
     request<{ champion: Champion; upgrade: UpgradeOutcome }>("upgrade", {
-      slot, id,
+      slot, id, expectedGearId, expectedLevel,
     }),
   nft: () => request<NftView>("nft"),
   market: () => request<MarketView>("market"),

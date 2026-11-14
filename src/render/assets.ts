@@ -4,9 +4,10 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 import { abilityContact, abilityDuration } from "../sim/abilities.ts";
-import { clipContact, combatLift, combatPose, motionClock, staffGesture, piercingGesture, crossbowRecoil, type CombatMotion } from "./combat-motion.ts";
+import { clipContact, combatBody, combatLift, combatPose, motionClock, swingClock, staffGesture, piercingGesture, crossbowRecoil, type CombatMotion } from "./combat-motion.ts";
 
 import { PoseTransition } from "./pose-transition.ts";
+import { fistWorld } from "./weapon-pose.ts";
 import { restPose, type RestPose } from './rest-pose.ts';
 
 interface ModelSpec {
@@ -242,7 +243,11 @@ export class AnimatedModel {
     for (const [joint, base] of this.posed) joint.quaternion.copy(base);
     this.posed.clear();
     if(this.staffFocus)this.staffFocus.visible=false;
-    this.presentation.position.y = combatLift(motion) + air;
+    // The whole figure gathers, travels with the blow and takes the impact around its clip.
+    const body = combatBody(motion, this.active?.getClip().name);
+    this.presentation.position.set(body.advance, combatLift(motion) + air, 0);
+    this.presentation.rotation.set(body.roll, body.yaw, -body.lean);
+    this.presentation.scale.set(1 + body.squash * .3, 1 - body.squash * .6, 1 + body.squash * .3);
     if (clipProgress !== undefined && this.active) {
       this.active.time = Math.max(0, Math.min(1, clipProgress)) * this.active.getClip().duration;
       this.mixer.update(0); this.transition.apply(dt); return;
@@ -257,7 +262,7 @@ export class AnimatedModel {
       if(rest?.inspect)this.aimInspection(rest);
       this.transition.apply(dt); return;
     }
-    this.active.time = motionClock(motion, this.active.getClip().name) * this.active.getClip().duration;
+    this.active.time = swingClock(motion, this.active.getClip().name) * this.active.getClip().duration;
     this.mixer.update(0);
     for (const [name, angles] of Object.entries(combatPose(motion))) {
       const joint = this.bone(name);
@@ -303,7 +308,7 @@ export class AnimatedModel {
     }
     this.root.updateWorldMatrix(true,true);
     const axis=new THREE.Vector3(0,0,1).applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
-    const tip=hand.getWorldPosition(new THREE.Vector3()).addScaledVector(axis,1.65);
+    const tip=fistWorld(hand).addScaledVector(axis,1.65);
     this.staffFocus.position.copy(this.root.worldToLocal(tip));
     const localAxis=axis.transformDirection(this.root.matrixWorld.clone().invert());
     this.staffFocus.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),localAxis);
@@ -341,14 +346,17 @@ export class AnimatedModel {
     const right=this.bone('RightHand'),left=this.bone('LeftHand');
     if(!right||!left)return;
     this.root.updateWorldMatrix(true,true);
-    const axis=new THREE.Vector3(0,0,1).applyQuaternion(right.getWorldQuaternion(new THREE.Quaternion()));
-    const shaft=left.getWorldPosition(new THREE.Vector3()).sub(right.getWorldPosition(new THREE.Vector3())).normalize();
-    if(state==='ultimate-slam')shaft.negate();
     if(!this.posed.has(right))this.posed.set(right,right.quaternion.clone());
-    const world=right.getWorldQuaternion(new THREE.Quaternion());
-    const parent=right.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
-    right.quaternion.copy(parent.multiply(new THREE.Quaternion().setFromUnitVectors(axis,shaft).multiply(world)));
-    right.updateWorldMatrix(false,true);
+    // The shaft runs fist to fist. Turning the wrist moves its own fist, so settle in a few passes.
+    for(let pass=0;pass<3;pass++) {
+      const axis=new THREE.Vector3(0,0,1).applyQuaternion(right.getWorldQuaternion(new THREE.Quaternion()));
+      const shaft=fistWorld(left,new THREE.Vector3(),0).sub(fistWorld(right)).normalize();
+      if(state==='ultimate-slam')shaft.negate();
+      const world=right.getWorldQuaternion(new THREE.Quaternion());
+      const parent=right.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
+      right.quaternion.copy(parent.multiply(new THREE.Quaternion().setFromUnitVectors(axis,shaft).multiply(world)));
+      right.updateWorldMatrix(false,true);
+    }
   }
   /** Keep ranged releases in front of the caster while preserving the animated windup. */
   private aimHeldWeapon(motion: CombatMotion) {
@@ -451,6 +459,7 @@ export class ModelLibrary {
       this.clips.get(spec.file),
     );
     if (kind === "warden") model.tint(0x9c719e);
+    if (kind === "wizard") model.tint(0x96a8bd);
     if (kind === "champion") model.tint(0xbd6970);
     return model;
   }

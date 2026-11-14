@@ -1,4 +1,4 @@
-import { Referee, RefereeError } from "./referee.ts";
+import { Referee, RefereeError, isClaimReceiver } from "./referee.ts";
 import { NearBridge } from "./near.ts";
 
 /** Serialize local commits and relays so parallel HTTP requests cannot reuse a nonce. */
@@ -19,10 +19,15 @@ export class GameService {
     return this.serial(async () => {
       if (this.near.config) {
         try {
-          await this.near.flush();
-          if (!this.referee.profile(owner).chain?.pending)
-            await this.near.checkOwner(owner);
-        } catch {
+          // checkOwner isolates unrelated pending relays before refreshing this guest.
+          await this.near.checkOwner(owner);
+        } catch (error) {
+          if (
+            error instanceof RefereeError &&
+            error.status === 409 &&
+            this.referee.profile(owner).chain?.pending === false
+          )
+            throw error;
           /* Durable pending saves will retry; do not claim confirmation. */
         }
       }
@@ -133,13 +138,17 @@ export class GameService {
               "Gear upgrades open after the testnet contract is updated.",
               503,
             );
-          result = { upgrade: this.referee.upgrade(owner, body.slot, body.id) };
+          result = { upgrade: this.referee.upgrade(owner, body.slot, body.id, body.expectedGearId, body.expectedLevel) };
           break;
         case "/api/claim": {
           if (!this.near.config || !this.near.supports("claim"))
             throw new RefereeError(
               "Claiming opens after the testnet contract is updated.",
               503,
+            );
+          if (!isClaimReceiver(body.receiver))
+            throw new RefereeError(
+              "Enter a NEAR testnet account, like yourname.testnet.",
             );
           if (!(await this.near.accountExists(String(body.receiver))))
             throw new RefereeError(
@@ -187,7 +196,7 @@ export class GameService {
       )
         return this.near.status(this.referee.profile(owner));
       if (path === "/api/upgrade") {
-        if (body.id !== undefined) result.upgrade = this.referee.upgrade(owner, body.slot, body.id);
+        if (body.id !== undefined) result.upgrade = this.referee.upgrade(owner, body.slot, body.id, body.expectedGearId, body.expectedLevel);
         result.champion = this.near.status(this.referee.profile(owner));
       }
       if (path === "/api/claim") {

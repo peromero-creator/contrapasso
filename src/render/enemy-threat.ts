@@ -12,6 +12,7 @@ export function enemyThreat(e: Enemy) {
   if (e.kind === 'imp') return { shape: 'circle' as const, progress, radius: e.r + .5 + 1.25, length: 0, width: 0 };
   if (e.kind === 'warden' && bossMove(e) === 'gaze') return { shape: 'charge' as const, progress, radius: 0, length: GAZE_LENGTH, width: GAZE_HALF_WIDTH * 2 };
   if (e.kind === 'warden' && bossMove(e) === 'slam') return { shape: 'circle' as const, progress, radius: SLAM_RADIUS, length: 0, width: 0 };
+  if (e.kind === 'warden' && bossMove(e) === 'rain') return { shape: 'circle' as const, progress, radius: e.r + 2.2, length: 0, width: 0 };
   if (e.kind === 'warden' && bossMove(e) === 'fan') return { shape: 'fan' as const, progress, radius: 0, length: 12, width: 0 };
   // A radial volley has no fixed lane: its random offset is chosen at release.
   if (e.kind === 'warden' && bossMove(e) === 'burst')

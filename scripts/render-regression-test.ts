@@ -161,7 +161,7 @@ assert.equal(enemyThreat(brute)!.length,17*.55);
 assert.equal(enemyThreat(brute)!.progress,.5);
 assert.ok(enemyThreat({...brute,z:9.5})!.length<.56,'charge guide ends at the arena clamp');
 let litWarnings=0;warning.root.traverse(node=>{if(node instanceof T.Light)litWarnings++;});assert.equal(litWarnings,0);
-assert.equal(enemyThreat({...brute,kind:'warden',pattern:3})!.shape,'burst','radial shots must not masquerade as a charge lane');
+assert.equal(enemyThreat({...brute,kind:'warden',pattern:0})!.shape,'burst','radial shots must not masquerade as a charge lane');
 assert.equal(enemyThreat({...brute,kind:'archer'})!.shape,'aim');
 assert.equal(enemyThreat({...brute,spawn:.1}),null);
 assert.equal(enemyThreat({...brute,hp:0}),null);

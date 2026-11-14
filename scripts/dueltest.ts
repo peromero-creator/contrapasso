@@ -10,6 +10,42 @@ import {
 import { packInput, unpackInput } from "../src/sim/input.ts";
 import { bot } from "../src/dev/bot.ts";
 import { Referee } from "../server/referee.ts";
+import { abilityContact, abilityDuration } from "../src/sim/abilities.ts";
+
+// On-hit healing must not undo the retaliation that killed its caster. Check
+// exact lethal damage, overkill, and a survivor that should still receive healing.
+for (const action of ["blood", "siphon-spell", "staff-3", "dagger-3"] as const) {
+  for (const hp of [15, 16, 17]) {
+    const w = createDuelWorld(
+      11,
+      { skills: { reprisal: 1 }, weaponId: "starter", weaponLevel: 0, armorLevel: 0 },
+      { skills: { [action]: 1 }, weaponId: action === "staff-3" ? "vesper-reed" : action === "dagger-3" ? "widows-fang" : "starter", weaponLevel: 0, armorLevel: 0 },
+    );
+    w.player.x = 1; w.player.z = 0;
+    const rival = w.enemies[0];
+    rival.x = rival.z = rival.spawn = 0; rival.hp = hp; rival.cd = 99;
+    if (action === "blood") {
+      rival.state = "windup"; rival.t = .001; rival.dx = 1; rival.dz = 0; rival.attackKind = "swing";
+    } else {
+      rival.ability!.castId = action;
+      rival.ability!.castT = abilityDuration(action) - abilityContact(action) + .001;
+      rival.ability!.castPending = true; rival.ability!.castAim = 0;
+    }
+    const replay = structuredClone(w), input = { move: -1, aim: 0, attack: false, dash: false };
+    step(w, input); step(replay, unpackInput(packInput(input)));
+    assert.deepEqual(w, replay, `${action}/${hp}: packed replay matches lethal contact`);
+    assert.ok(w.player.hp > 0, "the retaliation owner survived the initial hit");
+    if (hp <= 16) {
+      assert.equal(w.phase, "won", `${action}: lethal retaliation ends the Duel`);
+      assert.equal(w.enemies.length, 0, `${action}: healing cannot resurrect a defeated rival`);
+      assert.equal(w.events.some(e => e.type === "heal"), false, `${action}: no posthumous heal`);
+    } else {
+      const healing = action === "blood" ? 2 : action === "dagger-3" ? 5 : 6;
+      assert.equal(w.phase, "fight");
+      assert.equal(w.enemies[0].hp, hp - 16 + healing, `${action}: living rivals still heal`);
+    }
+  }
+}
 
 const empty: CombatBuild = { skills: {}, weaponLevel: 0, armorLevel: 0 };
 for (const seed of [1, 42, 20261112]) {

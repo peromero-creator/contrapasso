@@ -37,10 +37,18 @@ export const ARENA_HX = 17;
 export const ARENA_HZ = 11;
 export const FLOORS = 5;
 export const BOSS_GATE = { x: -10, z: -7.5, r: 2.5 };
-export const BOSS_FLOORS = [2, 4, 5] as const;
+export const BOSS_FLOORS = [2, 3, 4, 5] as const;
 export function bossAvailable(w: World): boolean { return w.mode !== "duel" && (BOSS_FLOORS as readonly number[]).includes(w.floor) && w.bossEncounter === "waiting"; }
 export function nearBossGate(w: World): boolean { return bossAvailable(w) && w.phase === "cleared" && (w.player.x-BOSS_GATE.x)**2+(w.player.z-BOSS_GATE.z)**2 < BOSS_GATE.r**2; }
 export const PORTAL = { x: 0, z: -ARENA_HZ + 1.6, r: 1.5 };
+/** A ritual bell the hero rings to summon the next wave, so a floor is paced, not run. */
+export const WAVE_BELL = { x: 0, z: -4, r: 2.6 };
+export function waveBellReady(w: World): boolean {
+  return w.mode !== "duel" && w.phase === "fight" && w.bossEncounter !== "active" && w.enemies.length === 0 && w.wave + 1 < w.wavesInFloor;
+}
+export function nearWaveBell(w: World): boolean {
+  return waveBellReady(w) && (w.player.x - WAVE_BELL.x) ** 2 + (w.player.z - WAVE_BELL.z) ** 2 < WAVE_BELL.r ** 2;
+}
 
 export interface Input {
   /** direction index to move in, or -1 to stand still */
@@ -181,7 +189,8 @@ export interface SimEvent {
   z: number;
   /** Presentation identity for grouping damage; never part of player input. */
   target?: number;
-  bossMove?: "gaze" | "slam";
+  bossMove?: "gaze" | "slam" | "rain";
+  boss?: BossId;
   ability?: AbilityId;
   stage?: "charge" | "release" | "pulse";
   side?: "player" | "enemy";
@@ -202,6 +211,8 @@ export interface World {
   bossEncounter: "waiting" | "active" | "defeated";
   gateTransition: number;
   gateDirection: "enter" | "return" | null;
+  /** A newly opened exit must not transport a hero already standing inside it. */
+  portalArmed: boolean;
   phase: Phase;
   player: Player;
   enemies: Enemy[];
@@ -288,6 +299,7 @@ export function createWorld(
     bossEncounter: "waiting",
     gateTransition: 0,
     gateDirection: null,
+    portalArmed: false,
     phase: "fight",
     player: {
       ...abilityState(equipment.core, skills, equipment.spell),
@@ -551,6 +563,7 @@ function nova(
 }
 
 function offerSkills(w: World) {
+  w.portalArmed = (w.player.x - PORTAL.x) ** 2 + (w.player.z - PORTAL.z) ** 2 >= PORTAL.r ** 2;
   const pool = w.unlocked.filter(
     (id) => rank(w.player.skills, id) < MAX_SKILL_RANK && (!id.endsWith("-spell") || id === w.player.spell) && (!techniqueId(id) || weaponTechniques(w.player.weaponId).includes(id as TechniqueId)),
   );
@@ -868,7 +881,7 @@ function abilityHit(w: World, actor: { x: number; z: number; hp?: number; maxHp?
       clampArena(target, r);
     }
   }
-  if (t.heal && hits && actor.hp && actor.maxHp && w.phase === "fight") {
+  if (t.heal && hits && actor.hp !== undefined && actor.hp > 0 && actor.maxHp && w.phase === "fight") {
     const gain = Math.min(actor.maxHp - actor.hp, hits * t.heal);
     actor.hp += gain;
     if (gain > 0) w.events.push({ type: "heal", x: actor.x, z: actor.z, amount: gain });
@@ -1174,7 +1187,7 @@ function stepPlayer(w: World, input: Input) {
 function stepRitualBoss(w: World, e: Enemy, ex: number, ez: number, d: number) {
   if (e.state === "seek") {
     e.dx = ex; e.dz = ez;
-    const desired = e.boss === "witness" ? 7 : 3.5;
+    const desired = e.boss === "witness" ? 7 : e.boss === "wizard" ? 6 : 3.5;
     if (d > desired) { e.x += ex * 2.8 * DT; e.z += ez * 2.8 * DT; }
     if (e.cd <= 0 && d < 14) {
       e.pattern++; e.enraged = e.hp < e.maxHp * .5;
@@ -1186,11 +1199,22 @@ function stepRitualBoss(w: World, e: Enemy, ex: number, ez: number, d: number) {
   const move = bossMove(e);
   if (e.state === "windup" && e.t <= 0) {
     if (move === "charge") { e.state = "act"; e.t = .6; return; }
-    if (move === "gaze" || move === "slam") {
+    if (move === "rain") {
+      // A spell: meteors converge on the hero from every side, forcing a dodge.
+      const n = e.enraged ? 10 : 8;
+      for (let i = 0; i < n; i++) {
+        const a = (i * DIRS) / n;
+        const x = w.player.x + DX[a] * 3.2;
+        const z = w.player.z + DZ[a] * 3.2;
+        fireShot(w, x, z, -DX[a], -DZ[a], 5.5, 11);
+      }
+      e.impactT = .2;
+      w.events.push({ type: "boss-impact", x: w.player.x, z: w.player.z, dir: 0, bossMove: "rain", boss: e.boss });
+    } else if (move === "gaze" || move === "slam") {
       if (move === "gaze" ? gazeHits(e, w.player) : (e.x-w.player.x)**2+(e.z-w.player.z)**2 <= SLAM_RADIUS**2)
         hurtPlayer(w, move === "gaze" ? 19 : 23);
       e.impactT = .18;
-      w.events.push({ type: "boss-impact", x:e.x,z:e.z,dir:dirIndex(e.dx,e.dz), bossMove:move });
+      w.events.push({ type: "boss-impact", x:e.x,z:e.z,dir:dirIndex(e.dx,e.dz), bossMove:move, boss: e.boss });
     } else {
       const n = move === "burst" ? (e.enraged ? 14 : 10) : (e.enraged ? 5 : 3);
       const aim = dirIndex(e.dx,e.dz);
@@ -1364,7 +1388,7 @@ function stepEnemy(w: World, e: Enemy) {
                 p.burnT = 3;
                 p.burnCd = 0.5;
               }
-              if (rank(skills, "blood"))
+              if (e.hp > 0 && rank(skills, "blood"))
                 e.hp = Math.min(e.maxHp, e.hp + 2 * rank(skills, "blood"));
             }
             e.state = "recover";
@@ -1561,6 +1585,14 @@ export function step(w: World, input: Input): void {
     w.spawnDelay = 0.7;
     return;
   }
+  if (input.choice === 1 && nearWaveBell(w)) {
+    // The hero rings the bell and summons the next wave; the floor waits between waves.
+    w.wave += 1;
+    w.shots = []; // stray bolts from the finished wave do not punish the walk to the bell
+    spawnWave(w);
+    w.events.push({ type: "floor", x: WAVE_BELL.x, z: WAVE_BELL.z, amount: w.wave });
+    return;
+  }
 
   stepPlayer(w, input);
   if (p.burnT > 0 && p.hp > 0) {
@@ -1722,8 +1754,8 @@ export function step(w: World, input: Input): void {
         if (w.bossEncounter === "active") {
           spawnEnemy(w, "warden");
           const boss = w.enemies[w.enemies.length - 1];
-          boss.boss = BOSS_IDS[BOSS_FLOORS.indexOf(w.floor as 2 | 4 | 5)];
-          boss.hp = boss.maxHp = w.floor === 2 ? 600 : w.floor === 4 ? 750 : 900;
+          boss.boss = BOSS_IDS[BOSS_FLOORS.indexOf(w.floor as 2 | 3 | 4 | 5)];
+          boss.hp = boss.maxHp = w.floor === 2 ? 600 : w.floor === 3 ? 675 : w.floor === 4 ? 750 : 900;
         } else spawnWave(w);
       }
     } else if (w.enemies.length === 0) {
@@ -1733,8 +1765,8 @@ export function step(w: World, input: Input): void {
         w.gateDirection = "return";
         w.shots = []; w.zones = []; w.techniques = [];
       } else if (w.wave + 1 < w.wavesInFloor) {
-        w.wave += 1;
-        w.spawnDelay = 0.9;
+        // The next wave waits for the hero to ring the ritual bell; the floor
+        // is paced rather than auto-advanced, so a cleared wave leaves a breath.
       } else {
         offerSkills(w);
       }
@@ -1742,7 +1774,9 @@ export function step(w: World, input: Input): void {
   } else if (w.phase === "cleared") {
     const dx = p.x - PORTAL.x;
     const dz = p.z - PORTAL.z;
-    if (dx * dx + dz * dz < PORTAL.r * PORTAL.r) {
+    const insidePortal = dx * dx + dz * dz < PORTAL.r * PORTAL.r;
+    if (!insidePortal) w.portalArmed = true;
+    if (insidePortal && w.portalArmed) {
       if (w.floor === FLOORS) {
         w.phase = "won";
         w.events.push({type:"won",x:p.x,z:p.z});
@@ -1750,6 +1784,7 @@ export function step(w: World, input: Input): void {
       }
       w.floor += 1;
       w.bossEncounter = "waiting";
+      w.portalArmed = false;
       w.pickups = [];
       w.zones = [];
       w.wave = 0;

@@ -1,6 +1,6 @@
 // Record a bot run, then replay only its packed inputs and compare every tick.
 import assert from "node:assert/strict";
-import { createWorld, step, DT, PORTAL, type Enemy, type Input, type World } from "../src/sim/world.ts";
+import { createWorld, step, DT, PORTAL, WAVE_BELL, nearWaveBell, waveBellReady, type Enemy, type Input, type World } from "../src/sim/world.ts";
 import { dirIndex } from "../src/sim/dirs.ts";
 import { packInput as pack, unpackInput as unpack } from "../src/sim/input.ts";
 import { SKILL_IDS, type SkillId } from "../src/sim/skills.ts";
@@ -16,6 +16,11 @@ function bot(w: World): Input {
   }
   if (w.phase === "cleared") {
     const a = dirIndex(0 - p.x, PORTAL.z - p.z);
+    return { move: a, aim: a, attack: false, dash: false };
+  }
+  if (waveBellReady(w)) {
+    const a = dirIndex(WAVE_BELL.x - p.x, WAVE_BELL.z - p.z);
+    if (nearWaveBell(w)) return { move: -1, aim: a, attack: false, dash: false, choice: 1 };
     return { move: a, aim: a, attack: false, dash: false };
   }
   if (!best) return { move: -1, aim: p.aim, attack: false, dash: false };
@@ -83,6 +88,7 @@ for (const dash of [false, true]) {
 // The portal restores health once, and the final wave can finish the run.
 const portal = arena();
 portal.phase = "cleared";
+portal.portalArmed = true;
 portal.player.x = PORTAL.x;
 portal.player.z = PORTAL.z;
 portal.player.hp = 65;

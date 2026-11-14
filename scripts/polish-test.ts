@@ -6,12 +6,32 @@ import { WeaponTrail } from '../src/render/weapon-trail.ts';
 import { Sound } from '../src/audio/sound.ts';
 import { inkFamily } from '../src/render/skill-ink.ts';
 import type { Enemy } from '../src/sim/world.ts';
+import { createWorld, step } from '../src/sim/world.ts';
 import { Atmosphere } from '../src/render/atmosphere.ts';
 
 // CPU-side canvas substitute: verify pooling and lifetime, not raster appearance.
 const oldDocument=Object.getOwnPropertyDescriptor(globalThis,'document');
 Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement:()=>({width:0,height:0,getContext:()=>new Proxy({}, {get:()=>()=>{}})})}});
 const scene=new T.Scene(),weight=new SkillWeight(scene);
+// A real Ash Step dash emits a passive pulse, not a charged Reaping Orbit.
+const dashWorld=createWorld(17,['ash']);
+step(dashWorld,{move:-1,aim:0,attack:false,dash:true});
+const dashPulse=dashWorld.events.find(e=>e.type==='ability'&&e.stage==='pulse')!;
+assert.ok(dashPulse);assert.equal(dashPulse.side,undefined);
+for(const ability of ['ash','iron','ember'] as const){
+  assert.equal(weight.event({...dashPulse,ability}),null,'passive echoes cannot trigger ultimate camera response or hit-stop');
+  assert.ok(weight.root.children.every(n=>!n.visible),'passive echoes cannot leave an ultimate aftermath');
+}
+assert.equal(weight.chain,0);
+weight.event({type:'ability',stage:'charge',ability:'hammer-4',side:'player',x:0,z:0});
+assert.equal(weight.event(dashPulse),null,'passive proc leaves the active skill response untouched');
+const realContact=weight.event({type:'ability',stage:'pulse',ability:'hammer-4',side:'player',x:0,z:0})!;
+assert.equal(realContact.stop,.045,'the actual committed heavy contact keeps its first-contact accent');
+assert.equal(weight.chain,1);
+const footprintBefore=weight.root.children.map(n=>({visible:n.visible,position:n.position.toArray(),order:n.children[0].renderOrder}));
+assert.equal(weight.event(dashPulse),null);
+assert.deepEqual(weight.root.children.map(n=>({visible:n.visible,position:n.position.toArray(),order:n.children[0].renderOrder})),footprintBefore,'passive proc cannot duck or displace the current skill footprint');
+weight.clear();
 for(const ability of ['sword-1','hammer-2','staff-3'] as const){weight.event({type:'ability',stage:'charge',ability,side:'player',x:0,z:0});weight.event({type:'ability',stage:'pulse',ability,side:'player',x:0,z:0});}
 assert.equal(weight.chain,3);assert.equal(weight.peakChain,3);
 const tell=new EnemyThreat();tell.sync({kind:'warden',boss:'cantor',hp:100,spawn:0,state:'windup',pattern:2,t:.4,r:1,x:0,z:0,dx:1,dz:0} as Enemy,{x:0,z:0});

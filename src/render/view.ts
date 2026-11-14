@@ -21,7 +21,7 @@ import { Underworld } from "./dressing";
 // Everything visual. Reads the simulation state, never changes it.
 import * as THREE from "three";
 import {
-  BOSS_GATE, bossAvailable,
+  BOSS_GATE, bossAvailable, WAVE_BELL,
   ARENA_HX,
   ARENA_HZ,
   JUMP_TIME,
@@ -107,6 +107,13 @@ export const CIRCLES = [
     tint: 0xb8351c,
     light: 0xffb090,
     glow: 0xff4a1e,
+  },
+  {
+    name: "DUEL",
+    fog: 0x0a0b0d,
+    tint: 0x6f6a63,
+    light: 0xe8e0d2,
+    glow: 0xc0b098,
   },
 ];
 
@@ -215,8 +222,8 @@ export class View {
     return this.preparation ??= (async () => {
       await Promise.all([...this.actorLoads, this.bossGate.ready, this.environment.ready, this.underworld.ready]);
       this.environment.prepare(this.renderer);
-      await Promise.all([...CIRCLES.map(c=>c.name),'BOSS_WARDEN','BOSS_WITNESS','BOSS_CANTOR'].map(name=>this.models.floor(name).then(t=>{if(t)this.renderer.initTexture(t);})));
-      const models = await Promise.all(['imp', 'archer', 'brute', 'warden', 'witness', 'cantor'].map(kind => this.models.create(kind)));
+      await Promise.all([...CIRCLES.map(c=>c.name),'BOSS_WARDEN','BOSS_WIZARD','BOSS_WITNESS','BOSS_CANTOR'].map(name=>this.models.floor(name).then(t=>{if(t)this.renderer.initTexture(t);})));
+      const models = await Promise.all(['imp', 'archer', 'brute', 'warden', 'wizard', 'witness', 'cantor'].map(kind => this.models.create(kind)));
       const warmup = new THREE.Scene();
       const textures = new Set<THREE.Texture>();
       for (const model of models) if (model) {
@@ -473,6 +480,7 @@ export class View {
   private squashT = 0;
   private squashAmp = 0;
   private damageTexts: DamageText[] = [];
+  private textPool: DamageText[] = [];
   private pulses: Pulse[] = [];
 
   private damageText(x: number, z: number, text: string, color: string, y = 2, size = 1, target?: number) {
@@ -486,6 +494,28 @@ export class View {
       return;
     }
     if (this.damageTexts.length >= 40) return;
+    // Reuse a spent text sprite so a fresh burst of hits never re-uploads textures
+    // mid-fight; the canvas is redrawn and flagged, which is a cheap sub-image upload.
+    let entry = this.textPool.pop();
+    if (entry) {
+      entry.target = target;
+      entry.total = Number(text);
+      entry.sinceHit = 0;
+      entry.life = 0.65;
+      entry.size = size;
+      const ctx = entry.canvas.getContext("2d")!;
+      ctx.clearRect(0, 0, 256, 128);
+      ctx.strokeText(text, 128, 82);
+      ctx.fillStyle = color;
+      ctx.fillText(text, 128, 82);
+      entry.sprite.material.map!.needsUpdate = true;
+      entry.sprite.position.set(x + (Math.random() - 0.5) * 0.5, y, z);
+      entry.sprite.scale.set(1.5, 0.75, 1);
+      entry.sprite.material.opacity = 1;
+      this.scene.add(entry.sprite);
+      this.damageTexts.push(entry);
+      return;
+    }
     const canvas = document.createElement("canvas");
     canvas.width = 256;
     canvas.height = 128;
@@ -600,6 +630,28 @@ export class View {
     this.sigilInner.rotation.x = -Math.PI / 2;
     this.sigilInner.position.y = 0.02;
     this.scene.add(this.sigilInner);
+
+    // Ritual bell: the hero rings it to summon the next wave between fights.
+    {
+      const bell = new THREE.Group();
+      const bronze = new THREE.MeshStandardMaterial({ color: 0x8a7a55, roughness: 0.42, metalness: 0.62, emissive: 0x2a1f12, emissiveIntensity: 0.25 });
+      const iron = new THREE.MeshStandardMaterial({ color: 0x4a3d2c, roughness: 1, metalness: 0 });
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.95, 12), bronze);
+      body.position.y = 1.15;
+      bell.add(body);
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.28, 8), iron);
+      crown.position.y = 1.72;
+      bell.add(crown);
+      const clapper = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), iron);
+      clapper.position.y = 0.72;
+      bell.add(clapper);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.035, 6, 24), bronze);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.03;
+      bell.add(ring);
+      bell.position.set(WAVE_BELL.x, 0, WAVE_BELL.z);
+      this.scene.add(bell);
+    }
   }
 
   /** A soft dark disc under an actor: the only "shadow" in a 2.5D scene. */
@@ -825,6 +877,12 @@ export class View {
     clearTransientEffects(this.scene,
       [this.cracks, this.splats, this.pulses, this.particles],
       this.damageTexts, []);
+    // Dispose the pooled (spent) damage-text sprites too, so a new run starts clean.
+    for (const text of this.textPool) {
+      text.sprite.material.map?.dispose();
+      text.sprite.material.dispose();
+    }
+    this.textPool.length = 0;
     this.afterimages.clear();this.weaponTrail.clear();
     this.squashT = this.squashAmp = this.dustCd = this.echoCd = 0;
     for (const c of this.fallen) this.disposeEnemy(c.view);
@@ -1177,9 +1235,12 @@ export class View {
         case "burn":
           this.burst(e.x, 0.6, e.z, 2, 0xff852a, 1.4);
           break;
-        case "boss-impact":
-          if (e.bossMove === 'slam') { this.impact.ring(e.x, e.z, SLAM_RADIUS, 0xb28368); this.shake = Math.max(this.shake,.08); }
+        case "boss-impact": {
+          const ink = e.boss === 'wizard';
+          if (e.bossMove === 'slam') { this.impact.ring(e.x, e.z, SLAM_RADIUS, ink ? 0x6b7f92 : 0xb28368); this.shake = Math.max(this.shake,.08); }
+          else if (e.bossMove === 'rain') { this.impact.ring(e.x, e.z, 3.4, ink ? 0x5a6b8a : 0xa97fb0); this.burst(e.x, .5, e.z, 10, ink ? 0x35465a : 0xb86a9a, 4); this.shake = Math.max(this.shake,.06); }
           break;
+        }
         case "nova":
           this.impact.ring(e.x, e.z, e.amount ?? 3, 0xffcd7e, e.followsCaster);
           this.burst(e.x, 0.4, e.z, 16, 0xffcd7e, 5);
@@ -1207,7 +1268,7 @@ export class View {
   sync(w: World, dt: number, alpha = 1) {
     this.rivalWeapon = w.enemies.find(e => e.kind === "champion")?.weaponId ?? "starter";
     const chamberVisible = w.bossEncounter === "active" ? w.gateTransition <= 27 : w.gateDirection === "return" && w.gateTransition > 27;
-    const visualCircle = chamberVisible ? 0 : w.floor - 1;
+    const visualCircle = w.mode === "duel" ? CIRCLES.length - 1 : chamberVisible ? 0 : w.floor - 1;
     const battlefieldChanged =
       w.tick < this.lastWorldTick || visualCircle !== this.circle;
     if (w.tick < this.lastWorldTick) {
@@ -1221,7 +1282,7 @@ export class View {
     }
     this.lastWorldTick = w.tick;
     this.time += dt;
-    this.setCircle(visualCircle,chamberVisible?`BOSS_${w.floor===2?'WARDEN':w.floor===4?'WITNESS':'CANTOR'}`:undefined);
+    this.setCircle(visualCircle,chamberVisible?`BOSS_${w.floor===2?'WARDEN':w.floor===3?'WIZARD':w.floor===4?'WITNESS':'CANTOR'}`:undefined);
     const p = w.player;
     if (
       p.weaponId !== this.equippedWeapon ||
@@ -1442,7 +1503,7 @@ export class View {
         v = this.makeEnemy(e.kind);
         this.enemies.set(e.id, v);
         const actor = v;
-        void this.models.create(e.boss ?? e.kind, v.h - 0.3).then((model) => {
+        void this.models.create(e.boss ?? e.kind, v.h + 0.4).then((model) => {
           if (!model) return;
           if (this.enemies.get(e.id) !== actor) {
             model.dispose();
@@ -1575,8 +1636,10 @@ export class View {
       text.sprite.material.opacity = Math.max(0, text.life / 0.4);
       if (text.life <= 0) {
         this.scene.remove(text.sprite);
-        text.sprite.material.map?.dispose();
-        text.sprite.material.dispose();
+        // Keep the canvas + texture alive for the next hit; it costs a sub-image
+        // upload instead of a fresh texture allocation on the next burst.
+        text.sprite.material.opacity = 0;
+        this.textPool.push(text);
       }
     }
     this.damageTexts = this.damageTexts.filter((text) => text.life > 0);

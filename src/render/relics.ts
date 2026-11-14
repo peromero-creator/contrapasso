@@ -176,6 +176,25 @@ export class RelicStage {
     this.camera.position.set(3.5, 2.8, 5.5);
     this.camera.lookAt(0.25, 1.1, 0);
     this.starter.add(starterWeapon()); this.grip.add(this.starter); this.starter.visible = true;
+    // A soft contact shadow grounds the champion in the chamber so it reads as a
+    // solid figure rather than a floating hologram.
+    {
+      const c = document.createElement("canvas"); c.width = c.height = 128;
+      const g = c.getContext("2d")!;
+      const grad = g.createRadialGradient(64, 64, 8, 64, 64, 62);
+      grad.addColorStop(0, "rgba(0,0,0,0.5)");
+      grad.addColorStop(0.55, "rgba(0,0,0,0.28)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+      const shadowTex = new THREE.CanvasTexture(c);
+      const shadow = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.7, 1.5),
+        new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, toneMapped: false }),
+      );
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.01;
+      this.scene.add(shadow);
+    }
     this.ready = models.create("hero", 2.2).then((hero) => {
       if (!hero) {
         this.label.textContent = "Preview unavailable";
@@ -260,8 +279,8 @@ export class RelicStage {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
       const expanded = width > 850;
-      this.camera.position.set(...(expanded ? [7,6,11] : [3.4,2.8,5.3]) as [number,number,number]);
-      this.camera.lookAt(expanded ? 1 : .35, 1, 0);
+      this.camera.position.set(...(expanded ? [4.2,3.2,5.8] : [3.4,2.8,5.3]) as [number,number,number]);
+      this.camera.lookAt(expanded ? .45 : .35, 1.05, 0);
       this.camera.updateProjectionMatrix();
     }
     if(this.showcase) {
@@ -276,8 +295,9 @@ export class RelicStage {
     const wide = width > 850;
     const airborne = this.ability==='sword-4' || this.ability==='hammer-4';
     const expansive = airborne || !!this.ability && ['staff-2','staff-3','ember','ash','iron','nova-spell'].includes(this.ability);
-    this.camera.position.set(...(wide ? [7,6,11] : expansive ? [5.8,4.5,8] : [3.4,2.8,5.3]) as [number,number,number]);
-    this.camera.lookAt(wide ? 1 : .35, airborne ? 1.4 : 1, 0);
+    // Framing: the champion fills the idle/attack view; only wide-area skills pull back.
+    this.camera.position.set(...(expansive ? [6.0,4.8,9.0] : [3.6,2.7,5.0]) as [number,number,number]);
+    this.camera.lookAt(expansive ? .6 : .35, airborne ? 1.4 : 1.05, 0);
     this.previewWorld.player.core = coreId(this.ability);
     this.previewWorld.player.wardT = this.ability === "iron" && this.elapsed > CORE_CONTACT && this.elapsed < 4 ? 1 : 0;
     this.fx.sync(this.previewWorld, dt);this.weight.update(dt);

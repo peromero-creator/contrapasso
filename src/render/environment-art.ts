@@ -33,15 +33,16 @@ export class EnvironmentArt {
     this.ready=Promise.all([
       load('/art/stone-border.jpg').then(t=>{t.wrapS=T.RepeatWrapping;borderMat.map=t;borderMat.needsUpdate=true;}),
       load('/art/pilgrim-exit.jpg').then(t=>{this.exitMat.map=t;this.exitMat.needsUpdate=true;}),
-      ...['limbo','lust','gluttony','greed','wrath'].map((name,i)=>load(`/art/wall-${name}.jpg`).then(t=>{t.offset.y=.155;t.repeat.y=.845;this.walls[i]=t;})),
+      ...['limbo','lust','gluttony','greed','wrath','duel'].map((name,i)=>load(`/art/wall-${name}.jpg`).then(t=>{t.offset.y=.155;t.repeat.y=.845;this.walls[i]=t;})),
     ]).then(()=>{this.wall.material.map=this.walls[0];this.wall.material.needsUpdate=true;});
   }
   prepare(renderer:T.WebGLRenderer) { for(const texture of this.walls)renderer.initTexture(texture); }
   sync(w:World,chamber:boolean) {
-    this.root.visible=w.mode==='solo';
-    this.exit.visible=!chamber;
+    const duel=w.mode==='duel';
+    this.root.visible=w.mode==='solo'||duel;
+    this.exit.visible=w.mode==='solo'&&!chamber;
     this.exitMat.color.setHex(w.phase==='cleared'?0xe5d4b7:0x59544d);
-    const map=this.walls[Math.max(0,w.floor-1)]??this.walls[0];
+    const map=duel?this.walls[5]:this.walls[Math.max(0,w.floor-1)]??this.walls[0];
     if(map&&this.wall.material.map!==map){this.wall.material.map=map;this.wall.material.needsUpdate=true;}
   }
 }

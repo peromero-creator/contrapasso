@@ -16,8 +16,10 @@
   z-index: 30;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-columns: 208px minmax(0, 1fr);
   overflow: hidden;
+  /* clip, unlike hidden, cannot be scrolled by focus or scrollIntoView on a sliding page */
+  overflow: clip;
   background: #11120f;
   transition: opacity 0.35s;
 }
@@ -65,7 +67,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 30px 0 22px;
+  padding: 26px 0 22px;
   border-right: 1px solid var(--rule);
   background: linear-gradient(180deg, #0d0e0cf5, #100f0deb);
 }
@@ -74,9 +76,9 @@
   align-self: flex-start;
   background: none;
   border: 0;
-  padding: 4px 26px;
+  padding: 4px 22px;
   color: var(--bone);
-  font: 800 24px var(--heading);
+  font: 800 22px var(--heading);
   letter-spacing: 0.03em;
   cursor: pointer;
 }
@@ -87,16 +89,18 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  margin-top: 40px;
+  margin: 32px 12px 0;
+  gap: 6px;
 }
 #camp-nav button {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: baseline;
   gap: 2px 8px;
-  padding: 15px 26px 14px;
+  padding: 13px 14px;
   background: none;
   border: 0;
+  border-radius: 6px;
   color: #9c9483;
   text-align: left;
   cursor: pointer;
@@ -106,30 +110,30 @@
     padding-left 0.25s var(--ease-out);
 }
 #camp-nav button small {
+  display: none;
   font: 600 11px var(--body);
   letter-spacing: 0.1em;
   color: #6f685b;
   transition: color 0.2s;
 }
 #camp-nav button span {
-  font: 700 23px / 1 var(--heading);
-  letter-spacing: 0.09em;
+  font: 600 16px / 1.35 var(--body);
+  letter-spacing: 0;
 }
 #camp-nav button > i {
-  grid-column: 2;
+  grid-column: 1;
   font: 500 12px var(--body);
   font-style: normal;
-  color: #6f685b;
+  color: #aaa294;
   transition: color 0.2s;
 }
 #camp-nav button:hover {
   color: var(--bone);
-  padding-left: 31px;
+  background: #ffffff08;
 }
 #camp-nav button[aria-current] {
   color: var(--bone);
-  background: linear-gradient(90deg, #b18b4922, transparent 85%);
-  padding-left: 31px;
+  background: #b18b4922;
 }
 #camp-nav button[aria-current] small {
   color: var(--gold);
@@ -187,13 +191,14 @@
 }
 .camp-tool {
   appearance: none;
-  min-height: 38px;
+  min-height: 40px;
   padding: 8px 13px;
   border: 1px solid #5d5341;
+  border-radius: 6px;
   background: #1c1a15;
   color: #cfc4ae;
-  font: 600 11px var(--body);
-  letter-spacing: 0.12em;
+  font: 600 13px var(--body);
+  letter-spacing: 0;
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -329,13 +334,15 @@
   appearance: none;
   display: grid;
   place-items: center;
-  width: 44px;
+  min-width: 82px;
+  padding: 0 12px;
   height: 44px;
   flex-shrink: 0;
   border: 1px solid #645846;
+  border-radius: 6px;
   background: #24211b;
   color: var(--bone);
-  font: 500 20px var(--body);
+  font: 600 14px var(--body);
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -343,21 +350,20 @@
 }
 .page-back:hover {
   border-color: var(--gold);
-  transform: translateX(-3px);
 }
 #camp .btn {
   min-height: 44px;
   padding: 10px 18px;
   gap: 14px;
-  font-size: 16px;
+  font-size: 14px;
 }
 #camp .btn span {
   font-size: 18px;
 }
 #camp .btn.big {
-  min-height: 60px;
-  padding: 14px 26px;
-  font-size: 20px;
+  min-height: 48px;
+  padding: 12px 24px;
+  font-size: 16px;
 }
 #camp .section-label {
   margin: 0 0 14px;
@@ -374,7 +380,7 @@
 }
 .hub {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 1fr);
   gap: clamp(20px, 3vw, 44px);
   align-items: stretch;
   min-height: 540px;
@@ -385,6 +391,7 @@
   overflow: hidden;
   border: 1px solid var(--rule);
   background: #151815;
+  border-radius: 8px;
 }
 #hub-stage {
   position: absolute;
@@ -405,12 +412,12 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
 }
 #camp .hub-champion h2 {
   margin: 6px 0 8px;
-  font: 600 clamp(28px, 3vw, 40px) / 1.05 var(--title);
+  font: 600 clamp(26px, 2.5vw, 36px) / 1.1 var(--title);
   letter-spacing: 0.03em;
 }
 .hub-champion p {
@@ -428,7 +435,7 @@
   grid-template-columns: 1fr auto 16px;
   align-items: baseline;
   gap: 10px;
-  padding: 12px 4px;
+  padding: 10px 4px;
   border: 0;
   border-bottom: 1px solid var(--rule);
   background: none;
@@ -477,17 +484,18 @@
 }
 #camp .card {
   min-height: 0;
-  padding: 20px 24px 16px;
-  gap: 7px;
+  padding: 16px 20px;
+  gap: 6px;
   border-top-width: 1px;
+  border-radius: 8px;
 }
 #camp .card-k {
   font-size: 11px;
   letter-spacing: 0.15em;
 }
 #camp .card-t {
-  font: 500 clamp(34px, 3.4vw, 46px) / 1 var(--title);
-  letter-spacing: 0.04em;
+  font: 600 28px / 1.15 var(--title);
+  letter-spacing: 0;
 }
 #camp #mode-duel .card-t {
   font-size: 26px;
@@ -501,10 +509,10 @@
   line-height: 1.5;
 }
 #camp .card-action {
-  margin-top: 8px;
-  padding-top: 12px;
-  font-size: 15px;
-  letter-spacing: 0.06em;
+  margin-top: 6px;
+  padding-top: 10px;
+  font: 600 14px / 1.3 var(--body);
+  letter-spacing: 0;
 }
 #camp .card-action b {
   transition: transform 0.2s var(--ease-out);
@@ -526,8 +534,8 @@
   font: 500 26px var(--title);
 }
 #camp .preparation-footer .btn {
-  font-size: 20px;
-  padding: 16px 28px;
+  font-size: 16px;
+  padding: 12px 24px;
 }
 
 /* ---------- Duel ---------- */
@@ -642,14 +650,13 @@
 }
 #camp .tree-tabs {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 5px;
   margin: 0 0 12px;
   padding: 0;
   border: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: visible;
 }
 /* A quiet rule separates the weapon paths from the soul paths. */
 .tree-tabs-label {
@@ -664,10 +671,11 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 5px 8px;
-  flex: 1 0 auto;
-  min-height: 46px;
+  flex: 0 1 auto;
+  min-height: 42px;
   padding: 7px 8px 8px;
   border: 1px solid #5c503b70;
+  border-radius: 6px;
   background: #1a1814cc;
   color: #b9b19e;
   font: 600 12px var(--body);
@@ -688,7 +696,7 @@
 }
 #camp .tree-tabs button.all {
   grid-template-columns: 1fr;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
 }
 .tree-tabs button > span {
   display: flex;
@@ -856,26 +864,32 @@
 /* The action bar mirrors the one in combat: the menu and the fight speak the same language. */
 .tree-loadout {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
+  gap: 10px;
   margin: 0 0 12px;
   padding: 10px 14px;
   border: 1px solid var(--rule);
+  border-radius: 6px;
   background: #14120fd9;
 }
 .tree-loadout-title {
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
 }
 .tree-loadout-title p {
-  margin-top: 3px;
-  max-width: 24ch;
+  margin-top: 0;
+  max-width: none;
   font-size: 13px;
   line-height: 1.4;
   color: #b9b0a0;
 }
 .tree-loadout-slots {
   display: flex;
-  flex: 1;
+  flex: 1 1 100%;
   justify-content: flex-end;
   gap: 4px;
   min-width: 0;
@@ -889,10 +903,11 @@
   gap: 1px 9px;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 168px;
+  max-width: none;
   height: 52px;
   padding: 6px 10px;
   border: 1px dashed #5d5341;
+  border-radius: 5px;
   background: #14120fe0;
   color: #8f8777;
   text-align: left;
@@ -916,7 +931,7 @@
   overflow: hidden;
   font: 600 12px / 1.2 var(--body);
   letter-spacing: 0.03em;
-  white-space: nowrap;
+  white-space: normal;
   text-overflow: ellipsis;
 }
 .loadout-slot small {
@@ -937,7 +952,6 @@
 }
 .loadout-slot:hover {
   border-color: var(--gold);
-  transform: translateY(-2px);
 }
 .loadout-slot:focus-visible {
   outline-offset: 2px;
@@ -1108,6 +1122,8 @@ details.claim-box[open] summary {
   gap: 0;
   margin: 0 0 0 auto;
   border: 1px solid #645846;
+  border-radius: 6px;
+  overflow: hidden;
   background: #1c1a15;
 }
 #camp .market-tabs button {
@@ -1117,8 +1133,8 @@ details.claim-box[open] summary {
   border: 0;
   background: none;
   color: #a39b8a;
-  font: 700 15px var(--heading);
-  letter-spacing: 0.08em;
+  font: 600 14px var(--body);
+  letter-spacing: 0;
   cursor: pointer;
   transition:
     background 0.2s,
@@ -1871,28 +1887,10 @@ details.claim-box[open] summary {
     transform: translate3d(-18px, 0, 0);
   }
 }
-/* A light sweeps across a primary button when it is ready to be pressed. */
+/* Stable action buttons keep the selected page and primary action easy to scan. */
 #camp .btn:not(.ghost),
 .overlay .btn:not(.ghost) {
   overflow: hidden;
-}
-#camp .btn:not(.ghost)::after,
-.overlay .btn:not(.ghost)::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 36%, #fff6 50%, transparent 64%);
-  transform: translateX(-130%);
-  pointer-events: none;
-}
-#camp .btn:not(.ghost):hover:not(:disabled)::after,
-.overlay .btn:not(.ghost):hover:not(:disabled)::after {
-  transform: translateX(130%);
-  transition: transform 0.65s var(--ease-out);
-}
-#camp .btn:active:not(:disabled),
-#camp .card:active:not(:disabled) {
-  transform: translateY(1px) scale(0.985);
 }
 
 /* Choose your weapon */
@@ -1975,17 +1973,6 @@ details.claim-box[open] summary {
 #camp #loadout-stats b {
   font-size: 24px;
   font-variant-numeric: tabular-nums;
-}
-#camp #loadout-start:not(:disabled) {
-  animation: cta-breathe 2.4s ease-in-out infinite;
-}
-@keyframes cta-breathe {
-  50% {
-    box-shadow:
-      inset 0 0 0 3px #30231730,
-      0 0 0 6px #e9b76e2e,
-      0 10px 34px #ab673f66;
-  }
 }
 
 /* Inventory */
@@ -2091,6 +2078,10 @@ details.claim-box[open] summary {
 @keyframes descent-curtain { 0%{opacity:0;transform:translateY(12%)} 30%,65%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-8%)} }
 .page-loading {position:absolute;inset:0;z-index:8;background:#151410;display:flex;flex-direction:column;justify-content:center;gap:20px;padding:60px;color:#d5c4aa;pointer-events:all;}
 .page-loading i {height:90px;border:1px solid #75624755;background:linear-gradient(90deg,#302a20,#40392a,#302a20);background-size:200%;animation:loading-sweep 1.8s ease-in-out infinite;}
+.page-error {position:absolute;inset:0;z-index:8;background:#151410;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:16px;padding:clamp(24px,6vw,60px);}
+.page-error h3,.page-error p {margin:0;}
+.page-error p {max-width:42rem;color:#d5c4aa;line-height:1.6;}
+.camp-page.load-failed > :not(.page-error) {visibility:hidden;}
 @keyframes loading-sweep {to{background-position:200%}}
 .power-choice {transition:transform .28s ease,opacity .28s ease;}
 .decided .power-choice:not(.chosen){opacity:.18;transform:scale(.95)}
@@ -2143,3 +2134,106 @@ details.claim-box[open] summary {
 .minimap-title button { margin-left:auto; border:0; background:none; color:#d2c6b1; font:14px var(--body); cursor:pointer; padding:0 4px; }
 .minimap-map[hidden] { display:none; }
 #camp .tree-map.atlas-overview .tree-node.sealed { opacity:.78; }
+
+/* Action bar: key caps only. A cooling skill shows its seconds inside the key. */
+#action-bar { gap: 14px; align-items: end; }
+#action-bar .action-group { gap: 6px; }
+#action-bar .action-group > .keycap {
+  --fill: 1;
+  display: grid;
+  grid-template-columns: none;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #4a4036;
+  border-bottom-width: 3px;
+  border-radius: 8px;
+  background: #12100de6;
+}
+#action-bar .action-group > .keycap.wide { width: 78px; }
+#action-bar .action-group > .keycap.unlearned { display: none; }
+/* Ability buttons show their skill glyph; the key shrinks to a corner badge. */
+#action-bar .keycap .keycap-icon {
+  position: relative;
+  z-index: 1;
+  grid-area: 1 / 1;
+  width: 27px;
+  height: 27px;
+  color: #d8c5a0;
+  opacity: .85;
+  transition: opacity .18s, color .18s;
+  pointer-events: none;
+}
+#action-bar .keycap .keycap-icon svg { width: 100%; height: 100%; display: block; }
+#action-bar .keycap:has(> .keycap-icon) kbd {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  left: 3px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 700 10px / 1 var(--heading);
+  color: #efe0b8;
+}
+#action-bar .keycap.ready .keycap-icon { color: #f2ddae; opacity: 1; }
+#action-bar .keycap.cooling .keycap-icon { opacity: .22; }
+#action-bar .keycap kbd {
+  position: relative;
+  z-index: 1;
+  grid-area: 1 / 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 700 19px / 1 var(--heading);
+  color: #8d8371;
+  transition: transform 0.18s, color 0.18s;
+}
+#action-bar .keycap.wide kbd { font-size: 13px; letter-spacing: 0.06em; transform: translateY(-6px); }
+#action-bar .keycap small {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  font: 600 9px / 1 var(--body);
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: #7f7667;
+}
+#action-bar .action-group > .keycap > i { inset: 0; height: auto; background: none; }
+#action-bar .action-group > .keycap > i b {
+  width: 100%;
+  height: 100%;
+  transform: scaleY(var(--fill));
+  transform-origin: 50% 100%;
+  background: #33291b;
+}
+#action-bar .action-group > .keycap.ready { border-color: #b39a67; background: #1e1911ee; }
+#action-bar .action-group > .keycap.ready > i b { background: #2b2417; }
+#action-bar .keycap.ready kbd { color: #f3ddb0; }
+#action-bar .keycap.ready small { color: #cdbb97; }
+#action-bar .keycap.cooling kbd { opacity: .65; }
+#action-bar .keycap .cooldown-number {
+  position: relative;
+  z-index: 1;
+  grid-area: 1 / 1;
+  right: auto;
+  top: auto;
+  padding: 0;
+  background: none;
+  font: 700 17px / 1 var(--heading);
+  font-variant-numeric: tabular-nums;
+  color: #e9d5ad;
+  text-shadow: 0 1px 4px #000;
+}
+#action-bar #cast-slot.ready { border-color: #86b0b9; }
+#hud #pause-toggle { min-height: 34px; padding: 6px 10px; border-radius: 8px; opacity: 0.75; }
+#hud #pause-toggle kbd { border: 0; background: none; padding: 0; font: 700 11px var(--body); letter-spacing: 0.1em; }
+#hud #help { transition: opacity 0.8s; }
+#hud #help.seen { opacity: 0; }

@@ -161,6 +161,35 @@ try {
   };
   await earn(alice);
   await earn(bob);
+  // A pending write for one guest must not suppress another guest's chain refresh.
+  const blockedGuest = referee.createSession().owner;
+  await service.profile(blockedGuest);
+  await earn(blockedGuest);
+  const blockedId = referee.profile(blockedGuest).id;
+  const sendNormally = near.account.callFunctionRaw;
+  near.account.callFunctionRaw = async (request) => {
+    if (JSON.parse(request.args.payload).championId === blockedId)
+      throw new Error("Isolated relay timeout");
+    return sendNormally(request);
+  };
+  const blockedTraining = await service.perform(blockedGuest, "/api/train", { skill: "haste" });
+  assert.equal(blockedTraining.chain.pending, true);
+  const refreshedId = referee.profile(bob).id;
+  const confirmedBefore = referee.profile(bob).coins;
+  store.champions.get(refreshedId).coins += 7;
+  store.champions.get(refreshedId).revision++;
+  assert.equal((await service.profile(bob)).coins, confirmedBefore + 7,
+    "an unrelated pending relay cannot leave this profile stale");
+  const priorOwner = owners.get(refreshedId);
+  owners.set(refreshedId, "external-wallet.testnet");
+  await assert.rejects(service.profile(bob),
+    (error) => error.status === 409 && /another owner/.test(error.message),
+    "known ownership loss must not be returned as a confirmed guest profile");
+  owners.set(refreshedId, priorOwner);
+  near.account.callFunctionRaw = sendNormally;
+  await service.retryPending();
+  assert.equal((await service.profile(blockedGuest)).chain.pending, false);
+  assert.equal(referee.pendingChainOperations().length, 0);
   // A response can disappear after chain success. A durable retry must not award twice.
   const ack = referee.acknowledgeChain.bind(referee);
   let loseAck = true;
@@ -242,6 +271,48 @@ try {
   terminal = false;
   assert.ok((await service.perform(alice, "/api/upgrade", rejectedUpgradeRequest)).upgrade.error);
   const source = referee.profile(alice).id;
+  // A wallet lookup outage is not evidence that the recipient does not exist.
+  const claimAccountView = near.provider.viewAccount;
+  let claimLookups = 0;
+  const missingRecipient = Object.assign(new Error("Account does not exist"), {
+    name: "UnknownAccountError",
+  });
+  let recipientError = missingRecipient;
+  near.provider.viewAccount = async () => {
+    claimLookups++;
+    throw recipientError;
+  };
+  const claimRequest = { championId: source, receiver: "wallet.testnet" };
+  await assert.rejects(
+    service.perform(alice, "/api/claim", { ...claimRequest, receiver: "bad address" }),
+    (error) => error.status === 400 && /testnet account/.test(error.message),
+  );
+  assert.equal(claimLookups, 0, "invalid recipient is rejected before its wallet lookup");
+  await assert.rejects(
+    service.perform(alice, "/api/claim", claimRequest),
+    (error) => error.status === 404 && /does not exist/.test(error.message),
+  );
+  recipientError = Object.assign(new Error("Providers exhausted"), {
+    name: "FailoverRpcError",
+    errors: [missingRecipient, missingRecipient],
+  });
+  assert.equal(await near.accountExists("wallet.testnet"), false);
+  for (const failure of [
+    new Error("RPC timeout"),
+    Object.assign(new Error("Providers exhausted"), {
+      name: "FailoverRpcError",
+      errors: [missingRecipient, new Error("RPC timeout")],
+    }),
+  ]) {
+    recipientError = failure;
+    await assert.rejects(
+      service.perform(alice, "/api/claim", claimRequest),
+      (error) => error.status === 503 && /Unable to verify/.test(error.message),
+    );
+    assert.equal(referee.profile(alice).id, source);
+    assert.equal(referee.pendingClaim(source), undefined, "unverified wallet never queues a transfer");
+  }
+  near.provider.viewAccount = claimAccountView;
   // Do not rotate the guest or claim success until an outgoing transfer is final.
   fail = true;
   const waiting = await service.perform(alice, "/api/claim", {
@@ -412,6 +483,96 @@ try {
     /owners/,
   );
   await service.perform(alice, "/api/runs", {});
+  // A second tab can replace the equipped NFT before the first tab submits its quoted upgrade.
+  const staleGearId = referee.profile(blockedGuest).equipped.weapon;
+  const changedEquipment = store.champions.get(blockedId);
+  changedEquipment.equipped.weapon = "replacement-weapon";
+  changedEquipment.revision++;
+  const upgradeCoins = changedEquipment.coins;
+  const upgradeCalls = calls;
+  await assert.rejects(service.perform(blockedGuest, "/api/upgrade", {
+    slot: "weapon", id: randomUUID(), expectedGearId: staleGearId, expectedLevel: 0,
+  }), (error) => error.status === 409 && /changed/i.test(error.message),
+  "a stale tab must not upgrade a replacement NFT");
+  assert.equal(calls, upgradeCalls);
+  assert.equal(referee.profile(blockedGuest).coins, upgradeCoins);
+  assert.equal(referee.pendingChainOperations().length, 0);
+  const parallelUpgrade = {
+    slot: "weapon", id: randomUUID(), expectedGearId: "replacement-weapon", expectedLevel: 0,
+  };
+  const parallelResults = await Promise.all([
+    service.perform(blockedGuest, "/api/upgrade", parallelUpgrade),
+    service.perform(blockedGuest, "/api/upgrade", parallelUpgrade),
+  ]);
+  assert.deepEqual(parallelResults[0].upgrade, parallelResults[1].upgrade);
+  assert.equal(calls, upgradeCalls + 1, "two concurrent copies of one intent send one transaction");
+  assert.equal(referee.profile(blockedGuest).coins, upgradeCoins - 15);
+  await assert.rejects(service.perform(blockedGuest, "/api/upgrade", {
+    ...parallelUpgrade, id: randomUUID(),
+  }), (error) => error.status === 409 && /Equipment changed/.test(error.message),
+  "a fresh stale-level intent cannot silently buy the more expensive next upgrade");
+  await assert.rejects(service.perform(blockedGuest, "/api/upgrade", {
+    ...parallelUpgrade, expectedLevel: 1,
+  }), /different choices/, "a retry must retain its original quote");
+  assert.equal(referee.profile(blockedGuest).coins, upgradeCoins - 15);
+
+  // The chain can accept a write even though its HTTP response never reaches the relay.
+  const uncertainUpgrade = { ...parallelUpgrade, id: randomUUID(), expectedLevel: 1 };
+  const deliverNormally = near.account.callFunctionRaw;
+  near.account.callFunctionRaw = async (request) => {
+    const result = await deliverNormally(request);
+    if (JSON.parse(request.args.payload).id === `upgrade:${uncertainUpgrade.id}`)
+      throw new Error("Response lost after chain acceptance");
+    return result;
+  };
+  const uncertain = await service.perform(blockedGuest, "/api/upgrade", uncertainUpgrade);
+  assert.equal(uncertain.champion.chain.pending, true);
+  assert.equal(store.champions.get(blockedId).build.weaponLevel, 2);
+  near.account.callFunctionRaw = deliverNormally;
+  const recovered = await Promise.all([
+    service.perform(blockedGuest, "/api/upgrade", uncertainUpgrade),
+    service.perform(blockedGuest, "/api/upgrade", uncertainUpgrade),
+  ]);
+  assert.equal(calls, upgradeCalls + 2, "an applied receipt is recovered without resubmission");
+  assert.equal(recovered[0].champion.chain.pending, false);
+  assert.equal(recovered[0].champion.coins, upgradeCoins - 40);
+  assert.deepEqual(recovered[0].upgrade, recovered[1].upgrade);
+
+  // An uncertain but unapplied write must roll back if its NFT changes before retry.
+  const changedWhilePending = { ...parallelUpgrade, id: randomUUID(), expectedLevel: 2 };
+  fail = true;
+  assert.equal((await service.perform(blockedGuest, "/api/upgrade", changedWhilePending)).champion.chain.pending, true);
+  store.champions.get(blockedId).equipped.weapon = "another-replacement";
+  store.champions.get(blockedId).build.weaponLevel = 0;
+  store.champions.get(blockedId).revision++;
+  fail = false;
+  const abandonedUpgrade = await service.perform(blockedGuest, "/api/upgrade", changedWhilePending);
+  assert.match(abandonedUpgrade.upgrade.error, /gear changed/i);
+  assert.equal(abandonedUpgrade.champion.chain.pending, false);
+  assert.equal(abandonedUpgrade.champion.coins, upgradeCoins - 40, "no charge for an unapplied stale NFT upgrade");
+  assert.equal(abandonedUpgrade.champion.equipped.weapon, "another-replacement");
+  assert.equal(calls, upgradeCalls + 2);
+  // One supported 1,000-piece edition plus the champion and starter gear is 1,003 NFTs.
+  // The final owned items must remain selectable instead of disappearing at an arbitrary cap.
+  const inventoryView = near.provider.callFunction;
+  const fullInventory = Array.from({ length: 1003 }, (_, index) => ({
+    token_id: `owned:${index}`,
+    owner_id: "inventory-owner.testnet",
+    metadata: { title: `Owned relic ${index}`, extra: JSON.stringify({ kind: "weapon", level: index === 1002 ? 9 : 0 }) },
+  }));
+  const inventoryOffsets = [];
+  near.provider.callFunction = async (request) => {
+    if (request.method !== "nft_tokens_for_owner") return inventoryView(request);
+    const offset = Number(request.args.from_index);
+    inventoryOffsets.push(offset);
+    return fullInventory.slice(offset, offset + request.args.limit);
+  };
+  const owned = await near.tokens(referee.profile(alice));
+  assert.equal(owned.tokens.length, 1003, "all legal edition items and starter NFTs are returned");
+  assert.equal(owned.tokens.at(-1).tokenId, "owned:1002");
+  assert.equal(owned.tokens.at(-1).extra.level, 9, "last-page metadata is preserved");
+  assert.equal(inventoryOffsets.at(-1), 1000, "pagination reaches the short final page");
+  near.provider.callFunction = inventoryView;
   console.log(
     "Bridge: PASS (signed relays, serialized requests, lost acknowledgement, durable retry, expired unopened Duel refund, ownership and coin conservation)",
   );

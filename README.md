@@ -13,21 +13,21 @@ npm run dev
 
 Open [localhost:5173](http://127.0.0.1:5173/). This starts the game and local referee together. A fresh checkout runs Solo locally; testnet writes require your own configured server credentials. See [NEAR setup](docs/NEAR.md).
 
-1. **Take the Descent** opens Camp. Choose **Solo**, select your weapon and start a server-issued run. WASD moves, mouse aims, hold click attacks, Space jumps, Shift (or right click) dashes. Attacking in the air dives along the aim and breaks the ground on landing. Every third attack has a weapon-specific finisher.
+1. **Play →** opens Camp. On **Solo**, press **Choose weapon →**, select your weapon and press **Start Solo** to begin a server-issued run. WASD moves, mouse aims, hold click attacks, Space jumps, Shift (or right click) dashes. Attacking in the air dives along the aim and breaks the ground on landing. Every third attack has a weapon-specific finisher.
 2. Unlock skills with Solo coin in the weapon, spell and soul-vow skill tree. Clear a circle → choose a rank for one of your unlocked powers with the mouse or **1 / 2 / 3** → enter the lit gate. Powers stack to rank 3.
-3. Finish → the referee verifies the replay and saves earned coin. **Skills** opens your coin-funded paths. **Try Same Descent** repeats the seed with your currently owned gear and training.
+3. Finish → the referee verifies the replay and saves earned coin. **Open skills** shows your coin-funded paths. **Replay this seed** repeats the seed with your currently owned gear and training.
 4. **Inventory** tempers equipped gear from +0 to +9 with earned coin, lists dynamic NFTs, equips relics and claims a champion into an existing testnet wallet.
-5. **The Reliquary** reserves a chosen long sword, war hammer, dagger, hand crossbow, soul staff, executioner axe or war spear with 10 coin, then mints it for 0.01 test NEAR. The current edition has 100 pieces; repeated mints each require fresh coin access and native payment. A bounded demo grant covers guest testnet gas. Mint revenue stays in the owner-controlled application treasury; there are no new tickets or raffle distributions.
-6. **Player Market** lists unequipped tradable weapon NFTs for 0.001–1 test NEAR. Purchases preserve the token’s upgrades and history; 90% becomes seller proceeds and 10% enters the treasury. Withdraw proceeds from the same screen.
+5. **Market → Mint weapons** reserves a chosen long sword, war hammer, dagger, hand crossbow, soul staff, executioner axe or war spear with 10 coin, then mints it for 0.01 test NEAR. The current edition has 100 pieces; repeated mints each require fresh coin access and native payment. A bounded demo grant covers guest testnet gas. Mint revenue stays in the owner-controlled application treasury; there are no new tickets or raffle distributions.
+6. **Market → Player listings** lists unequipped tradable weapon NFTs for 0.001–1 test NEAR. Purchases preserve the token’s upgrades and history; 90% becomes seller proceeds and 10% enters the treasury. Withdraw proceeds from the same screen.
 7. With testnet connected, **Duel** lists matched defenders. Both vaults stake 10 coin; the winner takes 20. Fights last up to 90 seconds. Forfeit or abandonment loses the challenger stake. Enable defense to let others challenge your build.
 
 Escape pauses; losing focus also pauses. 1–4 trigger learned techniques for the equipped weapon. Q casts the spell selected in the skill tree (Soul Lance, Cinder Circle or Blood Thread). R releases an attuned soul core at 100% charge; N restarts Solo. Sound defaults off; M enables it. [Silent mode](http://127.0.0.1:5173/?silent=1) hard-disables audio. The development-only `?silent=1&autoplay=1` bot still requires manual power choices.
 
-Camp has a fixed navigation rail for Descent, Skills, Inventory and Market. Skills supports keyboard navigation, cancellable hold-to-learn, an affordable next-technique cue, direct Q/R selection, a corner minimap and an owned-weapon equip shortcut. Settings controls sound, camera shake, pixel density, fullscreen and menu motion. Hidden model previews stop drawing during play.
+Camp has a fixed navigation rail for Play, Skills, Inventory and Market. Skills supports keyboard navigation, cancellable hold-to-learn, an affordable next-technique cue, direct Q/R selection, a corner minimap and an owned-weapon equip shortcut. Settings controls sound, camera shake, pixel density, fullscreen and menu motion. Hidden model previews stop drawing during play.
 
 ## Features and status
 
-- Deterministic 60 Hz combat, five circles, enemy waves and three optional bosses.
+- Deterministic 60 Hz combat, five circles, enemy waves and four optional bosses.
 - Forty-two coin-funded unlocks: 28 weapon techniques, 12 soul vows and two additional Q spells, plus three core attunements unlocked by those vows. The atlas supports pan, zoom, all-paths overview and silent in-hand previews. Bounded coin earning and replay verification remain in place.
 - Replay-verifying referee, Ed25519 receipts and durable transaction retries.
 - Dynamic champion/gear NFTs, coin-funded + upgrades, transfer-aware inventory, wallet claiming, coin and native prize vaults.

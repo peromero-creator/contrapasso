@@ -69,6 +69,56 @@ actor.update(0);assert.ok(actor.bone('Spine')!.quaternion.angleTo(new THREE.Quat
 const hand = new THREE.Group(), grip = new THREE.Group(); hand.scale.setScalar(.012);
 mountGrip(hand,grip);grip.add(starterWeapon());hand.updateMatrixWorld(true);
 assert.ok(grip.getWorldScale(new THREE.Vector3()).distanceTo(new THREE.Vector3(1,1,1))<1e-7,'held prop keeps its world size on a normalized rig');
+// The whole-body layer starts and ends at rest, stays bounded, and gives every action its own shape.
+{
+  const { combatBody, swingClock, pulseBeat, skillTail } = await import('../src/render/combat-motion.ts');
+  const { attackClip } = await import('../src/render/weapon-pose.ts');
+  const { SPELL_IDS, CORE_IDS, abilityDuration, abilityContact } = await import('../src/sim/abilities.ts');
+  const { weapon } = await import('../src/sim/weapons.ts');
+  const still = (p: ReturnType<typeof combatBody>) => Math.abs(p.yaw)+Math.abs(p.lean)+Math.abs(p.roll)+Math.abs(p.advance)+Math.abs(p.squash) < 1e-9;
+  const bounded = (p: ReturnType<typeof combatBody>, label: string) => {
+    assert.ok(Object.values(p).every(Number.isFinite), `${label}: finite body pose`);
+    assert.ok(Math.abs(p.yaw)<=Math.PI+1e-9 && Math.abs(p.lean)<.7 && Math.abs(p.roll)<.3 && Math.abs(p.advance)<.6 && p.squash>=0 && p.squash<.45, `${label}: body stays within a readable range`);
+  };
+  assert.ok(still(combatBody()), 'no motion leaves the figure upright');
+  const shapes = new Set<string>();
+  for (const id of WEAPON_IDS) for (const combo of [1,2,3]) {
+    const clip = attackClip(id, combo), tail = weapon(id).swing + .2, motion = { weapon:id, combo, elapsed:0, tail };
+    assert.ok(still(combatBody(motion, clip)), `${id} strike ${combo} starts at rest`);
+    assert.ok(still(combatBody({ ...motion, elapsed:tail }, clip)), `${id} strike ${combo} ends at rest`);
+    let moved = 0;
+    for (let i=0;i<=60;i++) { const p = combatBody({ ...motion, elapsed:tail*i/60 }, clip); bounded(p, `${id} strike ${combo}`); moved = Math.max(moved, Math.abs(p.yaw)+Math.abs(p.lean)+Math.abs(p.advance)+p.squash); }
+    assert.ok(moved > .08, `${id} strike ${combo} commits the body`);
+  }
+  for (const id of [...Object.keys(TECHNIQUES), ...SPELL_IDS, ...CORE_IDS] as (keyof typeof TECHNIQUES)[]) {
+    const identity = id in TECHNIQUES ? FAMILY_WEAPON[id.split('-')[0] as keyof typeof FAMILY_WEAPON] : 'starter';
+    const clip = abilityClip(id, identity), tail = skillTail(id), motion = { weapon:identity, ability:id, combo:1, elapsed:0, tail };
+    assert.ok(still(combatBody(motion, clip)), `${id} starts at rest`);
+    assert.ok(still(combatBody({ ...motion, elapsed:tail }, clip)), `${id} ends at rest`);
+    const trace: number[] = [];
+    for (let i=0;i<=80;i++) {
+      const now = { ...motion, elapsed:tail*i/80 }, p = combatBody(now, clip), clock = swingClock(now, clip);
+      bounded(p, id); assert.ok(clock>=0 && clock<=1, `${id}: clip time stays inside the clip`);
+      if (i%8===4) trace.push(...Object.values(p).map(v => Math.round(v*50)), Math.round(clock*20));
+    }
+    shapes.add(`${identity}:${clip}:${trace.join(',')}`);
+    // Every repeated contact that is on screen is struck on its own beat.
+    const pulses = TECHNIQUES[id]?.pulses ?? 1;
+    if (pulses > 1) {
+      const last = pulseBeat({ ...motion, elapsed:tail })!;
+      assert.ok(last.shown >= 2, `${id}: more than one contact is choreographed`);
+      for (let k=0;k<last.shown;k++) assert.ok(Math.abs(swingClock({ ...motion, elapsed:abilityContact(id)+k*.28 }, clip)-clipContact(clip))<1e-6, `${id}: contact ${k+1} lands on the strike frame`);
+      assert.equal(swingClock({ ...motion, elapsed:tail }, clip), 1);
+    } else assert.equal(swingClock({ ...motion, elapsed:abilityDuration(id)*.6 }, clip), motionClock({ ...motion, elapsed:abilityDuration(id)*.6 }, clip));
+  }
+  assert.equal(shapes.size, 34, 'no two techniques, spells or cores of a family share a body shape and clip');
+  actor.play('attack',1,true); actor.update(.1,{weapon:'tollkeeper',ability:'hammer-1',combo:1,elapsed:.56,tail:.98});
+  const figure = actor.root.children[0];
+  assert.ok(figure.quaternion.angleTo(new THREE.Quaternion())>.05 && figure.scale.y<.99, 'a heavy blow leans and compresses the figure');
+  actor.update(0);
+  assert.ok(figure.quaternion.angleTo(new THREE.Quaternion())<1e-7 && figure.position.length()<1e-7 && figure.scale.distanceTo(new THREE.Vector3(1,1,1))<1e-7, 'the figure returns upright with no leftover offset');
+  console.log('Body motion: PASS (24 strikes and 34 abilities start and end at rest, bounded, distinct, one swing per repeated contact)');
+}
 actor.dispose();
 console.log('Combat presentation: PASS (28 contact clocks, family accents, pose reset, matching volley counts, shared hand scale)');
 const aimRig=new THREE.Group(),body=new THREE.Mesh(new THREE.BoxGeometry(.5,2.2,.4),new THREE.MeshStandardMaterial());body.position.y=1.1;aimRig.add(body);
@@ -91,8 +141,19 @@ for(const id of ['vesper-reed','gravewhisper'] as const) {
 aiming.play('attack-hammer',.8,true);aiming.update(.1,{weapon:'tollkeeper',ability:'hammer-1',elapsed:.5,combo:1});
 const palm=aiming.bone('RightHand')!,other=aiming.bone('LeftHand')!;
 const shaft=new THREE.Vector3(0,0,1).applyQuaternion(palm.getWorldQuaternion(new THREE.Quaternion()));
-const palms=other.getWorldPosition(new THREE.Vector3()).sub(palm.getWorldPosition(new THREE.Vector3())).normalize();
-assert.ok(shaft.dot(palms)>.999,'a heavy weapon shaft crosses both palms');
+const {fistWorld,fistPoint}=await import('../src/render/weapon-pose.ts');
+const palms=fistWorld(other,new THREE.Vector3(),0).sub(fistWorld(palm)).normalize();
+assert.ok(shaft.dot(palms)>.999,'a heavy weapon shaft crosses both fists');
+{
+  // The grip sits in the fist, well past the wrist joint, and keeps a world-sized weapon.
+  const held=new THREE.Group();mountGrip(palm,held);
+  const reach=palm.position.length();
+  assert.ok(held.position.length()>reach*.6&&held.position.length()<reach,'the grip is mounted in the fist, not at the wrist joint');
+  assert.ok(held.position.distanceTo(fistPoint(palm))<1e-9,'grip and alignment share one fist point');
+  palm.updateWorldMatrix(true,true);
+  assert.ok(Math.abs(held.getWorldScale(new THREE.Vector3()).x-1)<1e-6,'mounting keeps the weapon at world size');
+  palm.remove(held);
+}
 // The same aimed actor must plant, gather and release without losing its weapon axis.
 for(const id of ['staff-1','staff-2','staff-3','staff-4','ember','ash','iron'] as const) {
   const { abilityContact }=await import('../src/sim/abilities.ts');
@@ -103,7 +164,7 @@ for(const id of ['staff-1','staff-2','staff-3','staff-4','ember','ash','iron'] a
   const shaft=new THREE.Vector3(0,0,1).applyQuaternion(aiming.bone('RightHand')!.getWorldQuaternion(new THREE.Quaternion()));
   assert.ok(shaft.dot(direction)>.999,`${id}: shaft follows its release gesture on a rotated actor`);
   const focus=aiming.root.getObjectByName('staff-charge')!;
-  const tip=aiming.bone('RightHand')!.getWorldPosition(new THREE.Vector3()).addScaledVector(shaft,1.65);
+  const tip=fistWorld(aiming.bone('RightHand')!).addScaledVector(shaft,1.65);
   assert.ok(focus.getWorldPosition(new THREE.Vector3()).distanceTo(tip)<1e-6,`${id}: focus stays at the real staff crown`);
   aiming.update(0);assert.equal(focus.visible,false,'no lingering charge after interruption or weapon switch');
 }

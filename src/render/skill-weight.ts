@@ -76,7 +76,10 @@ export class SkillWeight {
   }
   /** What the view should do for this event, or null when it is not a player's skill. */
   event(e: SimEvent): { punch: number; shake: number; stop: number; handoff: boolean; contact: boolean } | null {
-    if (e.type !== "ability" || e.side === "enemy" || !e.ability) return null;
+    // Passive Ash Step / Reprisal / Pyre pulses have no actor side. Their
+    // short echo is drawn by SoulFx; they must not borrow an ultimate's
+    // hit-stop, aftermath or priority over the player's committed skill.
+    if (e.type !== "ability" || e.side !== "player" || !e.ability) return null;
     const id = e.ability;
     if (e.stage === "charge") {
       this.chain = this.chainT > 0 ? this.chain + 1 : 1;

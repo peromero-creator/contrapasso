@@ -3,6 +3,16 @@ import { techniqueId } from "../sim/techniques.ts";
 import { isSpell, abilityDuration } from "../sim/abilities.ts";
 import type { SimEvent } from "../sim/world";
 
+/** Short narrator lines; each speaks a banner or result title the game already shows. */
+export const VOICE_LINES = [
+  "limbo", "lust", "gluttony", "greed", "wrath",
+  "warden", "wizard", "witness", "cantor", "deepens",
+  "duel", "won", "dead", "duel-won", "duel-lost",
+] as const;
+export type VoiceLine = (typeof VOICE_LINES)[number];
+/** The narrator sits just above an effect's peak, well under the limiter. */
+const VOICE_GAIN = 1.4;
+
 export class Sound {
   muted = true;
   private context: AudioContext | null = null;
@@ -13,6 +23,10 @@ export class Sound {
   private volume = 1;
   private skillChain=0;
   private skillUntil=0;
+  private lines = new Map<VoiceLine, AudioBuffer>();
+  private linesRequested = false;
+  private speaking: AudioBufferSourceNode | null = null;
+  private waiting: { line: VoiceLine; until: number } | null = null;
 
   private readonly silent: boolean;
   constructor(silent = false) {this.silent=silent;}
@@ -32,6 +46,7 @@ export class Sound {
         const samples = this.noise.getChannelData(0);
         for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
         this.updateVolume();
+        this.loadLines(ctx);
       }
       if (this.context.state === "suspended") void this.context.resume().catch(() => {});
     } catch {
@@ -54,8 +69,62 @@ export class Sound {
 
   setPaused(paused: boolean) {
     this.paused = paused;
-    if (paused) for (const voice of this.voices) voice.stop();
+    if (paused) {
+      this.waiting = null;
+      for (const voice of this.voices) voice.stop();
+    }
     this.updateVolume();
+  }
+
+  /** Requested once, after sound is switched on. A silent or muted session never fetches them. */
+  private loadLines(ctx: AudioContext) {
+    if (this.linesRequested) return;
+    this.linesRequested = true;
+    for (const line of VOICE_LINES)
+      void fetch(`/assets/voice/${line}.mp3`)
+        .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(line))))
+        .then((bytes) => ctx.decodeAudioData(bytes))
+        .then((buffer) => {
+          this.lines.set(line, buffer);
+          const waiting = this.waiting;
+          if (waiting?.line === line) {
+            this.waiting = null;
+            if (ctx.currentTime <= waiting.until) this.say(line);
+          }
+        })
+        .catch(() => {
+          // A missing line leaves the banner silent; effects still play.
+        });
+  }
+
+  /** Speak one narrator line. A newer line replaces the one still playing. */
+  say(line: VoiceLine, delay = 0) {
+    const ctx = this.context;
+    if (!ctx || !this.master || this.muted || this.paused) return;
+    const buffer = this.lines.get(line);
+    if (!buffer) {
+      // Sound was switched on a moment ago: speak when the line arrives, if still timely.
+      this.waiting = { line, until: ctx.currentTime + delay + 1.5 };
+      return;
+    }
+    if (ctx.state !== "running") return;
+    this.waiting = null;
+    this.speaking?.stop();
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.value = VOICE_GAIN;
+    source.connect(gain);
+    gain.connect(this.master);
+    this.voices.add(source);
+    this.speaking = source;
+    source.onended = () => {
+      this.voices.delete(source);
+      if (this.speaking === source) this.speaking = null;
+      source.disconnect();
+      gain.disconnect();
+    };
+    source.start(ctx.currentTime + delay);
   }
 
   private updateVolume() {

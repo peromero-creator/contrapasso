@@ -47,7 +47,7 @@ export class SettingsPanel {
       try { if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen(); }
       catch { $('setting-fullscreen').textContent='Unavailable in this browser'; }
     });
-    document.addEventListener('fullscreenchange',()=>{$('setting-fullscreen').textContent=document.fullscreenElement?'EXIT FULL SCREEN':'FULL SCREEN';});
+    document.addEventListener('fullscreenchange',()=>{$('setting-fullscreen').textContent=document.fullscreenElement?'Exit full screen':'Full screen';});
     this.paint();
     this.apply(this.values);
   }
@@ -93,6 +93,7 @@ export class SettingsPanel {
         sibling.inert = true;
       }
     this.root.classList.remove("hidden", "closing");
+    this.root.inert = false;
     document.getElementById("settings-close")!.focus();
   }
   close() {
@@ -100,6 +101,7 @@ export class SettingsPanel {
     for (const [el, inert] of this.blocked) el.inert = inert;
     this.blocked = [];
     this.root.classList.add("closing");
+    this.root.inert = true;
     this.closing = window.setTimeout(() => {
       this.root.classList.add("hidden");
       this.root.classList.remove("closing");

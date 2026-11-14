@@ -1,11 +1,15 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <link rel="preload" as="image" href="/art/vow-cards.jpg" />
+
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#111110" />
     <title>Contrapasso — Take the Descent</title>
+    <link rel="preload" as="image" href="/art/vows/blade.jpg" />
+    <link rel="preload" as="image" href="/art/vows/staff.jpg" />
+    <link rel="preload" as="image" href="/art/vows/heart.jpg" />
+    <link rel="preload" as="image" href="/art/vows/sentinel.jpg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -58,11 +62,12 @@
       <div id="portal-hint" class="hidden">
         ENTER THE LIT GATE TO DESCEND <span>↑</span>
       </div>
-      <div id="boss-gate-prompt" class="hidden"><span id="boss-gate-help"></span><strong id="boss-gate-name"></strong><button id="boss-enter" class="btn">ENTER · E</button></div>
+      <div id="boss-gate-prompt" class="hidden"><span id="boss-gate-help"></span><strong id="boss-gate-name"></strong><button id="boss-enter" class="btn">Enter · E</button></div>
+      <div id="wave-bell-prompt" class="hidden"><kbd>E</kbd> Ring the bell · summon the next wave</div>
       <div id="flow" aria-hidden="true"><b id="flow-count">×2</b><span>FLOW</span></div>
       <div id="first-technique-hint" hidden>YOUR TECHNIQUE IS READY · PRESS 1</div>
       <div id="help">
-        <kbd>WASD</kbd> move <kbd>HOLD CLICK</kbd> attack <kbd>ESC</kbd> pause · settings
+        <kbd>WASD</kbd> move <kbd>CLICK</kbd> attack
       </div>
       <div class="hud-bottom">
         <div id="run-info">
@@ -70,27 +75,26 @@
         </div>
         <div id="action-bar" aria-label="Abilities">
           <div class="action-group move-group">
-            <div id="dash-pip" class="ready">
-              <kbd>SHIFT</kbd><span>DASH</span><i><b id="dash-meter"></b></i>
+            <div id="dash-pip" class="keycap wide ready" title="Dash">
+              <kbd>SHIFT</kbd><small>DASH</small><i><b id="dash-meter"></b></i>
             </div>
-            <div id="jump-pip" class="ready" title="Jump, then attack to plunge">
-              <kbd>SPACE</kbd><span id="jump-label">JUMP</span><i><b id="jump-meter"></b></i>
+            <div id="jump-pip" class="keycap wide ready" title="Jump, then attack to plunge">
+              <kbd>SPACE</kbd><small id="jump-label">JUMP</small><i><b id="jump-meter"></b></i>
             </div>
           </div>
-          <div class="action-group ability-bar technique-bar"><div id="technique-1"><kbd>1</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-2"><kbd>2</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-3"><kbd>3</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div><div id="technique-4"><kbd>4</kbd><span>WEAPON TECHNIQUE</span><i><b></b></i></div></div>
+          <div class="action-group ability-bar technique-bar">
+            <div id="technique-1" class="keycap"><span class="keycap-icon" aria-hidden="true"></span><kbd>1</kbd><i><b></b></i></div>
+            <div id="technique-2" class="keycap"><span class="keycap-icon" aria-hidden="true"></span><kbd>2</kbd><i><b></b></i></div>
+            <div id="technique-3" class="keycap"><span class="keycap-icon" aria-hidden="true"></span><kbd>3</kbd><i><b></b></i></div>
+            <div id="technique-4" class="keycap"><span class="keycap-icon" aria-hidden="true"></span><kbd>4</kbd><i><b></b></i></div>
+          </div>
           <div class="action-group ability-bar soul-bar">
-            <div id="cast-slot">
-              <kbd>Q</kbd><span id="cast-label">SOUL LANCE</span
-              ><i><b id="cast-meter"></b></i>
-            </div>
-            <div id="core-slot">
-              <kbd>R</kbd><span id="core-label">ATTUNE A CORE</span
-              ><i><b id="core-meter"></b></i>
-            </div>
+            <div id="cast-slot" class="keycap"><span class="keycap-icon" aria-hidden="true"></span><kbd>Q</kbd><i><b id="cast-meter"></b></i></div>
+            <div id="core-slot" class="keycap"><span class="keycap-icon" aria-hidden="true"></span><kbd>R</kbd><i><b id="core-meter"></b></i></div>
           </div>
         </div>
         <div id="run-controls">
-          <button id="pause-toggle" class="hud-button">PAUSE · ESC</button>
+          <button id="pause-toggle" class="hud-button" title="Pause and settings" aria-label="Pause (Esc)"><kbd>ESC</kbd></button>
         </div>
       </div>
     </div>
@@ -106,11 +110,9 @@
       <div class="reward-inner">
         <span class="eyebrow" id="reward-circle">CIRCLE I CLEARED</span>
         <h2 id="reward-title">TAKE A VOW</h2>
-        <p id="reward-sub">Choose one upgrade for this descent.</p>
+        <p id="reward-sub">Choose one upgrade. It lasts until this descent ends.</p>
         <div id="reward-cards"></div>
-        <p class="reward-hint">
-          Press 1, 2 or 3 · The vow lasts until this descent ends
-        </p>
+        <p class="reward-hint">Press 1, 2 or 3</p>
       </div>
     </section>
 
@@ -126,9 +128,9 @@
       <p id="pause-where">Your descent is paused.</p>
       <div id="pause-build" class="end-build"></div>
       <div class="pause-actions">
-        <button id="resume" class="btn">RESUME <span>↗</span></button>
-        <button id="pause-settings" class="btn ghost">SETTINGS &amp; CONTROLS</button>
-        <button id="pause-menu" class="btn ghost">LEAVE · RETURN TO CAMP</button>
+        <button id="resume" class="btn">Resume</button>
+        <button id="pause-settings" class="btn ghost">Settings &amp; controls</button>
+        <button id="pause-menu" class="btn ghost">End run &amp; return to camp</button>
       </div>
     </section>
 
@@ -155,36 +157,36 @@
         </div>
       </div>
       <div id="end-build"></div>
-      <div class="end-next"><button id="end-skills" class="btn ghost">LEARN SKILLS ↗</button><button id="end-inventory" class="btn ghost">TEMPER GEAR ↗</button></div>
+      <div class="end-next"><button id="end-skills" class="btn ghost">Open skills</button><button id="end-inventory" class="btn ghost">Upgrade gear</button></div>
       <p id="receipt-status" role="status"></p>
       <button id="retry-verification" class="btn ghost hidden">
-        VERIFY AGAIN
+        Retry save
       </button>
       <div class="end-actions">
-        <button id="again" class="btn">DESCEND AGAIN <span>↗</span></button
-        ><button id="same-seed" class="btn ghost">TRY SAME DESCENT</button
-        ><button id="to-menu" class="text-button">RETURN TO CAMP</button>
+        <button id="again" class="btn">Play again</button
+        ><button id="same-seed" class="btn ghost">Replay this seed</button
+        ><button id="to-menu" class="text-button">Return to camp</button>
       </div>
     </section>
 
     <!-- The camp: one place between descents. A fixed bar on top, one page at a time below. -->
     <div id="camp" data-page="modes" inert>
       <header id="camp-bar">
-        <button id="camp-home" class="camp-wordmark" aria-label="Contrapasso · Descent">
+        <button id="camp-home" class="camp-wordmark" aria-label="Contrapasso · Play">
           CONTRAPASSO<span> /</span>
         </button>
         <nav id="camp-nav" aria-label="Camp">
-          <button id="nav-descent" data-camp="modes" aria-current="page"><small>01</small><span>DESCENT</span><i>Choose how you fight</i></button>
-          <button id="train" data-camp="forge"><small>02</small><span>SKILLS</span><i>Learn and equip</i></button>
-          <button id="nft-open" data-camp="nft"><small>03</small><span>INVENTORY</span><i>Champion and gear</i></button>
-          <button id="market-open" data-camp="market"><small>04</small><span>MARKET</span><i>Mint and trade relics</i></button>
+          <button id="nav-descent" data-camp="modes" aria-current="page"><small aria-hidden="true">01</small><span>Play</span><i>Choose how you fight</i></button>
+          <button id="train" data-camp="forge"><small aria-hidden="true">02</small><span>Skills</span><i>Learn and equip</i></button>
+          <button id="nft-open" data-camp="nft"><small aria-hidden="true">03</small><span>Inventory</span><i>Champion and gear</i></button>
+          <button id="market-open" data-camp="market"><small aria-hidden="true">04</small><span>Market</span><i>Mint and trade relics</i></button>
           <i id="camp-nav-mark" aria-hidden="true"></i>
         </nav>
         <div class="camp-status">
           <div class="camp-coin" title="Coin in your champion's vault">
             <span class="coin"></span><b class="champion-coins">0</b><small>COIN</small>
           </div>
-          <button id="settings-open" class="camp-tool" aria-haspopup="dialog">SETTINGS</button>
+          <button id="settings-open" class="camp-tool" aria-haspopup="dialog">Settings</button>
         </div>
       </header>
 
@@ -228,14 +230,13 @@
                 <span class="card-k">THE FIVE CIRCLES</span
                 ><span class="card-t">SOLO</span
                 ><span class="card-d"
-                  >Earn coin. Take a vow. Build the champion hell deserves.</span
-                ><span class="card-action">CHOOSE YOUR WEAPON <b>↘</b></span></button
+                  >Fight through five circles. Earn coin and improve your skills.</span
+                ><span class="card-action">Choose weapon <b aria-hidden="true">→</b></span></button
               ><button class="card locked" id="mode-duel" disabled>
                 <span class="card-k">ANOTHER SINNER</span
                 ><span class="card-t">DUEL</span
                 ><span class="card-d"
-                  >Their champion. Your punishment. Risk 10 coin, claim the
-                  pool.</span
+                  >Challenge another champion. Stake 10 coin to win the 20-coin pool.</span
                 ><span id="duel-card-action" class="card-action"
                   >CONNECTING CHAMPION</span
                 >
@@ -248,27 +249,27 @@
       <section id="preparation" class="camp-page hidden" aria-labelledby="preparation-title">
         <div class="camp-inner preparation-inner">
           <header class="page-head">
-            <button id="preparation-close" class="page-back" aria-label="Back to Descent">←</button>
+            <button id="preparation-close" class="page-back" aria-label="Back to Play">← Back</button>
             <div>
-              <span class="eyebrow">DESCENT · SOLO · STEP 1 OF 2</span>
-              <h2 id="preparation-title">CHOOSE YOUR WEAPON</h2>
+              <span class="eyebrow">SOLO · PREPARATION</span>
+              <h2 id="preparation-title">Choose your weapon</h2>
             </div>
           </header>
           <div class="preparation-grid">
-            <div class="preparation-theatre"><canvas id="loadout-stage" aria-label="Selected weapon held by your champion"></canvas><button id="loadout-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="loadout-preview-label" class="eyebrow">YOUR CHAMPION · YOUR WEAPON</span></div>
-            <div class="preparation-build"><span class="eyebrow">FROM YOUR INVENTORY</span><div id="loadout-weapons" role="group" aria-label="Owned weapons"></div><h3 id="loadout-name"></h3><p id="loadout-description"></p><div id="loadout-stats"></div><span class="eyebrow">WEAPON TECHNIQUES · CLICK TO PREVIEW</span><div id="loadout-techniques"></div><button id="loadout-train" class="btn ghost">OPEN THIS WEAPON'S SKILLS <span>↗</span></button></div>
+            <div class="preparation-theatre"><canvas id="loadout-stage" aria-label="Selected weapon held by your champion"></canvas><button id="loadout-slow" class="motion-speed" aria-pressed="false">Slow motion</button><span id="loadout-preview-label" class="eyebrow">YOUR CHAMPION · YOUR WEAPON</span></div>
+            <div class="preparation-build"><span class="eyebrow">FROM YOUR INVENTORY</span><div id="loadout-weapons" role="group" aria-label="Owned weapons"></div><h3 id="loadout-name"></h3><p id="loadout-description"></p><div id="loadout-stats"></div><span class="eyebrow">WEAPON TECHNIQUES · CLICK TO PREVIEW</span><div id="loadout-techniques"></div><button id="loadout-train" class="btn ghost">Open weapon skills</button></div>
           </div>
-          <footer class="preparation-footer"><div><p id="loadout-status" role="status" aria-live="polite">Your equipped weapon determines your active techniques.</p><small>WASD move · Mouse aim / attack · Space jump · Shift dash · 1–4 techniques · Q spell · R ultimate</small></div><button id="loadout-start" class="btn big">TAKE THE DESCENT ↘</button></footer>
+          <footer class="preparation-footer"><div><p id="loadout-status" role="status" aria-live="polite">Your equipped weapon determines your active techniques.</p><small>WASD move · Mouse aim / attack · Space jump · Shift dash · 1–4 techniques · Q spell · R ultimate</small></div><button id="loadout-start" class="btn big">Start Solo</button></footer>
         </div>
       </section>
 
       <section id="duel-lobby" class="camp-page hidden" aria-labelledby="duel-title">
         <div class="camp-inner duel-inner">
           <header class="page-head">
-            <button id="duel-close" class="page-back" aria-label="Back to Descent">←</button>
+            <button id="duel-close" class="page-back" aria-label="Back to Play">← Back</button>
             <div>
-              <span class="eyebrow">DESCENT · DUEL</span>
-              <h2 id="duel-title">FACE THE SINNER</h2>
+              <span class="eyebrow">PLAY · DUEL</span>
+              <h2 id="duel-title">Choose an opponent</h2>
             </div>
             <p class="page-lede duel-rules">
               Your deepest build against theirs. Both vaults stake 10 coin and
@@ -286,15 +287,15 @@
               away. Each accepted challenge risks 10 coin from your vault.
             </p>
             <button id="defense-toggle" class="btn ghost" aria-pressed="false">
-              ENABLE DEFENSE
+              Enable defense
             </button>
           </div>
           <button id="duel-resume" class="btn hidden">
-            REJOIN ACTIVE DUEL <span>↗</span>
+            Resume Duel
           </button>
           <div class="section-label">
             <span>MATCHED CHAMPIONS</span><i></i
-            ><button id="duel-refresh" class="text-button">REFRESH ↻</button>
+            ><button id="duel-refresh" class="text-button">Refresh</button>
           </div>
           <div id="duel-opponents"></div>
           <p id="duel-empty" class="hidden">
@@ -309,10 +310,10 @@
           <header class="page-head">
             <div>
               <span class="eyebrow">TRAIN WITH EARNED COIN</span>
-              <h2 id="forge-title">SKILLS</h2>
+              <h2 id="forge-title">Skills</h2>
             </div>
             <div id="forge-summary" class="tree-summary" aria-live="polite"></div>
-            <button id="forge-close" class="btn ghost hidden">← BACK TO YOUR WEAPON</button>
+            <button id="forge-close" class="btn ghost hidden">← Back to preparation</button>
           </header>
           <div id="forge-cards"></div>
           <div class="skill-theatre">
@@ -321,7 +322,7 @@
                 id="skill-stage"
                 aria-label="Silent skill animation preview"
               ></canvas
-              ><button id="skill-slow" class="motion-speed" aria-pressed="false">SLOW MOTION</button><span id="skill-preview-label">SILENT PREVIEW</span><button id="skill-preview-expand" class="preview-expand" aria-label="Expand animation preview" aria-pressed="false">⛶</button>
+              ><button id="skill-slow" class="motion-speed" aria-pressed="false">Slow motion</button><span id="skill-preview-label">SILENT PREVIEW</span><button id="skill-preview-expand" class="preview-expand" aria-label="Expand animation preview" aria-pressed="false">⛶</button>
             </div>
             <article>
               <span class="eyebrow">YOUR BODY IS THE WEAPON</span>
@@ -337,7 +338,7 @@
           <header class="page-head">
             <div>
               <span class="eyebrow">CHAMPION AND GEAR</span>
-              <h2 id="nft-title">INVENTORY</h2>
+              <h2 id="nft-title">Inventory</h2>
             </div>
             <p id="nft-intro" class="page-lede"></p>
           </header>
@@ -359,7 +360,7 @@
                 placeholder="yourname.testnet"
                 aria-label="Your NEAR testnet account"
               />
-              <button id="claim-button" class="btn">CLAIM TO WALLET</button>
+              <button id="claim-button" class="btn">Transfer to wallet</button>
             </div>
             <p id="claim-result" class="claim-result"></p>
           </details>
@@ -371,13 +372,13 @@
           <header class="page-head">
             <div>
               <span class="eyebrow">NEAR TESTNET · DEMO FUNDS ONLY</span>
-              <h2 id="market-title">THE RELIQUARY</h2>
+              <h2 id="market-title">Market</h2>
             </div>
             <nav class="market-tabs" aria-label="Relic trading">
-              <button id="tab-mint" aria-pressed="true">MINT NEW RELICS</button>
-              <button id="tab-exchange" aria-pressed="false">PLAYER LISTINGS</button>
+              <button id="tab-mint" aria-pressed="true">Mint weapons</button>
+              <button id="tab-exchange" aria-pressed="false">Player listings</button>
             </nav>
-            <button id="market-refresh" class="camp-tool">REFRESH ↻</button>
+            <button id="market-refresh" class="camp-tool">Refresh</button>
           </header>
           <div id="mint-panel">
             <div id="arsenal-choices" aria-label="Choose a weapon"></div>
@@ -423,7 +424,7 @@
             <div id="exchange-balance"></div>
             <div id="exchange-listings" class="exchange-grid"></div>
             <form id="sale-form" class="sale-form">
-              <h3>OFFER A RELIC</h3>
+              <h3>Sell a weapon</h3>
               <p>
                 Unequip a tradable weapon first. Listed gear stays locked until
                 sold or cancelled.
@@ -442,7 +443,7 @@
                 90% to your sale balance · 10% to the game treasury.
               </p>
               <button id="sale-submit" class="btn" type="submit">
-                LIST WEAPON ↗
+                List weapon
               </button>
             </form>
           </section>
@@ -465,14 +466,14 @@
         <header>
           <div>
             <span class="eyebrow">CONTRAPASSO</span>
-            <h2 id="settings-title">SETTINGS</h2>
+            <h2 id="settings-title">Settings</h2>
           </div>
-          <button id="settings-close" class="camp-tool" data-settings-close>CLOSE · ESC</button>
+          <button id="settings-close" class="camp-tool" data-settings-close>Close · Esc</button>
         </header>
         <section aria-labelledby="settings-sound">
           <h3 id="settings-sound">SOUND</h3>
           <div class="setting-row">
-            <div><b>Sound effects</b><small id="sound-note">Off by default. Press M at any time.</small></div>
+            <div><b>Sound effects</b><small id="sound-note">Off by default. Press M outside text fields.</small></div>
             <button
               id="sound-toggle"
               class="setting-switch"
@@ -490,12 +491,12 @@
         </section>
         <section aria-labelledby="settings-display">
           <h3 id="settings-display">DISPLAY</h3>
-          <div class="setting-row"><div><b>Graphics</b><small>Resolution; combat stays the same.</small></div><div class="setting-choice" role="group" aria-label="Graphics quality"><button data-quality="1">LOW</button><button data-quality="1.5">BALANCED</button><button data-quality="2">HIGH</button></div></div>
-          <div class="setting-row"><b>Display mode</b><button id="setting-fullscreen" class="camp-tool">FULL SCREEN</button></div>
+          <div class="setting-row"><div><b>Graphics</b><small>Resolution; combat stays the same.</small></div><div class="setting-choice" role="group" aria-label="Graphics quality"><button data-quality="1">Low</button><button data-quality="1.5">Balanced</button><button data-quality="2">High</button></div></div>
+          <div class="setting-row"><b>Display mode</b><button id="setting-fullscreen" class="camp-tool">Full screen</button></div>
           <div class="setting-row">
             <div><b>Screen shake</b><small>Camera kick on heavy hits.</small></div>
             <div class="setting-choice" role="group" aria-label="Screen shake">
-              <button data-shake="1" aria-pressed="true">FULL</button><button data-shake="0.4" aria-pressed="false">LOW</button><button data-shake="0" aria-pressed="false">OFF</button>
+              <button data-shake="1" aria-pressed="true">Full</button><button data-shake="0.4" aria-pressed="false">Low</button><button data-shake="0" aria-pressed="false">Off</button>
             </div>
           </div>
           <div class="setting-row">
@@ -542,7 +543,7 @@
           Build your champion.<br />Become someone else's punishment.
         </p>
         <button id="play" class="btn big">
-          TAKE THE DESCENT <span>↘</span>
+          Play <span aria-hidden="true">→</span>
         </button>
         <p class="landing-note">
           AN ACTION ROGUELIKE · FIVE CIRCLES · ONE CHAMPION

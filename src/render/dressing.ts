@@ -59,7 +59,7 @@ export class Underworld {
     wash.fillRect(0, 0, 128, 128);
     const water = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(ripple), color: 0x1b2627, transparent: true, depthWrite: false });
 
-    for (let circle = 0; circle < 6; circle++) {
+    for (let circle = 0; circle < 7; circle++) {
       const g = new THREE.Group();
       this.root.add(g);
       this.circles.push(g);
@@ -115,7 +115,7 @@ export class Underworld {
         this.relic(g, "hammer", 9.6, north, 3.6, 0.12);
         this.relic(g, "spear", 12.2, north - 0.4, 4.8, -0.08);
         this.figure(g, "imp", 15, north, 2.4, -Math.PI / 2 + 0.3);
-      } else {
+      } else if (circle === 5) {
         // The boss chamber: a closed court of arches with two colossi keeping the far wall.
         this.arch(g, -x, -5, 4.2);
         this.arch(g, -x, 2, 4.2);
@@ -125,6 +125,12 @@ export class Underworld {
         this.figure(g, "brute", 4.5, north - 0.6, 3.9, -Math.PI / 2 - 0.18);
         this.relic(g, "sword", 9.5, north, 3.5, 0.15);
         this.relic(g, "axe", 12, north - 0.4, 3.9, -0.14);
+      } else {
+        // The Duel court: a stripped, neutral ring of arches, no ashen figures or relics.
+        this.arch(g, -x, -5, 4.2);
+        this.arch(g, -x, 2, 4.2);
+        this.arch(g, x, -5, 4.2);
+        this.arch(g, x, 2, 4.2);
       }
       if (circle === 0 || circle === 4) {
         const pool = this.mesh(g, new THREE.PlaneGeometry(2, 2), water, -x, -0.1, 0);
@@ -231,8 +237,9 @@ export class Underworld {
   }
   sync(w: World, dt: number, visualCircle = w.floor - 1, chamber = false) {
     this.time += dt;
-    this.root.visible = w.mode === "solo";
-    const circle = chamber ? 5 : Math.max(0, Math.min(4, visualCircle));
+    const duel = w.mode === "duel";
+    this.root.visible = w.mode === "solo" || duel;
+    const circle = duel ? 6 : chamber ? 5 : Math.max(0, Math.min(4, visualCircle));
     this.atmosphere.mesh.visible=w.mode==='solo';
     if(w.mode==='solo')this.atmosphere.update(dt,circle,this.reducedMotion.matches);
     this.circles.forEach((g, i) => {

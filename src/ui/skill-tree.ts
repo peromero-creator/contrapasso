@@ -31,6 +31,7 @@ export class SkillTree {
   private busy = false;
   private cancelHold = () => {};
   private observer?: ResizeObserver;
+  private cameraFrame = 0;
   private camera = { x: 0, y: 0, scale: 1 };
   private resetCamera = true;
   /** Skills known at the previous render; anything new gets a one-time bloom. */
@@ -38,6 +39,8 @@ export class SkillTree {
   constructor(private root: HTMLElement, private actions: TreeActions) {}
   render(champion: Champion, busy: boolean) {
     this.cancelHold(); this.observer?.disconnect();
+    cancelAnimationFrame(this.cameraFrame);
+    this.cameraFrame = 0;
     const theatre = document.querySelector<HTMLElement>('.skill-theatre');
     theatre?.remove();
     this.champion = champion; this.busy = busy;
@@ -70,10 +73,10 @@ export class SkillTree {
       + slot('R', `cores:${core ?? CORE_IDS[0]}`, core ? CORES[core].name : 'No ultimate', !!core && owned(core), core ? 'ULTIMATE' : 'CHOOSE ONE');
     this.root.innerHTML = `
       <div class="tree-loadout"><div class="tree-loadout-title"><span class="eyebrow">YOUR ACTION BAR</span><p>${FAMILY_NAMES[inHand]} in hand · these are the keys you press in a fight</p></div><div class="tree-loadout-slots">${bar}</div></div>
-      <nav class="tree-tabs" aria-label="Skill categories"><button data-page="all" aria-pressed="${all}" class="all"><span>ALL PATHS</span></button><span class="tree-tabs-label">WEAPONS</span>${FAMILIES.map(tab).join('')}<span class="tree-tabs-label">SOUL</span>${(['spells', 'cores', 'vows'] as const).map(tab).join('')}</nav>
-      <div class="tree-workspace"><div class="tree-explorer"><div class="tree-toolbar" aria-label="Tree navigation"><button data-camera="out" aria-label="Zoom out">−</button><output class="tree-zoom" aria-label="Zoom level">100%</output><button data-camera="in" aria-label="Zoom in">+</button><button data-camera="fit">Fit tree</button><button data-camera="selected">Find selected</button><ul class="tree-legend" aria-label="Legend"><li class="learned">Learned</li><li class="reachable">Ready</li><li class="sealed">Locked</li></ul></div><div class="tree-viewport" tabindex="0" role="region" aria-label="${title} skill map. Arrow keys pan; plus and minus zoom; Home fits the tree."><div class="tree-map" style="width:${width}px;height:${height}px">
+      <nav class="tree-tabs" aria-label="Skill categories"><button data-page="all" aria-pressed="${all}" class="all"><span>All paths</span></button><span class="tree-tabs-label">WEAPONS</span>${FAMILIES.map(tab).join('')}<span class="tree-tabs-label">SOUL</span>${(['spells', 'cores', 'vows'] as const).map(tab).join('')}</nav>
+      <div class="tree-workspace"><div class="tree-explorer"><div class="tree-toolbar" aria-label="Tree navigation"><button data-camera="out" aria-label="Zoom out">−</button><output class="tree-zoom" aria-label="Zoom level">100%</output><button data-camera="in" aria-label="Zoom in">+</button><button data-camera="fit">Fit tree</button><button data-camera="selected">Find selected</button></div><div class="tree-viewport" tabindex="0" role="region" aria-label="${title} skill map. Arrow keys pan; plus and minus zoom; Home fits the tree."><div class="tree-map" style="width:${width}px;height:${height}px">
       ${regions.map(r=>`<section class="atlas-region" style="left:${r.x}px;top:${r.y}px;width:${r.width}px;--path-color:${r.color}"><h4>${pageName(r.page)}</h4>${r.page==='vows'?SKILL_BRANCHES.map((b,i)=>`<div class="vow-row-title" style="top:${65+(4+i*32)*3.6}px"><b>${b.name}</b><small>${b.subtitle}</small></div>`).join(''):''}</section>`).join('')}<svg class="tree-links" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">${nodes.map(n=>n.parents.map(p=>{ const parent=nodes.find(v=>v.skill===p&&v.page===n.page); if(!parent)return '';const x=parent.x*width/100,y=parent.y*height/100,nx=n.x*width/100,ny=n.y*height/100;return `<path class="${champion.skills.includes(n.skill)?'grown':champion.skills.includes(p)?'growing':''}${fresh.has(n.skill)?' fresh':''}" d="M${x} ${y} C${(x+nx)/2} ${y} ${(x+nx)/2} ${ny} ${nx} ${ny}"/>`;}).join('')).join('')}</svg>
-      ${nodes.map(n=>`<button class="tree-node ${n.page==='vows'?'vow-node':''} ${champion.skills.includes(n.skill)?'learned':canLearn(champion.skills,n.skill)?(champion.coins>=SKILLS[n.skill].cost?'reachable':'reachable costly'):'sealed'}${fresh.has(n.skill)?' fresh':''}" data-node="${nodeKey(n)}" title="${n.title} · ${owned(n.skill)?'Learned':SKILLS[n.skill].cost+' coin'} · ${SKILLS[n.skill].description}" style="left:${n.x}%;top:${n.y}%;--path-color:${colors[PAGES.indexOf(n.page)]}" aria-label="${n.title}${champion.skills.includes(n.skill)?', learned':', '+SKILLS[n.skill].cost+' coin'}" aria-pressed="${this.selected===nodeKey(n)}"><span class="node-orb">${skillIcon(n.skill)}<em>${n.key}</em></span><strong>${n.title}</strong><small>${n.skill===next?.skill?'NEXT · ':''}${champion.skills.includes(n.skill)?'LEARNED':SKILLS[n.skill].cost+' COIN'}</small></button>`).join('')}
+      ${nodes.map(n=>`<button class="tree-node ${n.page==='vows'?'vow-node':''} ${champion.skills.includes(n.skill)?'learned':canLearn(champion.skills,n.skill)?(champion.coins>=SKILLS[n.skill].cost?'reachable':'reachable costly'):'sealed'}${fresh.has(n.skill)?' fresh':''}" data-node="${nodeKey(n)}" title="${n.title} · ${owned(n.skill)?'Learned':SKILLS[n.skill].cost+' coin'} · ${SKILLS[n.skill].description}" style="left:${n.x}%;top:${n.y}%;--path-color:${colors[PAGES.indexOf(n.page)]}" aria-label="${n.title}${champion.skills.includes(n.skill)?', learned':', '+SKILLS[n.skill].cost+' coin'}" aria-pressed="${this.selected===nodeKey(n)}"><span class="node-orb">${skillIcon(n.skill)}<em>${n.key}</em></span><strong>${n.title}</strong><small>${champion.skills.includes(n.skill)?'LEARNED':SKILLS[n.skill].cost}</small></button>`).join('')}
       </div></div><p class="tree-map-hint">Drag to explore · Scroll to zoom · Select a skill, then hold to learn it</p></div><div class="tree-side"><aside id="tree-detail" class="tree-detail" aria-live="polite"></aside></div></div>`;
     if (theatre) this.root.querySelector('.tree-side')!.prepend(theatre);
     const overview = document.createElement('nav');
@@ -96,13 +99,14 @@ export class SkillTree {
     for(const b of this.root.querySelectorAll<HTMLButtonElement>('[data-jump]')) b.onclick=()=>{
       const [page]=b.dataset.jump!.split(':');
       if(page==='spells'||page==='cores'){
-        const previous=this.root.querySelector('.quick-equip');if(previous){previous.remove();return;}
+        const previous=this.root.querySelector('.quick-equip'), same=previous?.previousElementSibling===b;
+        this.closeQuickEquip(false);if(same)return;
         const picker=document.createElement('div');picker.className='quick-equip';picker.setAttribute('role','group');picker.setAttribute('aria-label',page==='spells'?'Equip spell':'Equip ultimate');
         const choices=nodes.filter(n=>n.page===page&&owned(n.skill));
         for(const n of choices){const option=document.createElement('button');option.textContent=n.title;option.disabled=this.busy||!!champion.chain?.pending;option.onclick=()=>{picker.remove();void(page==='spells'?this.actions.spell(n.ability as SpellId):this.actions.core(n.ability as CoreId));};picker.append(option);}
-        const explore=document.createElement('button');explore.textContent='Explore this path ↗';explore.onclick=()=>{picker.remove();choosePage(page as Page);};picker.append(explore);
+        const explore=document.createElement('button');explore.textContent='Explore this path';explore.onclick=()=>{picker.remove();choosePage(page as Page);};picker.append(explore);
         b.after(picker);picker.querySelector('button')?.focus();
-        picker.onkeydown=e=>{if(e.key==='Escape'){e.stopPropagation();picker.remove();b.focus();}};
+        picker.onkeydown=e=>{if(e.key==='Escape'){e.stopPropagation();this.closeQuickEquip();}};
 
         return;
       }
@@ -134,7 +138,15 @@ export class SkillTree {
   focusWeapon(identity: WeaponId) {
     this.page = familyOf(identity); this.chosen = true; this.selected = `${familyOf(identity)}:${familyOf(identity)}-1`; this.resetCamera = true;
   }
-  close() { this.cancelHold(); this.observer?.disconnect(); this.resetCamera = true; }
+  closeQuickEquip(restoreFocus = true): boolean {
+    const picker = this.root.querySelector('.quick-equip');
+    if (!picker) return false;
+    const trigger = picker.previousElementSibling as HTMLElement | null;
+    picker.remove();
+    if (restoreFocus) trigger?.focus();
+    return true;
+  }
+  close() { this.cancelHold(); this.closeQuickEquip(false); this.observer?.disconnect(); cancelAnimationFrame(this.cameraFrame); this.cameraFrame = 0; this.resetCamera = true; }
   private previewNode(n: Node) {
     if(n.ability) this.actions.preview(n.ability,FAMILIES.includes(n.page as Family)?(familyOf(this.champion.build.weaponId ?? "starter")===n.page?this.champion.build.weaponId ?? "starter":FAMILY_WEAPON[n.page as Family]):undefined);
   }
@@ -173,7 +185,7 @@ export class SkillTree {
     const zoom=(factor:number,x=viewport.clientWidth/2,y=viewport.clientHeight/2,glide=false)=>{const old=this.camera.scale,next=Math.max(.12,Math.min(2,old*factor));this.camera={scale:next,x:x-(x-this.camera.x)*next/old,y:y-(y-this.camera.y)*next/old};this.paintCamera(glide);};
     // Start with every region visible; category buttons focus a readable cluster.
     const open=()=>{ if(this.page==='all')fit(); else this.focusRegion(false); };
-    if(this.resetCamera){requestAnimationFrame(open);this.resetCamera=false;}else this.paintCamera();
+    if(this.resetCamera){this.cameraFrame=requestAnimationFrame(()=>{this.cameraFrame=0;open();});this.resetCamera=false;}else this.paintCamera();
     let lastWidth=viewport.clientWidth,lastHeight=viewport.clientHeight;
     this.observer=new ResizeObserver(()=>{if(viewport.clientWidth!==lastWidth||viewport.clientHeight!==lastHeight){lastWidth=viewport.clientWidth;lastHeight=viewport.clientHeight;open();}});this.observer.observe(viewport);
     for(const button of this.root.querySelectorAll<HTMLButtonElement>('[data-camera]'))button.onclick=()=>{
@@ -208,12 +220,12 @@ export class SkillTree {
       <h3>${n.title}</h3><p>${description}</p>
       ${spec ? `<div class="technique-stats"><span><b>${spec.damage+level*2}</b>base damage / hit</span><span><b>${spec.cooldown}s</b>cooldown</span></div>` : page === 'spells' ? `<div class="technique-stats"><span><b>${spellCooldown(Object.fromEntries(c.skills.map(id=>[id,1]))).toFixed(1)}s</b>cooldown</span><span><b>+25%</b>next weapon hit</span></div>` : page === 'cores' ? '<p class="core-cost">Requires a full soul core. Charge it by dealing damage.</p>' : ''}
       ${requirement ? `<p class="tree-requirement">${requirement}</p>` : ''}
-      ${known ? (page === 'spells' || page === 'cores' ? `<button class="btn tree-select" ${blocked || current ? 'disabled':''}>${current?'EQUIPPED ON '+n.key: 'EQUIP ON '+n.key}</button>` : `<span class="tree-learned">✓ ${t?(inHand?'READY ON '+n.key:'LEARNED'):'ALWAYS ACTIVE'}</span>`) : `<button class="btn hold-learn" ${blocked || !ready || !enough ? 'disabled':''} aria-label="Hold to learn ${n.title} for ${SKILLS[n.skill].cost} coin"><span class="hold-fill"></span><span class="hold-copy">${!featureReady?'UPDATE REQUIRED':blocked?'CONFIRMING…':`HOLD TO LEARN · ${SKILLS[n.skill].cost} COIN`}</span></button>`}
-      ${n.ability?'<button class="tree-preview">↻ Replay animation</button>':''}
+      ${known ? (page === 'spells' || page === 'cores' ? `<button class="btn tree-select" ${blocked || current ? 'disabled':''}>${current?'Equipped on '+n.key: 'Equip on '+n.key}</button>` : `<span class="tree-learned">✓ ${t?(inHand?'READY ON '+n.key:'LEARNED'):'ALWAYS ACTIVE'}</span>`) : `<button class="btn hold-learn" ${blocked || !ready || !enough ? 'disabled':''} aria-label="Hold to learn ${n.title} for ${SKILLS[n.skill].cost} coin"><span class="hold-fill"></span><span class="hold-copy">${!featureReady?'Update required':blocked?'Confirming…':`Hold to learn · ${SKILLS[n.skill].cost} coin`}</span></button>`}
+      ${n.ability?'<button class="tree-preview">Replay animation</button>':''}
       <details class="tree-extra"><summary>Progression details</summary><p>${spec ? `Damage shown at weapon +${level}, circle rank 1. Each weapon level adds 2 damage; each additional circle rank adds 15%.` : SKILLS[n.skill].rank}${n.title!==SKILLS[n.skill].name?` Unlocks with ${SKILLS[n.skill].name}.`:''}</p></details><span class="hold-status" role="status"></span>`;
     const preview = () => this.previewNode(n);
     if (t && !inHand) {
-      const change=document.createElement('button');change.className='btn ghost tree-weapon';change.textContent=`EQUIP ${FAMILY_NAMES[page as Family].toUpperCase()} ↗`;change.disabled=blocked;
+      const change=document.createElement('button');change.className='btn ghost tree-weapon';change.textContent=`Equip ${FAMILY_NAMES[page as Family].toLowerCase()}`;change.disabled=blocked;
       const picker=document.createElement('div');picker.className='tree-weapon-picker';picker.setAttribute('aria-live','polite');
       detail.querySelector('.tree-extra')!.before(change,picker);
       change.onclick=async()=>{
@@ -222,7 +234,7 @@ export class SkillTree {
           const choices=(await this.actions.inventory()).filter(w=>familyOf(w.identity)===page);
           if(!change.isConnected)return;
           picker.replaceChildren();
-          if(!choices.length){const empty=document.createElement('p');empty.textContent='You do not own this weapon family yet.';const market=document.createElement('button');market.className='tree-preview';market.textContent='Explore weapons ↗';market.onclick=()=>this.actions.market();picker.append(empty,market);}
+          if(!choices.length){const empty=document.createElement('p');empty.textContent='You do not own this weapon family yet.';const market=document.createElement('button');market.className='tree-preview';market.textContent='Browse weapons';market.onclick=()=>this.actions.market();picker.append(empty,market);}
           for(const w of choices){
             const option=document.createElement('button');option.className='tree-owned-weapon';option.disabled=w.blocked;
             const duplicate=choices.filter(v=>v.identity===w.identity&&v.level===w.level).length>1;
@@ -245,7 +257,7 @@ export class SkillTree {
     const onBlur=()=>cancel(), onVisibility=()=>{ if(document.hidden) cancel(); };
     window.addEventListener('blur',onBlur); document.addEventListener('visibilitychange',onVisibility);
     this.cancelHold=()=>{cancel(); window.removeEventListener('blur',onBlur); document.removeEventListener('visibilitychange',onVisibility);};
-    const tick=(now:number)=>{ if(!active) return; const fraction=Math.min(1,(now-start)/HOLD_MS); button.style.setProperty('--learn',`${fraction*100}%`); (this.root.querySelector(`[data-node="${nodeKey(n)}"]`) as HTMLElement | null)?.style.setProperty("--learn",`${fraction*100}%`); if(fraction<1) {frame=requestAnimationFrame(tick);return;} finished=true;active=false;button.disabled=true; detail.querySelector('.hold-copy')!.textContent='CONFIRMING…'; detail.querySelector('.hold-status')!.textContent='Saving your learned skill…'; void this.actions.learn(n.skill); };
+    const tick=(now:number)=>{ if(!active) return; const fraction=Math.min(1,(now-start)/HOLD_MS); button.style.setProperty('--learn',`${fraction*100}%`); (this.root.querySelector(`[data-node="${nodeKey(n)}"]`) as HTMLElement | null)?.style.setProperty("--learn",`${fraction*100}%`); if(fraction<1) {frame=requestAnimationFrame(tick);return;} finished=true;active=false;button.disabled=true; detail.querySelector('.hold-copy')!.textContent='Confirming…'; detail.querySelector('.hold-status')!.textContent='Saving your learned skill…'; void this.actions.learn(n.skill); };
     const begin=()=>{ if(active || finished || button.disabled)return; active=true;start=performance.now();this.root.querySelector(`[data-node="${nodeKey(n)}"]`)?.classList.add('learning'); frame=requestAnimationFrame(tick); };
     button.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();button.focus();button.setPointerCapture(e.pointerId);begin();};
     button.onpointerup=cancel;button.onpointercancel=cancel;button.onlostpointercapture=cancel;
