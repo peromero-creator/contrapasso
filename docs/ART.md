@@ -96,6 +96,8 @@ The same Meshy hero rig adds Charged Spell Cast (125), Mage Spell Cast 3 (132) a
 
 `src/render/soul-fx.ts` draws original layered flame textures, seals, tapering orbit blades, lance streaks and ward facets. Effects use normal transparency and bounded lifetimes, with at most 32 motifs. Dash echoes copy the current posed hero and fade over 0.3 seconds. The skill-tree preview uses the same rig and effects; it has no gameplay, payment or audio side effects. The earlier procedural perimeter filler has been replaced by authored props and ashen static poses from the existing enemy rigs.
 
+Audio is fully synthetic. The narrator's short banner lines are generated once, locally, with the Apache-2.0 Kokoro-82M text-to-speech model and shipped as small MP3s under `public/assets/voice/`; every gameplay cue — strikes, hits, the ritual bell, boss warnings, gate and reward beats — is synthesized at runtime with Web Audio. Sound is off by default, and silent mode never downloads a voice file or creates an audio context.
+
 ## Weapon mastery presentation (0.10)
 
 The skill atlas uses original SVG branch paths and weapon-family icons, circular learned nodes and a hold-to-learn ring. Seven weapon tabs, spells and ultimates separate browsing from the four combat hotkeys. The existing hero rig and weapon models supply the technique clips; no new generated models or animation credits were used for this revision. Directed trails, circular cuts and hammer ground fractures follow actual hit patterns without bloom. Reused clips have move-specific durations and contacts; this is not a new set of 28 bespoke motion-capture clips.

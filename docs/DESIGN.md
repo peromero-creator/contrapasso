@@ -17,7 +17,9 @@ In Dante's poem a _contrapasso_ is a punishment that mirrors the sin. In this ga
 
 ## Solo
 
-A run is five floors, one circle each. Each floor has waves of enemies. Floors II, IV and V also contain an optional boss gate. After a floor the player chooses an offered rank for an already unlocked power; with no eligible power, the gate opens immediately. Solo is where coin is earned.
+A run is five floors, one circle each. Each floor has waves of enemies. Floors II, III, IV and V also contain an optional boss gate. After a floor the player chooses an offered rank for an already unlocked power; with no eligible power, the gate opens immediately. Solo is where coin is earned.
+
+Waves are player-summoned since simulation 0.13.0: when the wave indicator shows the bell, the player walks to the ritual bell at the circle's heart and presses E to pull the lever beside it, ringing the bell and summoning the next wave. The descent stays via the lit portal and the optional boss via the carved door.
 
 ## Duel
 

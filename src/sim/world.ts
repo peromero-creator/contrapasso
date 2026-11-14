@@ -42,7 +42,7 @@ export function bossAvailable(w: World): boolean { return w.mode !== "duel" && (
 export function nearBossGate(w: World): boolean { return bossAvailable(w) && w.phase === "cleared" && (w.player.x-BOSS_GATE.x)**2+(w.player.z-BOSS_GATE.z)**2 < BOSS_GATE.r**2; }
 export const PORTAL = { x: 0, z: -ARENA_HZ + 1.6, r: 1.5 };
 /** A ritual bell the hero rings to summon the next wave, so a floor is paced, not run. */
-export const WAVE_BELL = { x: 0, z: -4, r: 2.6 };
+export const WAVE_BELL = { x: 0, z: 0, r: 2.6 };
 export function waveBellReady(w: World): boolean {
   return w.mode !== "duel" && w.phase === "fight" && w.bossEncounter !== "active" && w.enemies.length === 0 && w.wave + 1 < w.wavesInFloor;
 }

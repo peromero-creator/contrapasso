@@ -27,7 +27,7 @@ import { canPayNative, type MarketOperation, type MarketView } from "./shared/ma
 import * as THREE from "three";
 import { View, CIRCLES } from "./render/view";
 import {
-  BOSS_FLOORS, bossAvailable, nearBossGate, nearWaveBell, waveBellReady,
+  BOSS_FLOORS, WAVE_BELL, bossAvailable, nearBossGate, nearWaveBell, waveBellReady,
   createWorld,
   createDuelWorld,
   step,
@@ -395,6 +395,7 @@ function openReward() {
   rewardDelay = 0;
   if (world.phase !== "reward" || mode !== "run" || ended) return;
   rewardOpen = true;
+  sound.rewardOpen();
   const reward = $("reward");
   reward.inert = paused;
   reward.classList.add("open");
@@ -489,7 +490,7 @@ function updateHud(dt: number) {
       ? "TAKE A VOW"
       : world.phase === "cleared"
         ? "ENTER THE GATE"
-        : world.bossEncounter === "active" ? "BOSS CHAMBER" : waveBellReady(world) ? "RING THE BELL · WAVE " + (world.wave + 2) : `WAVE ${world.wave + 1} / ${world.wavesInFloor} · ${world.enemies.length} REMAIN`;
+        : world.bossEncounter === "active" ? "BOSS CHAMBER" : waveBellReady(world) ? "PULL THE LEVER · WAVE " + (world.wave + 2) : `WAVE ${world.wave + 1} / ${world.wavesInFloor} · ${world.enemies.length} REMAIN`;
   if (world.mode === "duel") {
     hud("circle").textContent = "DUEL / THE CHALLENGE";
     hud("wave").textContent =
@@ -520,9 +521,9 @@ function updateHud(dt: number) {
   hud("boss-gate-help").textContent = gateReady ? "Optional encounter" : "Optional boss · Approach the carved door";
   $("gate-veil").style.opacity = world.gateTransition > 0 ? String(Math.sin(Math.PI * (1-world.gateTransition/54))) : "0";
   const seconds = Math.floor(world.tick / 60);
-  hud("run-time").textContent =
-    `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-  hud("run-seed").textContent = `SEED ${world.seed}`;
+  hud("run-time").textContent =`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  // The seed stays internal (used by "Replay this seed"); it is not shown on screen.
+  hud("run-seed").textContent = "";
   for (let i = 1; i <= 3; i++)
     $("combo-" + i).classList.toggle(
       "lit",
@@ -680,6 +681,7 @@ function enterRun(next: RunChallenge) {
   shownPowers = "";
   acc = freeze = slow = 0;
   ended = paused = false;enragedBoss=null;waveKey='';wavePeak=0;
+  prevBossStates = new Map();prevEncounter="";bossAliveId=-1;prevWave=world.wave;
   mode = "run";
   sound.setPaused(false);
   sound.unlock();
@@ -1483,7 +1485,7 @@ function renderPreparation() {
   const equipped=weapon(champion.build.weaponId),damageDiff=spec.damage+(selected?.level??champion.build.weaponLevel)*2-(equipped.damage+champion.build.weaponLevel*2),rangeDiff=spec.reach-equipped.reach;
   const delta=(n:number)=>n?`<em class="${n>0?'better':'worse'}">${n>0?'+':''}${Number(n.toFixed(1))}</em>`:'';
   $('loadout-stats').innerHTML=`<span><b>${spec.damage+(selected?.level??champion.build.weaponLevel)*2}</b> damage ${delta(damageDiff)}</span><span><b>${spec.reach}m</b> reach ${delta(rangeDiff)}</span><span><b>${selected?.kills??0}</b> kills</span>`;
-  $('loadout-techniques').innerHTML=weaponTechniques(identity).map((id,i)=>`<button data-loadout-preview="${id}" title="Preview ${TECHNIQUES[id].name}"><kbd>${i+1}</kbd><span>${TECHNIQUES[id].name}<small>${champion!.skills.includes(id)?'LEARNED':'NOT LEARNED · PREVIEW ONLY'}</small></span></button>`).join('');
+  $('loadout-techniques').innerHTML=weaponTechniques(identity).map((id,i)=>champion!.skills.includes(id)?`<button data-loadout-preview="${id}" title="Preview ${TECHNIQUES[id].name}"><kbd>${i+1}</kbd><span>${TECHNIQUES[id].name}</span></button>`:'').join('')||'<p class="loadout-empty">No techniques learned for this weapon. Open weapon skills to train them.</p>';
   loadoutStage ??= new RelicStage($<HTMLCanvasElement>('loadout-stage'),$('loadout-preview-label'));
   void loadoutStage.select(identity); loadoutStage.preview(null);
   $<HTMLButtonElement>('loadout-start').disabled=preparationBusy||!!champion.chain?.pending||!!selected?.blocked;
@@ -1797,6 +1799,10 @@ function paintChain(pop: boolean) {
 }
 let hudElapsed = 0;
 let enragedBoss: number | null = null;
+let prevBossStates = new Map<number, string>();
+let prevEncounter = "";
+let bossAliveId = -1;
+let prevWave = 0;
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
@@ -1826,6 +1832,7 @@ function frame(now: number) {
           : automated
             ? bot(world, params.get("bosses") === "1")
             : readInput();
+      const picked = world.phase === "reward" && choiceQueued > 0;
       choiceQueued = 0;
       const packed = packInput(input);
       replay.push(packed);
@@ -1834,14 +1841,35 @@ function frame(now: number) {
       acc -= DT;
       n++;
       const phaseBoss=world.enemies.find(e=>e.kind==='warden'&&(e.enraged||e.hp<e.maxHp*.5));
-      if(phaseBoss&&phaseBoss.id!==enragedBoss){enragedBoss=phaseBoss.id;freeze=Math.max(freeze,.09);restartAnimation($('vignette'),'ult');showBanner('THE RITUAL DEEPENS',1.25);sound.say('deepens');}
+      if(phaseBoss&&phaseBoss.id!==enragedBoss){enragedBoss=phaseBoss.id;freeze=Math.max(freeze,.09);restartAnimation($('vignette'),'ult');showBanner('THE RITUAL DEEPENS',1.25);sound.say('deepens');sound.bossPhase();}
+      // Boss presentation cues: warning start, door opening, death.
+      const bossNow = world.enemies.find(e => e.kind === "warden" && e.boss);
+      if (bossNow) {
+        const prev = prevBossStates.get(bossNow.id);
+        if (bossNow.state === "windup" && prev !== "windup") sound.bossWarn();
+        prevBossStates.set(bossNow.id, bossNow.state);
+        bossAliveId = bossNow.id;
+      } else if (world.bossEncounter === "active" && bossAliveId !== -1) {
+        bossAliveId = -1;
+        sound.bossDeath();
+      }
+      if (world.bossEncounter === "active" && prevEncounter === "waiting") sound.gateOpen();
+      if (prevEncounter === "active" && world.bossEncounter === "defeated" && bossAliveId !== -1) { sound.bossDeath(); bossAliveId = -1; }
+      if (world.bossEncounter !== prevEncounter) prevEncounter = world.bossEncounter;
+      if (world.mode !== "duel" && world.wave !== prevWave) { if (world.wave > prevWave) sound.waveArrive(); prevWave = world.wave; }
+      if (picked) sound.rewardPick();
       for (const e of world.events) {
         if (e.type === "floor") {
-          const boss = world.bossEncounter === "active" ? BOSS_IDS[BOSS_FLOORS.indexOf(world.floor as 2|3|4|5)] : null;
-          showBanner(
-            boss ? BOSSES[boss].name.toUpperCase() : `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
-          );
-          sound.say(boss ?? CIRCLE_LINES[world.floor - 1], 0.35);
+          const bell = e.x === WAVE_BELL.x && e.z === WAVE_BELL.z;
+          if (bell) {
+            sound.bell();
+          } else {
+            const boss = world.bossEncounter === "active" ? BOSS_IDS[BOSS_FLOORS.indexOf(world.floor as 2|3|4|5)] : null;
+            showBanner(
+              boss ? BOSSES[boss].name.toUpperCase() : `CIRCLE ${ROMAN[world.floor - 1]} / ${CIRCLES[world.floor - 1].name}`,
+            );
+            sound.say(boss ?? CIRCLE_LINES[world.floor - 1], 0.35);
+          }
         }
         if (e.type === "hit") {
           chain += 1;
@@ -1875,7 +1903,9 @@ function frame(now: number) {
       }
       if (world.events.some(e => e.type === "hit" || e.type === "hurt")) paintChain(chain > 0);
       freeze = Math.max(freeze, view.consume(world.events));
-      sound.consume(world.events);
+      // The bell's floor event gets its own bronze strike; keep it out of the generic chime.
+      const bellEvent = world.events.find(e => e.type === "floor" && e.x === WAVE_BELL.x && e.z === WAVE_BELL.z);
+      sound.consume(bellEvent ? world.events.filter(e => e !== bellEvent) : world.events);
       world.events.length = 0;
       if (
         world.phase === "reward" ||

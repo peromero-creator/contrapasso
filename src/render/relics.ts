@@ -41,31 +41,12 @@ function chamber() {
     color: 0x39312a,
     roughness: 1,
   });
-  const bronze = new THREE.MeshStandardMaterial({
-    color: 0x756147,
-    roughness: 0.9,
-  });
   const pedestal = new THREE.Mesh(
     new THREE.CylinderGeometry(1.5, 1.65, 0.16, 12),
     stone,
   );
   pedestal.position.y = -0.14;
   scene.add(pedestal);
-  for (const x of [-1.55, 1.55]) {
-    const col = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.5, 0.22), stone);
-    col.position.set(x, 1.6, -0.8);
-    scene.add(col);
-  }
-  const arch = new THREE.Mesh(
-    new THREE.TorusGeometry(1.55, 0.055, 5, 48, Math.PI),
-    bronze,
-  );
-  arch.position.set(0, 3.3, -0.8);
-  scene.add(arch);
-  const seal = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.28, 64), bronze);
-  seal.rotation.x = -Math.PI / 2;
-  seal.position.y = -0.045;
-  scene.add(seal);
   return scene;
 }
 async function portrait(id: WeaponId) {
@@ -316,13 +297,7 @@ export class RelicStage {
           true,
           Math.min(.22,abilityContact(this.ability)*.8),
         );
-        this.fx.event({
-          type: "ability",
-          ability: this.ability,
-          stage: "charge",
-          x: 0,
-          z: 0,
-        }, this.identity);
+        // No windup ring: the hovering ritual charge reads as a stray notch on stage.
         this.label.textContent = `${weapon(this.identity).name.toUpperCase()} · ${(isSpell(this.ability) ? SPELLS[this.ability].name : techniqueId(this.ability) ? TECHNIQUES[techniqueId(this.ability)!].name : CORES[coreId(this.ability)!].name).toUpperCase()}`;
       }
       this.elapsed += dt;

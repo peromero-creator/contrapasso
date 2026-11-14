@@ -384,6 +384,19 @@
         "source": "Original Google Flow concept (art/source/funerary-brazier.jpg), Meshy image-to-3D. Carved bone-hand bronze brazier."
       }
     },
+    "ritual-bell": {
+      "file": "/assets/models/ritual-bell-0f9625ce0bad.glb",
+      "height": 2.4,
+      "rotationY": 0,
+      "clips": [],
+      "bytes": 341688,
+      "windows": {},
+      "credit": {
+        "author": "Made for Contrapasso",
+        "license": "Project asset",
+        "source": "Meshy text-to-3D from a written prompt (art/source/ritual-bell.jpg is the generated preview). Weathered bronze ritual bell on a wrought-iron yoke."
+      }
+    },
     "gate-threshold": {
       "file": "/assets/models/gate-threshold-612dc4931ab2.glb",
       "height": 0.85,

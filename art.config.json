@@ -1,636 +1,647 @@
 {
-  "output": "public/assets",
-  "models": {
-    "hero": {
-      "source": "art/source/hero-actions.glb",
-      "height": 2.2,
-      "rotationY": 90,
-      "textureSize": 1024,
-      "clips": {
-        "idle": {
-          "file": "art/source/hero-actions.glb",
-          "clip": "Idle"
-        },
-        "run": {
-          "file": "art/source/hero-actions.glb",
-          "clip": "Run_02"
-        },
-        "attack": {
-          "file": "art/source/hero-actions.glb",
-          "clip": "Right_Hand_Sword_Slash"
-        },
-        "dash": {
-          "file": "art/source/hero-actions.glb",
-          "clip": "Roll_Dodge"
-        },
-        "death": {
-          "file": "art/source/hero-actions.glb",
-          "clip": "Dead"
-        },
-        "attack-hammer": {
-          "file": "art/source/hero-arsenal-actions.glb",
-          "clip": "Heavy_Hammer_Swing"
-        },
-        "attack-dagger": {
-          "file": "art/source/hero-arsenal-actions.glb",
-          "clip": "Thrust_Slash"
-        },
-        "attack-crossbow": {
-          "file": "art/source/hero-ranged-actions.glb",
-          "clip": "Cowboy_Quick_Draw_Shooting"
-        },
-        "attack-staff": {
-          "file": "art/source/hero-ranged-actions.glb",
-          "clip": "mage_soell_cast"
-        },
-        "attack-axe": {
-          "file": "art/source/hero-execution-actions.glb",
-          "clip": "Charged_Axe_Chop"
-        },
-        "attack-axe-heavy": {
-          "file": "art/source/hero-execution-actions.glb",
-          "clip": "Axe_Spin_Attack"
-        },
-        "attack-spear": {
-          "file": "art/source/hero-arsenal-actions.glb",
-          "clip": "Thrust_Slash"
-        },
-        "cast": {
-          "file": "art/source/hero-soul-actions.glb",
-          "clip": "mage_soell_cast_3"
-        },
-        "ultimate": {
-          "file": "art/source/hero-soul-actions.glb",
-          "clip": "Charged_Spell_Cast"
-        },
-        "ultimate-iron": {
-          "file": "art/source/hero-soul-actions.glb",
-          "clip": "Sword_Judgment"
-        },
-        "attack-vault": {
-          "file": "art/source/hero-descent-actions.glb",
-          "clip": "Basic_Jump"
-        },
-        "ultimate-slam": {
-          "file": "art/source/hero-descent-actions.glb",
-          "clip": "Charged_Ground_Slam"
-        }
-      },
-      "requiredClips": [
-        "idle",
-        "run",
-        "attack",
-        "dash",
-        "death",
-        "attack-hammer",
-        "attack-dagger",
-        "attack-crossbow",
-        "attack-staff",
-        "attack-axe",
-        "attack-axe-heavy",
-        "attack-spear",
-        "cast",
-        "ultimate",
-        "ultimate-iron",
-        "attack-vault",
-        "ultimate-slam"
-      ],
-      "windows": {
-        "attack": [
-          0.35,
-          0.85
-        ],
-        "dash": [
-          0.75,
-          1.35
-        ],
-        "attack-hammer": [
-          0.95,
-          1.83
-        ],
-        "attack-dagger": [
-          0.55,
-          1.25
-        ],
-        "attack-crossbow": [
-          1.1,
-          1.8
-        ],
-        "attack-staff": [
-          0.2,
-          1.3
-        ],
-        "attack-axe": [
-          3.3,
-          4.95
-        ],
-        "attack-axe-heavy": [
-          0.25,
-          1.5
-        ],
-        "attack-spear": [
-          0.55,
-          1.35
-        ],
-        "cast": [
-          0.35,
-          1.45
-        ],
-        "ultimate": [
-          1.25,
-          2.1
-        ],
-        "ultimate-iron": [
-          0.7,
-          1.7
-        ],
-        "attack-vault": [
-          1.5,
-          3.6
-        ],
-        "ultimate-slam": [
-          1.05,
-          2.8
-        ]
-      },
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/hero-a.jpg)"
-      }
+ "output": "public/assets",
+ "models": {
+  "hero": {
+   "source": "art/source/hero-actions.glb",
+   "height": 2.2,
+   "rotationY": 90,
+   "textureSize": 1024,
+   "clips": {
+    "idle": {
+     "file": "art/source/hero-actions.glb",
+     "clip": "Idle"
     },
-    "imp": {
-      "source": "art/source/imp-actions.glb",
-      "height": 2.2,
-      "rotationY": 90,
-      "textureSize": 1024,
-      "clips": {
-        "idle": {
-          "file": "art/source/imp-actions.glb",
-          "clip": "Idle"
-        },
-        "run": {
-          "file": "art/source/imp-actions.glb",
-          "clip": "Run_02"
-        },
-        "attack": {
-          "file": "art/source/imp-actions.glb",
-          "clip": "Attack"
-        }
-      },
-      "requiredClips": [
-        "idle",
-        "run",
-        "attack"
-      ],
-      "windows": {
-        "attack": [
-          0.75,
-          1.2
-        ]
-      },
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/imp.jpg)"
-      },
-      "simplify": {
-        "ratio": 0.5,
-        "error": 0.005
-      }
+    "run": {
+     "file": "art/source/hero-actions.glb",
+     "clip": "Run_02"
     },
-    "archer": {
-      "source": "art/source/archer-actions.glb",
-      "height": 2.2,
-      "rotationY": 90,
-      "textureSize": 1024,
-      "clips": {
-        "idle": {
-          "file": "art/source/archer-actions.glb",
-          "clip": "Idle"
-        },
-        "run": {
-          "file": "art/source/archer-actions.glb",
-          "clip": "Run_02"
-        },
-        "attack": {
-          "file": "art/source/archer-actions.glb",
-          "clip": "mage_soell_cast"
-        }
-      },
-      "requiredClips": [
-        "idle",
-        "run",
-        "attack"
-      ],
-      "windows": {
-        "attack": [
-          0.2,
-          1.3
-        ]
-      },
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/archer.jpg)"
-      },
-      "simplify": {
-        "ratio": 0.5,
-        "error": 0.005
-      }
+    "attack": {
+     "file": "art/source/hero-actions.glb",
+     "clip": "Right_Hand_Sword_Slash"
     },
-    "brute": {
-      "source": "art/source/brute-actions.glb",
-      "height": 2.2,
-      "rotationY": 90,
-      "textureSize": 1024,
-      "clips": {
-        "idle": {
-          "file": "art/source/brute-actions.glb",
-          "clip": "Idle"
-        },
-        "run": {
-          "file": "art/source/brute-actions.glb",
-          "clip": "Run_02"
-        },
-        "attack": {
-          "file": "art/source/brute-actions.glb",
-          "clip": "Charged_Ground_Slam"
-        },
-        "dash": {
-          "file": "art/source/brute-actions.glb",
-          "clip": "Male_Head_Down_Charge"
-        }
-      },
-      "requiredClips": [
-        "idle",
-        "run",
-        "attack",
-        "dash"
-      ],
-      "windows": {
-        "attack": [
-          1.1,
-          1.8
-        ]
-      },
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/brute.jpg)"
-      },
-      "simplify": {
-        "ratio": 0.5,
-        "error": 0.005
-      }
+    "dash": {
+     "file": "art/source/hero-actions.glb",
+     "clip": "Roll_Dodge"
     },
-    "sword": {
-      "source": "art/source/cinder-requiem.glb",
-      "height": 1.85,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/cinder-requiem.jpg"
-      }
+    "death": {
+     "file": "art/source/hero-actions.glb",
+     "clip": "Dead"
     },
-    "hammer": {
-      "source": "art/source/tollkeeper.glb",
-      "height": 1.65,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/tollkeeper.jpg"
-      }
+    "attack-hammer": {
+     "file": "art/source/hero-arsenal-actions.glb",
+     "clip": "Heavy_Hammer_Swing"
     },
-    "dagger": {
-      "source": "art/source/widows-fang.glb",
-      "height": 0.95,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/widows-fang.jpg"
-      }
+    "attack-dagger": {
+     "file": "art/source/hero-arsenal-actions.glb",
+     "clip": "Thrust_Slash"
     },
-    "shore-spider": {
-      "source": "art/source/shore-spider.glb",
-      "height": 1.6,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/shore-spider.jpg"
-      }
+    "attack-crossbow": {
+     "file": "art/source/hero-ranged-actions.glb",
+     "clip": "Cowboy_Quick_Draw_Shooting"
     },
-    "ferryman": {
-      "source": "art/source/ferryman.glb",
-      "height": 2.7,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/ferryman.jpg"
-      }
+    "attack-staff": {
+     "file": "art/source/hero-ranged-actions.glb",
+     "clip": "mage_soell_cast"
     },
-    "crossbow": {
-      "source": "art/source/gravewhisper.glb",
-      "height": 0.28,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/gravewhisper.jpg"
-      }
+    "attack-axe": {
+     "file": "art/source/hero-execution-actions.glb",
+     "clip": "Charged_Axe_Chop"
     },
-    "staff": {
-      "source": "art/source/vesper-reed.glb",
-      "height": 1.9,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/vesper-reed.jpg"
-      }
+    "attack-axe-heavy": {
+     "file": "art/source/hero-execution-actions.glb",
+     "clip": "Axe_Spin_Attack"
     },
-    "funerary-arch": {
-      "source": "art/source/funerary-arch.glb",
-      "height": 3.8,
-      "rotationY": 0,
-      "textureSize": 1024,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Meshy image-to-3D from Google Flow concept art/source/funerary-arch.jpg"
-      }
+    "attack-spear": {
+     "file": "art/source/hero-arsenal-actions.glb",
+     "clip": "Thrust_Slash"
     },
-    "axe": {
-      "source": "art/source/guillotine-hymn.glb",
-      "height": 1.55,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept art/source/guillotine-hymn.jpg converted through Meshy image-to-3D"
-      }
+    "cast": {
+     "file": "art/source/hero-soul-actions.glb",
+     "clip": "mage_soell_cast_3"
     },
-    "spear": {
-      "source": "art/source/acheron-needle.glb",
-      "height": 2.55,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept art/source/acheron-needle.jpg converted through Meshy image-to-3D"
-      }
+    "ultimate": {
+     "file": "art/source/hero-soul-actions.glb",
+     "clip": "Charged_Spell_Cast"
     },
-    "cantor": {
-      "source": "art/source/cinder-cantor.glb",
-      "height": 4.6,
-      "rotationY": 90,
-      "textureSize": 512,
-      "clips": {
-        "idle": {
-          "file": "art/source/cinder-cantor-actions.glb",
-          "clip": "Idle"
-        },
-        "run": {
-          "file": "art/source/cinder-cantor-actions.glb",
-          "clip": "Run_02"
-        },
-        "dash": {
-          "file": "art/source/cinder-cantor-actions.glb",
-          "clip": "Run_02"
-        },
-        "attack": {
-          "file": "art/source/cinder-cantor-actions.glb",
-          "clip": "mage_soell_cast"
-        },
-        "death": {
-          "file": "art/source/cinder-cantor-actions.glb",
-          "clip": "Dead"
-        },
-        "attack-slam": {
-          "file": "art/source/cinder-cantor-actions.glb",
-          "clip": "Charged_Ground_Slam"
-        }
-      },
-      "requiredClips": [
-        "idle",
-        "run",
-        "dash",
-        "attack",
-        "death",
-        "attack-slam"
-      ],
-      "windows": {
-        "attack": [
-          0.35,
-          1.75
-        ],
-        "attack-slam": [
-          1.05,
-          2.8
-        ]
-      },
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/cinder-cantor.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
-      }
+    "ultimate-iron": {
+     "file": "art/source/hero-soul-actions.glb",
+     "clip": "Sword_Judgment"
     },
-    "witness": {
-      "source": "art/source/hollow-witness.glb",
-      "height": 4.6,
-      "rotationY": 90,
-      "textureSize": 512,
-      "clips": {
-        "idle": {
-          "file": "art/source/hollow-witness-actions.glb",
-          "clip": "Idle"
-        },
-        "run": {
-          "file": "art/source/hollow-witness-actions.glb",
-          "clip": "Run_02"
-        },
-        "dash": {
-          "file": "art/source/hollow-witness-actions.glb",
-          "clip": "Run_02"
-        },
-        "attack": {
-          "file": "art/source/hollow-witness-actions.glb",
-          "clip": "mage_soell_cast_3"
-        },
-        "death": {
-          "file": "art/source/hollow-witness-actions.glb",
-          "clip": "Dead"
-        }
-      },
-      "requiredClips": [
-        "idle",
-        "run",
-        "dash",
-        "attack",
-        "death"
-      ],
-      "windows": {
-        "attack": [
-          0.35,
-          1.45
-        ]
-      },
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/hollow-witness.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
-      }
+    "attack-vault": {
+     "file": "art/source/hero-descent-actions.glb",
+     "clip": "Basic_Jump"
     },
-    "wizard": {
-      "source": "art/source/wizard.glb",
-      "height": 4.6,
-      "rotationY": 90,
-      "textureSize": 512,
-      "clips": {
-        "idle": {
-          "file": "art/source/wizard-actions.glb",
-          "clip": "Idle"
-        },
-        "run": {
-          "file": "art/source/wizard-actions.glb",
-          "clip": "Run_02"
-        },
-        "dash": {
-          "file": "art/source/wizard-actions.glb",
-          "clip": "Run_02"
-        },
-        "attack": {
-          "file": "art/source/wizard-actions.glb",
-          "clip": "mage_soell_cast_7"
-        },
-        "death": {
-          "file": "art/source/wizard-actions.glb",
-          "clip": "Dead"
-        },
-        "attack-slam": {
-          "file": "art/source/wizard-actions.glb",
-          "clip": "Charged_Ground_Slam"
-        }
-      },
-      "requiredClips": [
-        "idle",
-        "run",
-        "dash",
-        "attack",
-        "death",
-        "attack-slam"
-      ],
-      "windows": {
-        "attack": [
-          0.35,
-          1.75
-        ],
-        "attack-slam": [
-          1.05,
-          2.8
-        ]
-      },
-      "simplify": {
-        "ratio": 0.42,
-        "error": 0.01
-      },
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/vesper-shriven.jpg), Meshy image-to-3D, rigging and preset animations."
-      }
-    },
-    "funerary-brazier": {
-      "source": "art/source/funerary-brazier.glb",
-      "height": 1.7,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/funerary-brazier.jpg), Meshy image-to-3D. Carved bone-hand bronze brazier."
-      }
-    },
-    "gate-threshold": {
-      "source": "art/source/gate-threshold.glb",
-      "height": 0.85,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/gate-threshold.jpg), Meshy image-to-3D."
-      }
-    },
-    "lust-niche": {
-      "source": "art/source/lust-niche.glb",
-      "height": 3.5,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/lust-niche.jpg), Meshy image-to-3D."
-      }
-    },
-    "gluttony-cauldron": {
-      "source": "art/source/gluttony-cauldron.glb",
-      "height": 2.4,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/gluttony-cauldron.jpg), Meshy image-to-3D."
-      }
-    },
-    "greed-chest": {
-      "source": "art/source/greed-chest.glb",
-      "height": 1.7,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/greed-chest.jpg), Meshy image-to-3D."
-      }
-    },
-    "wrath-column": {
-      "source": "art/source/wrath-column.glb",
-      "height": 3.2,
-      "rotationY": 0,
-      "textureSize": 512,
-      "credit": {
-        "author": "Made for Contrapasso",
-        "license": "Project asset",
-        "source": "Original Google Flow concept (art/source/wrath-column.jpg), Meshy image-to-3D."
-      }
+    "ultimate-slam": {
+     "file": "art/source/hero-descent-actions.glb",
+     "clip": "Charged_Ground_Slam"
     }
+   },
+   "requiredClips": [
+    "idle",
+    "run",
+    "attack",
+    "dash",
+    "death",
+    "attack-hammer",
+    "attack-dagger",
+    "attack-crossbow",
+    "attack-staff",
+    "attack-axe",
+    "attack-axe-heavy",
+    "attack-spear",
+    "cast",
+    "ultimate",
+    "ultimate-iron",
+    "attack-vault",
+    "ultimate-slam"
+   ],
+   "windows": {
+    "attack": [
+     0.35,
+     0.85
+    ],
+    "dash": [
+     0.75,
+     1.35
+    ],
+    "attack-hammer": [
+     0.95,
+     1.83
+    ],
+    "attack-dagger": [
+     0.55,
+     1.25
+    ],
+    "attack-crossbow": [
+     1.1,
+     1.8
+    ],
+    "attack-staff": [
+     0.2,
+     1.3
+    ],
+    "attack-axe": [
+     3.3,
+     4.95
+    ],
+    "attack-axe-heavy": [
+     0.25,
+     1.5
+    ],
+    "attack-spear": [
+     0.55,
+     1.35
+    ],
+    "cast": [
+     0.35,
+     1.45
+    ],
+    "ultimate": [
+     1.25,
+     2.1
+    ],
+    "ultimate-iron": [
+     0.7,
+     1.7
+    ],
+    "attack-vault": [
+     1.5,
+     3.6
+    ],
+    "ultimate-slam": [
+     1.05,
+     2.8
+    ]
+   },
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/hero-a.jpg)"
+   }
   },
-  "floors": {
-    "LIMBO": "art/source/floors/limbo.jpg",
-    "LUST": "art/source/floors/lust.jpg",
-    "GLUTTONY": "art/source/floors/gluttony.jpg",
-    "GREED": "art/source/floors/greed.jpg",
-    "WRATH": "art/source/floors/wrath.jpg",
-    "BOSS_WARDEN": "art/source/floor-warden.jpg",
-    "BOSS_WITNESS": "art/source/floor-witness.jpg",
-    "BOSS_CANTOR": "art/source/floor-cantor.jpg",
-    "BOSS_WIZARD": "art/source/floor-wizard.jpg",
-    "DUEL": "art/source/floor-duel.jpg"
+  "imp": {
+   "source": "art/source/imp-actions.glb",
+   "height": 2.2,
+   "rotationY": 90,
+   "textureSize": 1024,
+   "clips": {
+    "idle": {
+     "file": "art/source/imp-actions.glb",
+     "clip": "Idle"
+    },
+    "run": {
+     "file": "art/source/imp-actions.glb",
+     "clip": "Run_02"
+    },
+    "attack": {
+     "file": "art/source/imp-actions.glb",
+     "clip": "Attack"
+    }
+   },
+   "requiredClips": [
+    "idle",
+    "run",
+    "attack"
+   ],
+   "windows": {
+    "attack": [
+     0.75,
+     1.2
+    ]
+   },
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/imp.jpg)"
+   },
+   "simplify": {
+    "ratio": 0.5,
+    "error": 0.005
+   }
+  },
+  "archer": {
+   "source": "art/source/archer-actions.glb",
+   "height": 2.2,
+   "rotationY": 90,
+   "textureSize": 1024,
+   "clips": {
+    "idle": {
+     "file": "art/source/archer-actions.glb",
+     "clip": "Idle"
+    },
+    "run": {
+     "file": "art/source/archer-actions.glb",
+     "clip": "Run_02"
+    },
+    "attack": {
+     "file": "art/source/archer-actions.glb",
+     "clip": "mage_soell_cast"
+    }
+   },
+   "requiredClips": [
+    "idle",
+    "run",
+    "attack"
+   ],
+   "windows": {
+    "attack": [
+     0.2,
+     1.3
+    ]
+   },
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/archer.jpg)"
+   },
+   "simplify": {
+    "ratio": 0.5,
+    "error": 0.005
+   }
+  },
+  "brute": {
+   "source": "art/source/brute-actions.glb",
+   "height": 2.2,
+   "rotationY": 90,
+   "textureSize": 1024,
+   "clips": {
+    "idle": {
+     "file": "art/source/brute-actions.glb",
+     "clip": "Idle"
+    },
+    "run": {
+     "file": "art/source/brute-actions.glb",
+     "clip": "Run_02"
+    },
+    "attack": {
+     "file": "art/source/brute-actions.glb",
+     "clip": "Charged_Ground_Slam"
+    },
+    "dash": {
+     "file": "art/source/brute-actions.glb",
+     "clip": "Male_Head_Down_Charge"
+    }
+   },
+   "requiredClips": [
+    "idle",
+    "run",
+    "attack",
+    "dash"
+   ],
+   "windows": {
+    "attack": [
+     1.1,
+     1.8
+    ]
+   },
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D, rigging and preset animations, from a Google Flow concept image (art/source/concepts/brute.jpg)"
+   },
+   "simplify": {
+    "ratio": 0.5,
+    "error": 0.005
+   }
+  },
+  "sword": {
+   "source": "art/source/cinder-requiem.glb",
+   "height": 1.85,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/cinder-requiem.jpg"
+   }
+  },
+  "hammer": {
+   "source": "art/source/tollkeeper.glb",
+   "height": 1.65,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/tollkeeper.jpg"
+   }
+  },
+  "dagger": {
+   "source": "art/source/widows-fang.glb",
+   "height": 0.95,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/widows-fang.jpg"
+   }
+  },
+  "shore-spider": {
+   "source": "art/source/shore-spider.glb",
+   "height": 1.6,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/shore-spider.jpg"
+   }
+  },
+  "ferryman": {
+   "source": "art/source/ferryman.glb",
+   "height": 2.7,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/ferryman.jpg"
+   }
+  },
+  "crossbow": {
+   "source": "art/source/gravewhisper.glb",
+   "height": 0.28,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/gravewhisper.jpg"
+   }
+  },
+  "staff": {
+   "source": "art/source/vesper-reed.glb",
+   "height": 1.9,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/vesper-reed.jpg"
+   }
+  },
+  "funerary-arch": {
+   "source": "art/source/funerary-arch.glb",
+   "height": 3.8,
+   "rotationY": 0,
+   "textureSize": 1024,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy image-to-3D from Google Flow concept art/source/funerary-arch.jpg"
+   }
+  },
+  "axe": {
+   "source": "art/source/guillotine-hymn.glb",
+   "height": 1.55,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept art/source/guillotine-hymn.jpg converted through Meshy image-to-3D"
+   }
+  },
+  "spear": {
+   "source": "art/source/acheron-needle.glb",
+   "height": 2.55,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept art/source/acheron-needle.jpg converted through Meshy image-to-3D"
+   }
+  },
+  "cantor": {
+   "source": "art/source/cinder-cantor.glb",
+   "height": 4.6,
+   "rotationY": 90,
+   "textureSize": 512,
+   "clips": {
+    "idle": {
+     "file": "art/source/cinder-cantor-actions.glb",
+     "clip": "Idle"
+    },
+    "run": {
+     "file": "art/source/cinder-cantor-actions.glb",
+     "clip": "Run_02"
+    },
+    "dash": {
+     "file": "art/source/cinder-cantor-actions.glb",
+     "clip": "Run_02"
+    },
+    "attack": {
+     "file": "art/source/cinder-cantor-actions.glb",
+     "clip": "mage_soell_cast"
+    },
+    "death": {
+     "file": "art/source/cinder-cantor-actions.glb",
+     "clip": "Dead"
+    },
+    "attack-slam": {
+     "file": "art/source/cinder-cantor-actions.glb",
+     "clip": "Charged_Ground_Slam"
+    }
+   },
+   "requiredClips": [
+    "idle",
+    "run",
+    "dash",
+    "attack",
+    "death",
+    "attack-slam"
+   ],
+   "windows": {
+    "attack": [
+     0.35,
+     1.75
+    ],
+    "attack-slam": [
+     1.05,
+     2.8
+    ]
+   },
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/cinder-cantor.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
+   }
+  },
+  "witness": {
+   "source": "art/source/hollow-witness.glb",
+   "height": 4.6,
+   "rotationY": 90,
+   "textureSize": 512,
+   "clips": {
+    "idle": {
+     "file": "art/source/hollow-witness-actions.glb",
+     "clip": "Idle"
+    },
+    "run": {
+     "file": "art/source/hollow-witness-actions.glb",
+     "clip": "Run_02"
+    },
+    "dash": {
+     "file": "art/source/hollow-witness-actions.glb",
+     "clip": "Run_02"
+    },
+    "attack": {
+     "file": "art/source/hollow-witness-actions.glb",
+     "clip": "mage_soell_cast_3"
+    },
+    "death": {
+     "file": "art/source/hollow-witness-actions.glb",
+     "clip": "Dead"
+    }
+   },
+   "requiredClips": [
+    "idle",
+    "run",
+    "dash",
+    "attack",
+    "death"
+   ],
+   "windows": {
+    "attack": [
+     0.35,
+     1.45
+    ]
+   },
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/hollow-witness.jpg), Meshy image-to-3D, rigging and preset animations. Owner-supplied ritual/eye-hand references informed the original silhouette."
+   }
+  },
+  "wizard": {
+   "source": "art/source/wizard.glb",
+   "height": 4.6,
+   "rotationY": 90,
+   "textureSize": 512,
+   "clips": {
+    "idle": {
+     "file": "art/source/wizard-actions.glb",
+     "clip": "Idle"
+    },
+    "run": {
+     "file": "art/source/wizard-actions.glb",
+     "clip": "Run_02"
+    },
+    "dash": {
+     "file": "art/source/wizard-actions.glb",
+     "clip": "Run_02"
+    },
+    "attack": {
+     "file": "art/source/wizard-actions.glb",
+     "clip": "mage_soell_cast_7"
+    },
+    "death": {
+     "file": "art/source/wizard-actions.glb",
+     "clip": "Dead"
+    },
+    "attack-slam": {
+     "file": "art/source/wizard-actions.glb",
+     "clip": "Charged_Ground_Slam"
+    }
+   },
+   "requiredClips": [
+    "idle",
+    "run",
+    "dash",
+    "attack",
+    "death",
+    "attack-slam"
+   ],
+   "windows": {
+    "attack": [
+     0.35,
+     1.75
+    ],
+    "attack-slam": [
+     1.05,
+     2.8
+    ]
+   },
+   "simplify": {
+    "ratio": 0.42,
+    "error": 0.01
+   },
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/vesper-shriven.jpg), Meshy image-to-3D, rigging and preset animations."
+   }
+  },
+  "funerary-brazier": {
+   "source": "art/source/funerary-brazier.glb",
+   "height": 1.7,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/funerary-brazier.jpg), Meshy image-to-3D. Carved bone-hand bronze brazier."
+   }
+  },
+  "ritual-bell": {
+   "source": "art/source/ritual-bell.glb",
+   "height": 2.4,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Meshy text-to-3D from a written prompt (art/source/ritual-bell.jpg is the generated preview). Weathered bronze ritual bell on a wrought-iron yoke."
+   }
+  },
+  "gate-threshold": {
+   "source": "art/source/gate-threshold.glb",
+   "height": 0.85,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/gate-threshold.jpg), Meshy image-to-3D."
+   }
+  },
+  "lust-niche": {
+   "source": "art/source/lust-niche.glb",
+   "height": 3.5,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/lust-niche.jpg), Meshy image-to-3D."
+   }
+  },
+  "gluttony-cauldron": {
+   "source": "art/source/gluttony-cauldron.glb",
+   "height": 2.4,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/gluttony-cauldron.jpg), Meshy image-to-3D."
+   }
+  },
+  "greed-chest": {
+   "source": "art/source/greed-chest.glb",
+   "height": 1.7,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/greed-chest.jpg), Meshy image-to-3D."
+   }
+  },
+  "wrath-column": {
+   "source": "art/source/wrath-column.glb",
+   "height": 3.2,
+   "rotationY": 0,
+   "textureSize": 512,
+   "credit": {
+    "author": "Made for Contrapasso",
+    "license": "Project asset",
+    "source": "Original Google Flow concept (art/source/wrath-column.jpg), Meshy image-to-3D."
+   }
   }
+ },
+ "floors": {
+  "LIMBO": "art/source/floors/limbo.jpg",
+  "LUST": "art/source/floors/lust.jpg",
+  "GLUTTONY": "art/source/floors/gluttony.jpg",
+  "GREED": "art/source/floors/greed.jpg",
+  "WRATH": "art/source/floors/wrath.jpg",
+  "BOSS_WARDEN": "art/source/floor-warden.jpg",
+  "BOSS_WITNESS": "art/source/floor-witness.jpg",
+  "BOSS_CANTOR": "art/source/floor-cantor.jpg",
+  "BOSS_WIZARD": "art/source/floor-wizard.jpg",
+  "DUEL": "art/source/floor-duel.jpg"
+ }
 }

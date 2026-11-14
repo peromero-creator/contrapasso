@@ -365,6 +365,11 @@ export class View {
   private ground!: THREE.Mesh;
   private sigil!: THREE.Mesh;
   private sigilInner!: THREE.Mesh;
+  private bellRoot!: THREE.Group;
+  private leverRoot!: THREE.Group;
+  private leverArm!: THREE.Mesh;
+  private leverPivot!: THREE.Group;
+  private leverPulse = 0;
   private rimMats: THREE.MeshBasicMaterial[] = [];
   private splats: {
     mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
@@ -631,26 +636,46 @@ export class View {
     this.sigilInner.position.y = 0.02;
     this.scene.add(this.sigilInner);
 
-    // Ritual bell: the hero rings it to summon the next wave between fights.
+    // Ritual bell and wave lever at the circle's heart: pulling the lever rings the bell
+    // and summons the next wave. Themed Meshy bell model; never shown in Duel or a boss chamber.
+    this.bellRoot = new THREE.Group();
+    this.bellRoot.position.set(WAVE_BELL.x, 0, WAVE_BELL.z);
+    this.bellRoot.visible = false;
+    this.scene.add(this.bellRoot);
+    this.actorLoads.push(this.models.create("ritual-bell", 2.4).then((model) => {
+      if (model) {
+        model.root.position.y = 0;
+        this.bellRoot.add(model.root);
+      }
+    }));
+    // Lever: a stocky iron pull on a stone plinth, drawn from primitives; its arm tips when pulled.
     {
-      const bell = new THREE.Group();
-      const bronze = new THREE.MeshStandardMaterial({ color: 0x8a7a55, roughness: 0.42, metalness: 0.62, emissive: 0x2a1f12, emissiveIntensity: 0.25 });
-      const iron = new THREE.MeshStandardMaterial({ color: 0x4a3d2c, roughness: 1, metalness: 0 });
-      const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.95, 12), bronze);
-      body.position.y = 1.15;
-      bell.add(body);
-      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.28, 8), iron);
-      crown.position.y = 1.72;
-      bell.add(crown);
-      const clapper = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), iron);
-      clapper.position.y = 0.72;
-      bell.add(clapper);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.035, 6, 24), bronze);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = 0.03;
-      bell.add(ring);
-      bell.position.set(WAVE_BELL.x, 0, WAVE_BELL.z);
-      this.scene.add(bell);
+      const stone = new THREE.MeshStandardMaterial({ color: 0x4c4438, roughness: 0.95, metalness: 0 });
+      const iron = new THREE.MeshStandardMaterial({ color: 0x3a3228, roughness: 0.55, metalness: 0.55 });
+      const brass = new THREE.MeshStandardMaterial({ color: 0x8a7a55, roughness: 0.35, metalness: 0.8 });
+      this.leverRoot = new THREE.Group();
+      this.leverRoot.position.set(1.75, 0, 0);
+      const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.22, 0.72), stone);
+      plinth.position.y = 0.11;
+      this.leverRoot.add(plinth);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 1.05, 10), iron);
+      post.position.set(0, 0.75, 0);
+      this.leverRoot.add(post);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.1, 10), brass);
+      cap.position.set(0, 1.32, 0);
+      this.leverRoot.add(cap);
+      const pivot = new THREE.Group();
+      pivot.position.set(0, 1.32, 0);
+      this.leverRoot.add(pivot);
+      this.leverArm = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 1.35), iron);
+      this.leverArm.position.set(0, 0.1, 0.55);
+      this.leverArm.rotation.x = -0.28;
+      pivot.add(this.leverArm);
+      const grip = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), brass);
+      grip.position.set(0, 0.1, 1.22);
+      pivot.add(grip);
+      this.leverPivot = pivot;
+      this.scene.add(this.leverRoot);
     }
   }
 
@@ -1232,6 +1257,13 @@ export class View {
         case "won":
           this.burst(e.x, 0.4, e.z, 40, 0xffd27a, 8);
           break;
+        case "floor":
+          // The wave lever was pulled: tip the arm, ring the bell, and pose the hero.
+          if (e.x === WAVE_BELL.x && e.z === WAVE_BELL.z) {
+            this.leverPulse = 0.95;
+            this.heroModel?.play("cast", 0.9, true);
+          }
+          break;
         case "burn":
           this.burst(e.x, 0.6, e.z, 2, 0xff852a, 1.4);
           break;
@@ -1266,8 +1298,14 @@ export class View {
   }
 
   sync(w: World, dt: number, alpha = 1) {
-    this.rivalWeapon = w.enemies.find(e => e.kind === "champion")?.weaponId ?? "starter";
     const chamberVisible = w.bossEncounter === "active" ? w.gateTransition <= 27 : w.gateDirection === "return" && w.gateTransition > 27;
+    // The ritual bell and its lever live in the circle; they hide in Duel and inside a boss chamber.
+    if (this.bellRoot) {
+      const show = w.mode !== "duel" && !chamberVisible;
+      this.bellRoot.visible = show;
+      this.leverRoot.visible = show;
+    }
+    this.rivalWeapon = w.enemies.find(e => e.kind === "champion")?.weaponId ?? "starter";
     const visualCircle = w.mode === "duel" ? CIRCLES.length - 1 : chamberVisible ? 0 : w.floor - 1;
     const battlefieldChanged =
       w.tick < this.lastWorldTick || visualCircle !== this.circle;
@@ -1348,9 +1386,19 @@ export class View {
     this.hero.position.set((p.swingT > 0 ? p.x : sampled.x) + this.stride.x, 0, (p.swingT > 0 ? p.z : sampled.z) + this.stride.y);
     this.soul.sync(w, dt, this.hero.position);
     this.skillWeight.update(dt);
+    // The lever pull: the hero faces the lever and plays a short cast gesture while
+    // the lever arm tips and returns.
+    if (this.leverPulse > 0) {
+      this.leverPulse = Math.max(0, this.leverPulse - dt);
+      const t = 1 - this.leverPulse / 0.95;
+      this.leverPivot.rotation.x = Math.sin(Math.PI * Math.min(1, t)) * 0.85;
+    } else {
+      this.leverPivot.rotation.x = 0;
+    }
+    const pullingLever = this.leverPulse > 0;
     // Turn through the shortest arc in a few frames rather than snapping to a new aim
     // between a strike and the next strike or skill.
-    const faceTo = -dirAngle(p.castT > 0 ? p.castAim : p.aim);
+    const faceTo = pullingLever ? -Math.atan2(1.75 - p.x, -p.z) : -dirAngle(p.castT > 0 ? p.castAim : p.aim);
     if (this.heroFacing === null || battlefieldChanged || dt <= 0) this.heroFacing = faceTo;
     else {
       const turn = Math.atan2(Math.sin(faceTo - this.heroFacing), Math.cos(faceTo - this.heroFacing));
@@ -1403,7 +1451,9 @@ export class View {
       }
       const moving = this.heroMoving;
       this.heroModel.play(
-        w.phase === "dead"
+        pullingLever
+          ? "cast"
+          : w.phase === "dead"
           ? "death"
           : skill
             ? abilityClip(skill, p.weaponId)
@@ -1418,7 +1468,9 @@ export class View {
                 : moving
                   ? "run"
                   : "idle",
-        skill
+        pullingLever
+          ? 0.9
+          : skill
           ? skillLength
           : airborne && !p.plunge
             ? JUMP_TIME * 1.6

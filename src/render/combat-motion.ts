@@ -5,8 +5,9 @@ import { familyOf, techniqueId, TECHNIQUES, type Family } from '../sim/technique
 /** `tail` is presentation only: the follow-through may keep playing into the recovery
  * window after the authoritative swing has ended, so chained strikes flow into each other. */
 export interface CombatMotion { weapon: WeaponId; elapsed: number; combo: number; ability?: AbilityId | null; tail?: number }
-/** Longest stretch of recovery, in seconds, that a follow-through is carried across. */
-export const CARRY_LIMIT = .22;
+/** Longest stretch of recovery, in seconds, that a follow-through is carried across.
+ * Kept short for the heavy hammer so its frozen clip tail does not read as a held pose. */
+export const CARRY_LIMIT = .14;
 /** Techniques, spells and ultimates settle over this long after their cast time ends. */
 export const SKILL_CARRY = .18;
 export const skillTail = (id: AbilityId) => abilityDuration(id) + SKILL_CARRY;

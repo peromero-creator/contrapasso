@@ -13,7 +13,7 @@ Public source: [github.com/peromero-creator/contrapasso](https://github.com/pero
 ## Five-minute demo sequence
 
 1. Open Camp, choose Solo and select an owned weapon. Show movement, aiming, a heavy third swing, dash, jump and the vitality bar.
-2. Clear a circle, choose a rank for an unlocked power and descend through the lit gate. On circle II, IV or V, optionally enter the carved boss door; show a readable warning, dodge and finisher opening. At the end, show replay verification and the confirmed coin save.
+2. Clear a circle — ring the ritual bell (**E**) to summon each next wave — then choose a rank for an unlocked power and descend through the lit gate. On circle II, III, IV or V, optionally enter the carved boss door; show a readable warning, dodge and finisher opening. At the end, show replay verification and the confirmed coin save.
 3. Open Skills and show the branching weapon atlas. Hold to learn a technique with earned coin; release early once to show cancellation. Preview its animation and navigate with the corner atlas. If another weapon is owned, equip it from that path; listed gear stays locked. Choose a Q spell and an R ultimate, then demonstrate 1–4 weapon techniques, Q-to-weapon weaving and a charged R. Skills require no separate mint.
 4. Open Duel, choose a matched funded defender and show the rival health bar. Explain the 10+10 coin escrow and saved-build opponent. A completed or forfeited match settles the record and existing coin pool.
 5. Open Market → Mint weapons. Show limited supply, a coin reservation, demo funding, a native paid mint, seven distinct tradable weapon identities, repeatable earned mints, a silent attack preview and the transparent application treasury. Equip a relic in Inventory and show it in combat.

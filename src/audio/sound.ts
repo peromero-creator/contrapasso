@@ -1,5 +1,5 @@
 // Original, quiet effects generated locally. Audio never reads or changes the simulation.
-import { techniqueId } from "../sim/techniques.ts";
+import { techniqueId, familyOf } from "../sim/techniques.ts";
 import { isSpell, abilityDuration } from "../sim/abilities.ts";
 import type { SimEvent } from "../sim/world";
 
@@ -23,6 +23,7 @@ export class Sound {
   private volume = 1;
   private skillChain=0;
   private skillUntil=0;
+  private pulseAt = new Map<string, number>();
   private lines = new Map<VoiceLine, AudioBuffer>();
   private linesRequested = false;
   private speaking: AudioBufferSourceNode | null = null;
@@ -173,6 +174,47 @@ export class Sound {
     voice.stop(at + duration + 0.01);
   }
 
+  /** Ritual bell: a low, resonant bronze strike with a soft mallet transient. */
+  bell() {
+    this.play(235, 233, 0.9, 0.3, false);
+    this.play(470, 466, 0.6, 0.16, false, 0.004);
+    this.play(705, 700, 0.4, 0.1, false, 0.008);
+    this.play(800, 300, 0.25, 0.08, true);
+  }
+  /** A boss telegraphs: a low tension swell. */
+  bossWarn() {
+    this.play(90, 58, 0.55, 0.32, false);
+    this.play(280, 90, 0.5, 0.18, true);
+  }
+  /** Boss phase change: deeper than the warning, under the narrator. */
+  bossPhase() {
+    this.play(64, 42, 0.8, 0.4, false);
+    this.play(180, 60, 0.6, 0.22, true);
+  }
+  /** Boss dies: the loudest dark cue, still under a hit. */
+  bossDeath() {
+    this.play(150, 26, 1.0, 0.55, false);
+    this.play(240, 35, 0.85, 0.28, true);
+  }
+  /** Boss door opens: low rumble with a slow creak. */
+  gateOpen() {
+    this.play(70, 48, 1.1, 0.34, false);
+    this.play(130, 45, 1.0, 0.24, true);
+  }
+  /** Reward cards rise. */
+  rewardOpen() {
+    this.play(520, 523, 0.22, 0.2, false);
+    this.play(780, 784, 0.3, 0.16, false, 0.09);
+  }
+  /** Reward choice confirmed. */
+  rewardPick() {
+    this.play(660, 990, 0.14, 0.24, false);
+  }
+  /** A new wave arrives: barely-there air. */
+  waveArrive() {
+    this.play(420, 900, 0.3, 0.1, true);
+  }
+
   consume(events: readonly SimEvent[]) {
     // One cue of each kind per tick keeps a crowd hit from becoming deafening.
     const heard = new Set<SimEvent["type"]>();
@@ -186,9 +228,35 @@ export class Sound {
           if(e.stage==='charge'){
             this.skillChain=now<this.skillUntil?Math.min(5,this.skillChain+1):1;this.skillUntil=now+abilityDuration(id)+1.4;
             this.play((ultimate?120:360)*(1+.06*this.skillChain),ultimate?65:620,.16,.22,true);
-          }else if(e.stage===(isSpell(id)?'release':'pulse')){
-            this.play(ultimate?80:240-tier*35,ultimate?28:65,.10+tier*.045,.3+tier*.1);
-            this.play(800+tier*250+this.skillChain*70,190,.09+tier*.035,.18,true);
+          }else if(e.stage==='release'){
+            // Spell or soul-core release: cores are heavy and deep, spells mid and distinct.
+            if(ultimate){
+              this.play(70,30,.55,.5,false);
+              this.play(140,40,.45,.3,true);
+              this.play(90,60,.5,.25,false,.12);
+            }else if(id==='lance'){
+              this.play(320,150,.22,.3,false);
+              this.play(1400,2200,.16,.14,true);
+            }else if(id==='nova-spell'){
+              this.play(200,90,.3,.32,false);
+              this.play(500,220,.3,.16,true);
+            }else{
+              this.play(260,70,.32,.28,false);
+              this.play(900,240,.28,.14,true);
+            }
+          }else if(e.stage==='pulse'){
+            // Technique contact or zone pulse: one cue per ability per beat; heavy families sit lower.
+            if(now-(this.pulseAt.get(id)??-1)<.1)break;
+            this.pulseAt.set(id,now);
+            if(ultimate){
+              this.play(75,40,.3,.32,false);
+              this.play(160,50,.28,.16,true);
+            }else{
+              const family=t?t.slice(0,t.indexOf('-')):'sword';
+              const base={hammer:180,axe:190,dagger:260,sword:270,spear:300,crossbow:340,staff:380}[family]??270;
+              this.play(base,base*.45,.11+tier*.04,.26+tier*.07,false);
+              this.play(700+tier*200+this.skillChain*60,190,.08,.12,true);
+            }
           }
           break;
         }

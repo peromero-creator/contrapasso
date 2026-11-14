@@ -97,33 +97,14 @@ export class SkillWeight {
     return { punch: base.punch * scale, shake: base.shake * scale, stop: this.pulses > 1 ? 0 : base.stop, handoff: false, contact: true };
   }
   private stamp(e: SimEvent, shape: Shape, reach: number, tier: number) {
-    // The newest skill owns the floor: older stamps step back at once.
-    for (const s of this.stamps) if (s.root.visible) { s.duck = 0.4; s.fill.renderOrder=s.edge.renderOrder=FX_ORDER.previous; }
-    const ultimate = !techniqueId(e.ability!) && !isSpell(e.ability!);
-    const s = (ultimate && this.stamps.find(s=>s.root.visible && s.ability===e.ability)) || this.stamps.reduce((a, b) => (!b.root.visible || (a.root.visible && b.age / b.life > a.age / a.life) ? b : a));
-    const color = tone(e.ability!);
-    s.shape = shape; s.reach = reach; s.age = 0; s.duck = 1;
-    s.life = ultimate ? 1.8 : 0.45 + 0.13 * tier;
-    s.ability=e.ability;
-    s.fill.renderOrder=s.edge.renderOrder=FX_ORDER.skill;
-    s.fill.material.map=skillInk(e.ability!);
-    s.peak = FX_ALPHA.floor;
-    s.fill.geometry = FILL[shape]; s.edge.geometry = EDGE[shape];
-    s.edge.visible = true;
-    s.fill.material.color.setHex(color);
-    s.edge.material.color.setHex(color).lerp(new T.Color(0xfff0d0), 0.35);
-    s.root.position.set(e.x, 0.05, e.z);
-    s.root.rotation.y = -(e.dir ?? 0) * Math.PI * 2 / 1024;
-    s.root.visible = true;
-    this.paint(s);
+    // Ground stamps are disabled: the flat circles and rings read as debug hitboxes.
+    // The camera weight (punch/shake/stop) still lands through event(). Owner request.
+    void e; void shape; void reach; void tier;
   }
   /** A closing basic strike leaves one short brush mark at contact. It cannot evict a skill. */
   finisher(x:number,z:number,direction:number,color:number) {
-    const s=this.stamps.find(s=>!s.root.visible);if(!s)return;
-    s.shape='disc';s.reach=.95;s.age=0;s.life=.34;s.duck=1;s.peak=.6;s.ability=undefined;
-    s.fill.geometry=FILL.disc;s.fill.material.map=finisherInk();s.fill.material.color.setHex(color);
-    s.fill.renderOrder=FX_ORDER.strike;s.edge.visible=false;
-    s.root.position.set(x,.052,z);s.root.rotation.y=-direction;s.root.visible=true;this.paint(s);
+    // Disabled together with the ground stamps (owner request).
+    void x; void z; void direction; void color;
   }
   private paint(s: Stamp) {
     const t = Math.min(1, s.age / s.life), snap = Math.min(1, t / 0.16), out = 1 - (1 - snap) ** 3;

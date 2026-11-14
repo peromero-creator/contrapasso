@@ -192,7 +192,7 @@ export class AnimatedModel {
       const action = (name: string) => name.startsWith("attack") || name.startsWith("ultimate") || name === "cast";
       const leaving = action(this.active.getClip().name.toLowerCase()), length = seconds ?? .4;
       if (state === "dash") this.transition.begin(.045);
-      else if (state === "run" || state === "idle") this.transition.begin(leaving ? (state === "idle" ? .22 : .18) : .12);
+      else if (state === "run" || state === "idle") this.transition.begin(leaving ? (state === "idle" ? .3 : .2) : .12);
       // Chained strikes and strike-to-skill: carry the previous follow-through into the new
       // wind-up, but always arrive before the blow lands so the contact pose stays crisp.
       // Heavy two-handed clips end far from their next wind-up and gather for longer, so they

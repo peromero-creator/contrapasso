@@ -1895,6 +1895,7 @@ details.claim-box[open] summary {
 
 /* Choose your weapon */
 .camp-page[data-enter] #loadout-weapons button,
+#loadout-techniques .loadout-empty { opacity: .8; font: 500 13px var(--body); color: #cdbb97; padding: 8px 2px; }
 .preparation-build.swap #loadout-techniques button {
   animation: camp-rise 0.34s var(--ease-out) both;
 }
@@ -2104,7 +2105,8 @@ details.claim-box[open] summary {
 #camp #loadout-weapons button{position:relative;padding-left:74px;min-height:72px}#camp #loadout-weapons img[data-relic-art]{position:absolute;left:8px;top:5px;width:60px;height:60px;object-fit:contain}.better{color:#a8bd93}.worse{color:#c18b7c}#loadout-stats em{font-size:12px;font-style:normal}.temper-outcome{border:1px solid #9aab80;background:#172016e8;color:#d6e4bb;padding:14px;font-family:var(--heading);font-size:19px!important;text-align:center}.temper-outcome.failed{border-color:#9c685c;color:#e1b4a8;background:#261a18e8}.temper-outcome small{display:block;margin-top:5px;font:11px var(--body)}
 #pause-build{max-width:520px;margin:16px auto;color:#c7bba5}#pause-build strong{font-size:18px}#pause-build p{font-size:12px;line-height:1.6}
 .tree-loadout-slots{position:relative}.quick-equip{position:absolute;right:0;top:100%;width:250px;padding:9px;background:#191713;border:1px solid #66533b;box-shadow:0 14px 32px #000b;z-index:30}.quick-equip button{display:block;width:100%;padding:13px;text-align:left;background:transparent;border:0;color:#d7c6a9;font:13px var(--body)}.quick-equip button:hover,.quick-equip button:focus-visible{background:#393025;outline:1px solid #a48b60}
-#action-bar .cooldown-number{position:absolute;right:5px;top:4px;font:700 18px/1 var(--heading);color:#e0c6a3;text-shadow:0 1px 5px #000;background:#17130ed9;border-radius:3px;padding:2px}#action-bar .cooldown-number:empty{display:none}#wave-progress{height:3px;background:#211c16;width:150px;margin:8px auto}#wave-progress i{display:block;height:100%;width:calc(var(--remaining,1)*100%);background:#b99a6b;transition:width .2s}#first-technique-hint{position:absolute;bottom:160px;left:50%;transform:translateX(-50%);font:600 12px var(--body);color:#d6c3a2;background:#171410e8;padding:10px 16px;border:1px solid #67543a}
+/* Cooldown digits and charge percentages are hidden: the keycap fill meters tell the same story without debug-looking numbers. */
+#action-bar .cooldown-number{display:none}#action-bar .cooldown-number:empty{display:none}#wave-progress{height:3px;background:#211c16;width:150px;margin:8px auto}#wave-progress i{display:block;height:100%;width:calc(var(--remaining,1)*100%);background:#b99a6b;transition:width .2s}#first-technique-hint{position:absolute;bottom:160px;left:50%;transform:translateX(-50%);font:600 12px var(--body);color:#d6c3a2;background:#171410e8;padding:10px 16px;border:1px solid #67543a}
 #camp.gone .camp-page{visibility:hidden}
 @media (prefers-reduced-motion:reduce){#camp *,#settings *,#descent-curtain{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
 
@@ -2220,6 +2222,7 @@ details.claim-box[open] summary {
 #action-bar .keycap.ready small { color: #cdbb97; }
 #action-bar .keycap.cooling kbd { opacity: .65; }
 #action-bar .keycap .cooldown-number {
+  display: none;
   position: relative;
   z-index: 1;
   grid-area: 1 / 1;
